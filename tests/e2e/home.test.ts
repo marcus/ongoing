@@ -99,6 +99,7 @@ test('streams scan completion without dropping catalog or URL state', async ({ p
   );
   await expect(page).toHaveURL(/q=alpha/);
   await expect(page.locator('[data-project-row]')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'rescan' })).toBeFocused();
 });
 
 test('provides visible keyboard focus, reduced motion, and a recoverable empty result', async ({
@@ -248,6 +249,37 @@ test('keeps metric meaning in the narrow catalog layout', async ({ page }) => {
   );
 });
 
+test('names every hidden restore control and restores its exact project', async ({ page }) => {
+  await page.goto('/hidden');
+  await expect(page.locator('html')).toHaveAttribute('data-hydrated', 'true');
+  const manualNotes = page.getByRole('listitem').filter({ hasText: 'manual-notes' });
+  const quietArchive = page.getByRole('listitem').filter({ hasText: 'quiet-archive' });
+  await expect(manualNotes).toBeVisible();
+  await expect(quietArchive).toBeVisible();
+
+  await manualNotes
+    .getByRole('button', { name: /manual-notes/ })
+    .first()
+    .click();
+  const drawer = page.getByRole('region', { name: 'manual-notes details' });
+  await expect(drawer).toBeVisible();
+  await drawer.getByRole('button', { name: 'Restore manual-notes', exact: true }).click();
+  await expect(manualNotes).toHaveCount(0);
+  await expect(quietArchive).toBeVisible();
+
+  await quietArchive.getByRole('button', { name: 'Restore quiet-archive', exact: true }).click();
+  await expect(quietArchive).toHaveCount(0);
+
+  await page.goto('/?sort=name&dir=asc&filter=all&group=none&q=manual-notes');
+  await expect(
+    page.locator('[data-project-row]').filter({ hasText: 'manual-notes' })
+  ).toBeVisible();
+  await page.goto('/?sort=name&dir=asc&filter=all&group=none&q=quiet-archive');
+  await expect(
+    page.locator('[data-project-row]').filter({ hasText: 'quiet-archive' })
+  ).toBeVisible();
+});
+
 test('persists personal organization controls and rejects forged mutations', async ({ page }) => {
   await page.goto('/?sort=name&dir=asc&filter=all&group=none');
   await expect(page.locator('html')).toHaveAttribute('data-hydrated', 'true');
@@ -346,7 +378,7 @@ test('persists personal organization controls and rejects forged mutations', asy
   await expect(page.getByRole('listitem').filter({ hasText: 'manual-notes' })).toHaveCount(0);
   await page.getByRole('button', { name: /beta/ }).first().click();
   await expect(page.getByRole('region', { name: 'beta details' })).toBeVisible();
-  await page.getByRole('button', { name: 'restore' }).first().click();
+  await page.getByRole('button', { name: 'Restore beta', exact: true }).first().click();
   await expect(page.getByRole('listitem')).toHaveCount(0);
   await page.goto('/?sort=manual&dir=asc&filter=all&group=none');
   await expect(page.locator('[data-project-row]').last()).toContainText('beta');

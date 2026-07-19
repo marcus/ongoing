@@ -16,7 +16,8 @@
     ondecision,
     onhide,
     onaction,
-    hideLabel = 'Hide'
+    hideLabel = 'Hide',
+    hideAccessibleLabel
   } = $props<{
     project: DashboardProject;
     noteEditable?: boolean;
@@ -25,6 +26,7 @@
     onhide?: () => void;
     onaction?: (action: 'finder' | 'terminal') => Promise<void>;
     hideLabel?: string;
+    hideAccessibleLabel?: string;
   }>();
   let metrics = $derived(project.metrics);
   let editedNote = $state<string | undefined>();
@@ -193,7 +195,12 @@
       <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
       {#if githubUrl}<a class="button" href={githubUrl} target="_blank" rel="noreferrer">GitHub ↗</a
         >{/if}
-      {#if onhide}<button class="danger" type="button" onclick={onhide}>{hideLabel}</button>{/if}
+      {#if onhide}<button
+          class="danger"
+          type="button"
+          aria-label={hideAccessibleLabel}
+          onclick={onhide}>{hideLabel}</button
+        >{/if}
     </div>
     {#if project.errors.length}<div class="error-list" role="status">
         {#each project.errors as error (error.collector)}<p>

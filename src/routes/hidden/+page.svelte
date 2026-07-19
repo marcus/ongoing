@@ -1,6 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { invalidateAll } from '$app/navigation';
+  import { onMount } from 'svelte';
   import ProjectDrawer from '$lib/components/dashboard/ProjectDrawer.svelte';
   import '$lib/components/dashboard/dashboard.css';
 
@@ -18,6 +19,10 @@
           .includes(query.trim().toLocaleLowerCase('en'))
     )
   );
+
+  onMount(() => {
+    document.documentElement.dataset.hydrated = 'true';
+  });
 
   async function restoreProject(id: string, name: string) {
     restored = [...restored, id];
@@ -86,6 +91,7 @@
             <button
               class="button"
               type="button"
+              aria-label={`Restore ${project.name}`}
               onclick={() => restoreProject(project.id, project.name)}>restore</button
             >
           </div>
@@ -95,6 +101,7 @@
               noteEditable={false}
               onhide={() => restoreProject(project.id, project.name)}
               hideLabel="Restore"
+              hideAccessibleLabel={`Restore ${project.name}`}
             />
           {/if}
         </article>

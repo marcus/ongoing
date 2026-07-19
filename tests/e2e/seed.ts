@@ -188,6 +188,18 @@ await repository.updateNote(hidden.id, 'hidden intentionally; revisit after autu
 await repository.setFavorite(hidden.id, true);
 await repository.setHidden(hidden.id, true);
 
+const secondHidden = await repository.upsertDiscovered({
+  canonicalPath: '/code/archive/quiet-archive',
+  relativePath: 'archive/quiet-archive',
+  name: 'quiet-archive',
+  scanRoot: '/code'
+});
+await repository.updateNote(
+  secondHidden.id,
+  'another hidden project for semantic restore coverage'
+);
+await repository.setHidden(secondHidden.id, true);
+
 await repository.createScanRun({
   id: 'scan-e2e',
   reason: 'cli',

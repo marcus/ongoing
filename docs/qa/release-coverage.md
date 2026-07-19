@@ -36,13 +36,13 @@ security, persistence, migration, and deployment boundaries keep dedicated cover
 | Cached list, all URL-backed sorts, search, filters, history, and favorite grouping                                 | `tests/e2e/home.test.ts`                                                                              |
 | Pointer and keyboard reorder with reload persistence                                                               | `tests/e2e/home.test.ts`                                                                              |
 | Favorite, note, hide, hidden search/detail, restore, decision controls, and persistence                            | `tests/e2e/home.test.ts`                                                                              |
-| Scan start/SSE completion while retaining the URL, visible catalog, and input focus                                | `tests/e2e/home.test.ts`                                                                              |
+| Scan start/SSE completion while retaining the URL and visible catalog, with focus on the invoking rescan control   | `tests/e2e/home.test.ts`                                                                              |
 | Semantic names, keyboard navigation, skip link/focus ring, reduced motion, empty recovery, and 390 px no-overflow  | `tests/e2e/home.test.ts`                                                                              |
 | Login/session/logout production flow                                                                               | `tests/e2e/auth.test.ts` with `playwright.auth.config.ts`                                             |
 | Prototype fidelity for Ember and alternate theme, density, geometry, drawer, flyout, hidden/manual/degraded states | Manual screenshot comparison recorded in the `td-5700c4` log; artifacts live in `/tmp/ongoing-proof/` |
 
 The deterministic browser catalog is built by `tests/e2e/seed.ts`. It includes fresh and stale
-metrics, favorites, notes, a hidden project, a Unicode path, dirty state, TD/GitHub data, unavailable
+metrics, favorites, notes, multiple hidden projects, a Unicode path, dirty state, TD/GitHub data, unavailable
 GitHub enrichment, attention views, snapshots, and manual ranks without depending on the developer's
 live repositories.
 
