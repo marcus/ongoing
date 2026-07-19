@@ -6,7 +6,8 @@ export default defineConfig({
     baseURL: 'http://127.0.0.1:5173'
   },
   webServer: {
-    command: 'bun run dev',
+    command:
+      'DATABASE_PATH=.data/ongoing-e2e.sqlite SCAN_ROOTS=/private/tmp/ongoing-e2e-unscanned bun run tests/e2e/seed.ts && DATABASE_PATH=.data/ongoing-e2e.sqlite SCAN_ROOTS=/private/tmp/ongoing-e2e-unscanned bun run dev',
     url: 'http://127.0.0.1:5173',
     reuseExistingServer: !process.env.CI
   }

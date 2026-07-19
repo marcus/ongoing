@@ -711,4 +711,21 @@ export class CatalogRepository {
       errorCount: Number(row.error_count)
     };
   }
+
+  getLatestScanRun(): ScanRun | null {
+    const row = this.database
+      .query<Row, []>('SELECT * FROM scan_runs ORDER BY started_at DESC, id DESC LIMIT 1')
+      .get();
+    if (!row) return null;
+    return {
+      id: String(row.id),
+      reason: String(row.reason) as ScanRun['reason'],
+      status: String(row.status) as ScanStatus,
+      startedAt: String(row.started_at),
+      finishedAt: row.finished_at === null ? null : String(row.finished_at),
+      discoveredCount: Number(row.discovered_count),
+      updatedCount: Number(row.updated_count),
+      errorCount: Number(row.error_count)
+    };
+  }
 }

@@ -11,6 +11,15 @@ export default tseslint.config(
   prettier,
   ...svelte.configs['flat/prettier'],
   {
+    files: ['**/*.svelte'],
+    languageOptions: {
+      parserOptions: {
+        parser: tseslint.parser,
+        extraFileExtensions: ['.svelte']
+      }
+    }
+  },
+  {
     languageOptions: {
       globals: {
         ...globals.browser,
