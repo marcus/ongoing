@@ -7,7 +7,14 @@
   import KeyboardFooter from '$lib/components/dashboard/KeyboardFooter.svelte';
   import ProjectList from '$lib/components/dashboard/ProjectList.svelte';
   import ThemePicker from '$lib/components/dashboard/ThemePicker.svelte';
-  import type { DashboardQuery } from '$lib/dashboard/catalog';
+  import {
+    applyDashboardQuery,
+    viewKeys,
+    type DashboardQuery,
+    type DashboardProject
+  } from '$lib/dashboard/catalog';
+  import { classifyAttentionViews } from '$lib/domain/attention';
+  import type { ProjectDecisionUpdate } from '$lib/domain/project';
   import { relativeAge } from '$lib/dashboard/format';
   import { sortOptions, viewOptions } from '$lib/dashboard/options';
   import '$lib/components/dashboard/dashboard.css';
@@ -18,16 +25,30 @@
   let activeIndex = $state(0);
   let favoriteOverrides = $state<Record<string, boolean>>({});
   let noteOverrides = $state<Record<string, string>>({});
+  let decisionOverrides = $state<Record<string, ProjectDecisionUpdate>>({});
   let hiddenIds = $state<string[]>([]);
   let manualOrder = $state<string[] | null>(null);
-  let projects = $derived.by(() => {
-    let visible = data.visibleProjects
-      .filter((project) => !hiddenIds.includes(project.id))
-      .map((project) => ({
+  let catalogProjects = $derived.by(() =>
+    data.projects.map((project): DashboardProject => {
+      const merged = {
         ...project,
         isFavorite: favoriteOverrides[project.id] ?? project.isFavorite,
-        note: noteOverrides[project.id] ?? project.note
-      }));
+        note: noteOverrides[project.id] ?? project.note,
+        ...decisionOverrides[project.id]
+      };
+      const attention = classifyAttentionViews(merged, Date.parse(data.generatedAt));
+      return {
+        ...merged,
+        attention,
+        views: viewKeys.filter((key) => attention[key].member)
+      };
+    })
+  );
+  let projects = $derived.by(() => {
+    let visible = applyDashboardQuery(
+      catalogProjects.filter((project) => !hiddenIds.includes(project.id)),
+      data.query
+    );
     if (manualOrder) {
       const positions = new Map(manualOrder.map((id, index) => [id, index]));
       visible = [...visible].sort(
@@ -37,6 +58,14 @@
     }
     return visible;
   });
+  let viewCounts = $derived(
+    Object.fromEntries(
+      viewKeys.map((view) => [
+        view,
+        catalogProjects.filter((project) => project.views.includes(view)).length
+      ])
+    ) as Record<(typeof viewKeys)[number], number>
+  );
   let manualEnabled = $derived(
     data.query.sort === 'manual' &&
       data.query.direction === 'asc' &&
@@ -127,6 +156,19 @@
     const result = (await response.json()) as { error?: string };
     if (!response.ok) throw new Error(result.error ?? 'Unable to save note');
     noteOverrides = { ...noteOverrides, [id]: note };
+  }
+  async function saveDecision(id: string, update: ProjectDecisionUpdate) {
+    const response = await fetch(`/api/projects/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(update)
+    });
+    const result = (await response.json()) as { error?: string };
+    if (!response.ok) throw new Error(result.error ?? 'Unable to save decision');
+    decisionOverrides = {
+      ...decisionOverrides,
+      [id]: { ...decisionOverrides[id], ...update }
+    };
   }
   async function hideProject(id: string) {
     hiddenIds = [...hiddenIds, id];
@@ -317,7 +359,7 @@
     {#if flyoutOpen}
       <FilterFlyout
         query={data.query}
-        viewCounts={data.viewCounts}
+        {viewCounts}
         hiddenCount={data.hiddenCount}
         onchange={(patch) => changeQuery(patch)}
       />
@@ -337,7 +379,7 @@
   <ThemePicker />
 </header>
 
-<CatalogTicker projects={data.projects} />
+<CatalogTicker projects={catalogProjects} />
 
 <main id="project-catalog" tabindex="-1">
   {#if data.loadError}
@@ -374,6 +416,7 @@
       ontoggle={toggleDetails}
       onfavorite={(id, favorite) => void toggleFavorite(id, favorite)}
       onnote={saveNote}
+      ondecision={saveDecision}
       onhide={(id) => void hideProject(id)}
       onaction={projectAction}
       onreorder={(ids) => void reorderProjects(ids)}

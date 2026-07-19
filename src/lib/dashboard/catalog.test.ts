@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectMetrics } from '$lib/domain/metrics';
+import { classifyAttentionViews } from '$lib/domain/attention';
 import type { DashboardProject } from './catalog';
 import {
   applyDashboardQuery,
@@ -44,7 +45,9 @@ function project(
     errors: [],
     snapshots: []
   };
-  return { ...base, views: classifyProject(base, Date.parse('2026-07-19T00:00:00Z')) };
+  const now = Date.parse('2026-07-19T00:00:00Z');
+  const attention = classifyAttentionViews(base, now);
+  return { ...base, attention, views: classifyProject(base, now) };
 }
 
 describe('dashboard catalog model', () => {
@@ -80,9 +83,12 @@ describe('dashboard catalog model', () => {
         commits30d: 12,
         activeDays30d: 7,
         githubStars: 50,
-        githubCiState: 'failure'
+        githubCiState: 'failure',
+        gitScannedAt: '2026-07-18T23:00:00Z',
+        githubScannedAt: '2026-07-18T23:00:00Z',
+        githubAvailability: 'available'
       },
-      starsDelta: 4
+      starsDelta: 5
     });
     expect(item.views).toEqual(expect.arrayContaining(['attention', 'rising', 'momentum']));
   });

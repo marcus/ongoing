@@ -122,20 +122,51 @@ await repository.recordCollectionError({
   occurredAt: '2026-07-19T11:58:00.000Z'
 });
 
+const dormant = await repository.upsertDiscovered({
+  canonicalPath: '/code/dormant',
+  relativePath: 'dormant',
+  name: 'dormant',
+  scanRoot: '/code'
+});
+await repository.updateMetrics(dormant.id, {
+  branch: 'main',
+  latestCommitAt: '2026-01-01T00:00:00.000Z',
+  commitCount: 12,
+  commits7d: 0,
+  commits30d: 0,
+  commits90d: 0,
+  activeDays30d: 0,
+  githubRepoId: 'R_dormant',
+  githubOwner: 'example',
+  githubName: 'dormant',
+  githubStars: 0,
+  githubExternalPrs: 0,
+  githubExternalIssues30d: 0,
+  githubAvailability: 'available',
+  gitScannedAt: '2026-07-19T11:59:00.000Z',
+  githubScannedAt: '2026-07-19T11:59:00.000Z'
+});
+await repository.saveSnapshot({
+  projectId: dormant.id,
+  metric: 'github_stars',
+  capturedOn: '2026-06-18',
+  value: 0
+});
+
 await repository.createScanRun({
   id: 'scan-e2e',
   reason: 'cli',
   status: 'running',
   startedAt: '2026-07-19T11:55:00.000Z',
   finishedAt: null,
-  discoveredCount: 2,
-  updatedCount: 2,
+  discoveredCount: 3,
+  updatedCount: 3,
   errorCount: 1
 });
 await repository.finishScanRun(
   'scan-e2e',
   'completed',
-  { discoveredCount: 2, updatedCount: 2, errorCount: 1 },
+  { discoveredCount: 3, updatedCount: 3, errorCount: 1 },
   '2026-07-19T12:00:00.000Z'
 );
 catalog.close();

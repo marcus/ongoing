@@ -1,5 +1,11 @@
 <script lang="ts">
   import type { DashboardProject } from '$lib/dashboard/catalog';
+  import { viewOptions } from '$lib/dashboard/options';
+  import {
+    projectIntents,
+    type ProjectDecisionUpdate,
+    type ProjectIntent
+  } from '$lib/domain/project';
   import { compactNumber, fullDate, oldestAge, relativeAge } from '$lib/dashboard/format';
   import ActivityBars from './ActivityBars.svelte';
 
@@ -7,6 +13,7 @@
     project,
     noteEditable = true,
     onnote,
+    ondecision,
     onhide,
     onaction,
     hideLabel = 'Hide'
@@ -14,6 +21,7 @@
     project: DashboardProject;
     noteEditable?: boolean;
     onnote?: (note: string) => Promise<void>;
+    ondecision?: (update: ProjectDecisionUpdate) => Promise<void>;
     onhide?: () => void;
     onaction?: (action: 'finder' | 'terminal') => Promise<void>;
     hideLabel?: string;
@@ -25,6 +33,19 @@
   let savedNote = $derived(persistedNote ?? project.note);
   let saveState = $state<'idle' | 'saving' | 'saved' | 'error'>('saved');
   let saveMessage = $state('saved locally');
+  let decisionMessage = $state('saved locally');
+  let editedIntent = $state<ProjectIntent | '' | undefined>();
+  let editedExcitement = $state<string | undefined>();
+  let editedStrategicImportance = $state<string | undefined>();
+  let editedNextAction = $state<string | undefined>();
+  let editedReviewAfter = $state<string | undefined>();
+  let intent = $derived(editedIntent ?? project.intent ?? '');
+  let excitement = $derived(editedExcitement ?? project.excitement?.toString() ?? '');
+  let strategicImportance = $derived(
+    editedStrategicImportance ?? project.strategicImportance?.toString() ?? ''
+  );
+  let nextAction = $derived(editedNextAction ?? project.nextAction ?? '');
+  let reviewAfter = $derived(editedReviewAfter ?? project.reviewAfter ?? '');
   let timer: ReturnType<typeof setTimeout> | undefined;
   let githubUrl = $derived(
     metrics?.githubOwner && metrics.githubName
@@ -66,6 +87,16 @@
       saveMessage = error instanceof Error ? error.message : `unable to open ${action}`;
     }
   }
+  async function saveDecision(update: ProjectDecisionUpdate) {
+    if (!ondecision) return;
+    decisionMessage = 'saving…';
+    try {
+      await ondecision(update);
+      decisionMessage = 'saved locally';
+    } catch (error) {
+      decisionMessage = error instanceof Error ? error.message : 'save failed';
+    }
+  }
 </script>
 
 <section class="drawer" id={`details-${project.id}`} aria-label={`${project.name} details`}>
@@ -87,6 +118,74 @@
     <p class="saved" class:error-save={saveState === 'error'} role="status">
       {noteEditable ? saveMessage : 'saved locally · read only while hidden'}
     </p>
+    {#if ondecision}<div class="decision-fields">
+        <h3>Decision</h3>
+        <div class="decision-grid">
+          <label
+            >Intent<select
+              aria-label={`Intent for ${project.name}`}
+              value={intent}
+              onchange={(event) => {
+                editedIntent = event.currentTarget.value as ProjectIntent | '';
+                void saveDecision({ intent: editedIntent || null });
+              }}
+              ><option value="">not set</option>{#each projectIntents as option (option)}<option
+                  value={option}>{option}</option
+                >{/each}</select
+            ></label
+          >
+          <label
+            >Excitement<select
+              aria-label={`Excitement for ${project.name}`}
+              value={excitement}
+              onchange={(event) => {
+                editedExcitement = event.currentTarget.value;
+                void saveDecision({
+                  excitement: editedExcitement ? Number(editedExcitement) : null
+                });
+              }}
+              ><option value="">—</option>{#each [1, 2, 3, 4, 5] as value (value)}<option
+                  value={value.toString()}>{value}</option
+                >{/each}</select
+            ></label
+          >
+          <label
+            >Strategic<select
+              aria-label={`Strategic importance for ${project.name}`}
+              value={strategicImportance}
+              onchange={(event) => {
+                editedStrategicImportance = event.currentTarget.value;
+                void saveDecision({
+                  strategicImportance: strategicImportance ? Number(strategicImportance) : null
+                });
+              }}
+              ><option value="">—</option>{#each [1, 2, 3, 4, 5] as value (value)}<option
+                  value={value.toString()}>{value}</option
+                >{/each}</select
+            ></label
+          >
+          <label
+            >Review after<input
+              aria-label={`Review after for ${project.name}`}
+              type="date"
+              value={reviewAfter}
+              onchange={(event) => {
+                editedReviewAfter = event.currentTarget.value;
+                void saveDecision({ reviewAfter: editedReviewAfter || null });
+              }}
+            /></label
+          >
+        </div>
+        <label class="next-action"
+          >Next action<textarea
+            maxlength="500"
+            aria-label={`Next action for ${project.name}`}
+            value={nextAction}
+            oninput={(event) => (editedNextAction = event.currentTarget.value)}
+            onblur={() => void saveDecision({ nextAction: nextAction || null })}></textarea></label
+        >
+        <p class="saved" role="status">{decisionMessage}</p>
+      </div>{/if}
     <div class="actions" aria-label="Project actions">
       {#if onaction}<button type="button" onclick={() => void localAction('finder')}
           >Open in Finder</button
@@ -154,6 +253,27 @@
     </dl>
   </div>
   <div class="drawer-column">
+    {#if project.views.length}<h3>Why this project appears</h3>
+      <div class="attention-reasons">
+        {#each project.views as key (key)}
+          {@const view = viewOptions.find((option) => option.key === key)}
+          <section aria-label={`${view?.label ?? key} reasons`}>
+            <h4>{view?.label ?? key}</h4>
+            <ul>
+              {#each project.attention[key].reasons as item (item.input)}
+                <li>
+                  <span>{item.message}</span><code
+                    >{item.input}: {String(item.value)}
+                    {item.comparison}
+                    {String(item.threshold)}</code
+                  >
+                </li>
+              {/each}
+            </ul>
+          </section>
+        {/each}
+      </div>
+    {/if}
     <h3>Trend · commits · 7 / 30 / 90d</h3>
     <ActivityBars
       seven={metrics?.commits7d}

@@ -3,6 +3,7 @@
   import { ageTone, compactNumber, fullDate, relativeAge } from '$lib/dashboard/format';
   import ActivityBars from './ActivityBars.svelte';
   import ProjectDrawer from './ProjectDrawer.svelte';
+  import type { ProjectDecisionUpdate } from '$lib/domain/project';
 
   let {
     project,
@@ -13,6 +14,7 @@
     ondragstart,
     onfavorite,
     onnote,
+    ondecision,
     onhide,
     onaction,
     onmove
@@ -25,6 +27,7 @@
     ondragstart: () => void;
     onfavorite: (favorite: boolean) => void;
     onnote: (note: string) => Promise<void>;
+    ondecision: (update: ProjectDecisionUpdate) => Promise<void>;
     onhide: () => void;
     onaction: (action: 'finder' | 'terminal') => Promise<void>;
     onmove: (where: 'up' | 'down' | 'top' | 'bottom') => void;
@@ -230,4 +233,4 @@
     {/if}
   </div>
 </div>
-{#if open}<ProjectDrawer {project} {onnote} {onhide} {onaction} />{/if}
+{#if open}<ProjectDrawer {project} {onnote} {ondecision} {onhide} {onaction} />{/if}

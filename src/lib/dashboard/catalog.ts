@@ -1,5 +1,10 @@
 import type { CollectionError, MetricSnapshot, ScanRun } from '$lib/domain/metrics';
 import {
+  attentionViewKeys,
+  classifyAttentionViews,
+  type AttentionClassifications
+} from '$lib/domain/attention';
+import {
   sortKeys,
   sortProjects,
   type SortableProject,
@@ -8,14 +13,7 @@ import {
 } from '$lib/domain/sorting';
 import type { CatalogRepository } from '$lib/server/catalog/repository';
 
-export const viewKeys = [
-  'attention',
-  'rising',
-  'quickwin',
-  'opportunity',
-  'momentum',
-  'dormant'
-] as const;
+export const viewKeys = attentionViewKeys;
 export const filterKeys = ['all', 'favorites', 'missing', 'warnings', 'local'] as const;
 export const groupKeys = ['none', 'favorites'] as const;
 
@@ -27,6 +25,7 @@ export interface DashboardProject extends SortableProject {
   errors: CollectionError[];
   snapshots: MetricSnapshot[];
   views: ViewKey[];
+  attention: AttentionClassifications;
   githubTrafficViewsDelta30d: number | null;
   githubTrafficClonesDelta30d: number | null;
 }
@@ -86,7 +85,12 @@ function dashboardProject(
       now.getTime()
     )
   };
-  return { ...base, views: classifyProject(base, now.getTime()) };
+  const attention = classifyAttentionViews(base, now.getTime());
+  return {
+    ...base,
+    attention,
+    views: viewKeys.filter((key) => attention[key].member)
+  };
 }
 
 function member<T extends readonly string[]>(values: T, value: string | null): value is T[number] {
@@ -109,12 +113,6 @@ export function parseDashboardQuery(params: URLSearchParams): DashboardQuery {
   };
 }
 
-function daysSince(value: string | null, now: number): number | null {
-  if (!value) return null;
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? Math.max(0, (now - timestamp) / 86_400_000) : null;
-}
-
 export function metricDelta30d(
   snapshots: readonly MetricSnapshot[],
   metric: MetricSnapshot['metric'],
@@ -130,39 +128,11 @@ export function metricDelta30d(
 }
 
 export function classifyProject(
-  project: Omit<DashboardProject, 'views'>,
+  project: Omit<DashboardProject, 'views' | 'attention'>,
   now = Date.now()
 ): ViewKey[] {
-  const metrics = project.metrics;
-  const latestAge = daysSince(metrics?.latestCommitAt ?? null, now);
-  const oldestPrAge = daysSince(metrics?.githubOldestExternalPrAt ?? null, now);
-  const commits30d = metrics?.commits30d ?? 0;
-  const views: ViewKey[] = [];
-  if (
-    project.isMissing ||
-    project.errors.length > 0 ||
-    metrics?.githubCiState === 'failure' ||
-    (metrics?.tdBlockedCount ?? 0) > 0 ||
-    (metrics?.tdStaleCount ?? 0) > 0 ||
-    (oldestPrAge ?? 0) >= 30
-  )
-    views.push('attention');
-  if ((project.githubStarsGained30d ?? 0) > 0 || (metrics?.githubExternalIssues30d ?? 0) > 0)
-    views.push('rising');
-  if (
-    (metrics?.locCode ?? Infinity) <= 5_000 &&
-    ((metrics?.tdTotalNonClosedCount ?? 0) > 0 || (metrics?.githubStars ?? 0) > 0)
-  )
-    views.push('quickwin');
-  if ((metrics?.githubStars ?? 0) > 0 && commits30d <= 5) views.push('opportunity');
-  if (
-    commits30d >= 10 ||
-    (metrics?.activeDays30d ?? 0) >= 5 ||
-    (metrics?.githubMergedPrs30d ?? 0) > 0
-  )
-    views.push('momentum');
-  if (commits30d === 0 && (latestAge === null || latestAge >= 90)) views.push('dormant');
-  return views;
+  const classifications = classifyAttentionViews(project, now);
+  return viewKeys.filter((key) => classifications[key].member);
 }
 
 export function readDashboardCatalog(

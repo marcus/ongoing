@@ -18,5 +18,9 @@ describe('project invariants', () => {
     expect(() => validateDecisionUpdate({ intent: 'invest', excitement: 5 })).not.toThrow();
     expect(() => validateDecisionUpdate({ excitement: 0 })).toThrow(/1 through 5/);
     expect(() => validateDecisionUpdate({ strategicImportance: 2.5 })).toThrow(/integer/);
+    expect(() => validateDecisionUpdate({ nextAction: 'x'.repeat(501) })).toThrow(/500/);
+    expect(() => validateDecisionUpdate({ reviewAfter: 'next week' })).toThrow(/YYYY-MM-DD/);
+    expect(() => validateDecisionUpdate({ reviewAfter: '2026-02-31' })).toThrow(/YYYY-MM-DD/);
+    expect(() => validateDecisionUpdate({ reviewAfter: '2026-08-01' })).not.toThrow();
   });
 });

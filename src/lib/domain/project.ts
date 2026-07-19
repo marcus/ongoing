@@ -1,4 +1,5 @@
 export const PROJECT_NOTE_MAX_LENGTH = 500;
+export const PROJECT_NEXT_ACTION_MAX_LENGTH = 500;
 export const MANUAL_RANK_STEP = 1_000;
 
 export const projectIntents = ['invest', 'maintain', 'experiment', 'hibernate', 'archive'] as const;
@@ -66,6 +67,31 @@ export function validateDecisionUpdate(update: ProjectDecisionUpdate): void {
       (!Number.isInteger(value) || value < 1 || value > 5)
     ) {
       throw new RangeError(`${field} must be an integer from 1 through 5`);
+    }
+  }
+
+  if (
+    update.nextAction !== undefined &&
+    update.nextAction !== null &&
+    (typeof update.nextAction !== 'string' ||
+      update.nextAction.length > PROJECT_NEXT_ACTION_MAX_LENGTH)
+  ) {
+    throw new RangeError(
+      `nextAction must be a string no longer than ${PROJECT_NEXT_ACTION_MAX_LENGTH} characters`
+    );
+  }
+
+  if (update.reviewAfter !== undefined && update.reviewAfter !== null) {
+    const parsed =
+      typeof update.reviewAfter === 'string' ? new Date(`${update.reviewAfter}T00:00:00Z`) : null;
+    if (
+      typeof update.reviewAfter !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(update.reviewAfter) ||
+      !parsed ||
+      Number.isNaN(parsed.getTime()) ||
+      parsed.toISOString().slice(0, 10) !== update.reviewAfter
+    ) {
+      throw new TypeError('reviewAfter must be a valid YYYY-MM-DD date');
     }
   }
 }

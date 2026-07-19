@@ -883,6 +883,90 @@ svg rect.empty {
   font-size: 10px;
 }
 
+.decision-fields {
+  margin-top: 14px;
+  padding-top: 2px;
+  border-top: 1px solid var(--line);
+}
+
+.decision-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.decision-fields label {
+  display: grid;
+  gap: 3px;
+  color: var(--ink-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.decision-fields select,
+.decision-fields input {
+  min-width: 0;
+  height: 28px;
+  padding: 4px 6px;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+}
+
+.decision-fields .next-action {
+  margin-top: 7px;
+}
+
+.decision-fields .next-action textarea {
+  height: 48px;
+  font-family: inherit;
+  font-size: 11px;
+  font-style: normal;
+}
+
+.attention-reasons {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.attention-reasons section {
+  padding: 7px 9px;
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+  border-left: 2px solid var(--accent);
+}
+
+.attention-reasons h4 {
+  margin: 0 0 4px;
+  color: var(--ink);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.attention-reasons ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.attention-reasons li {
+  display: grid;
+  gap: 1px;
+  color: var(--ink-dim);
+  font-size: 10.5px;
+}
+
+.attention-reasons code {
+  overflow-wrap: anywhere;
+  color: var(--ink-faint);
+  font-size: 9px;
+}
+
 .manual-hint {
   position: fixed;
   right: 18px;

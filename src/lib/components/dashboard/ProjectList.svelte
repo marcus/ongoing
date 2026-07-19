@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { DashboardProject } from '$lib/dashboard/catalog';
   import ProjectRow from './ProjectRow.svelte';
+  import type { ProjectDecisionUpdate } from '$lib/domain/project';
 
   let {
     projects,
@@ -10,6 +11,7 @@
     ontoggle,
     onfavorite,
     onnote,
+    ondecision,
     onhide,
     onaction,
     onreorder
@@ -21,6 +23,7 @@
     ontoggle: (id: string) => void;
     onfavorite: (id: string, favorite: boolean) => void;
     onnote: (id: string, note: string) => Promise<void>;
+    ondecision: (id: string, update: ProjectDecisionUpdate) => Promise<void>;
     onhide: (id: string) => void;
     onaction: (id: string, action: 'finder' | 'terminal') => Promise<void>;
     onreorder: (orderedIds: string[]) => void;
@@ -69,6 +72,7 @@
         ondragstart={() => (draggedId = project.id)}
         onfavorite={(favorite) => onfavorite(project.id, favorite)}
         onnote={(note) => onnote(project.id, note)}
+        ondecision={(update) => ondecision(project.id, update)}
         onhide={() => onhide(project.id)}
         onaction={(action) => onaction(project.id, action)}
         onmove={(where) => {

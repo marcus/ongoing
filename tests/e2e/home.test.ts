@@ -49,6 +49,7 @@ test('supports keyboard navigation, details, and persistent themes', async ({ pa
 
 test('renders TD counts, freshness, stale warnings, and attention membership', async ({ page }) => {
   await page.goto('/?sort=name&dir=asc&filter=all&group=none');
+  await expect(page.locator('html')).toHaveAttribute('data-hydrated', 'true');
   const alpha = page.locator('[data-project-row]').filter({ hasText: 'alpha' });
   const td = alpha.locator('[data-label="td"]');
   await expect(td).toContainText('4');
@@ -66,7 +67,55 @@ test('renders TD counts, freshness, stale warnings, and attention membership', a
   await expect(drawer).toContainText('td collected');
 
   await page.goto('/?view=attention&filter=all&group=none');
+  await expect(page.locator('html')).toHaveAttribute('data-hydrated', 'true');
   await expect(page.locator('[data-project-row]').filter({ hasText: 'alpha' })).toBeVisible();
+  await alpha.click();
+  await expect(page.getByRole('region', { name: 'needs attention reasons' })).toContainText(
+    'tdBlockedCount: 1 > 0'
+  );
+});
+
+test('navigates attention views with counts, history, search, and favorite grouping', async ({
+  page
+}) => {
+  await page.goto('/?sort=name&dir=asc&filter=all&group=favorites&q=a');
+  await expect(page.locator('html')).toHaveAttribute('data-hydrated', 'true');
+  await page.getByRole('button', { name: /sort name/i }).click();
+  await expect(page.getByRole('button', { name: /needs attention 2/i })).toBeVisible();
+  await page.getByRole('button', { name: /needs attention 2/i }).click();
+  await expect(page).toHaveURL(/view=attention/);
+  await expect(page).toHaveURL(/q=a/);
+  await expect(page).toHaveURL(/group=favorites/);
+  await expect(page.locator('[data-project-row]').first()).toContainText('alpha');
+
+  await page.getByRole('button', { name: /rising 1/i }).click();
+  await expect(page).toHaveURL(/view=rising/);
+  await expect(page.locator('[data-project-row]')).toHaveCount(1);
+  await page.goBack();
+  await expect(page).toHaveURL(/view=attention/);
+});
+
+test('recomputes decision-driven views, counts, and reasons without a reload', async ({ page }) => {
+  await page.goto('/?sort=name&dir=asc&view=dormant&filter=all&group=none');
+  await expect(page.locator('html')).toHaveAttribute('data-hydrated', 'true');
+  const dormant = page.locator('[data-project-row]').filter({ hasText: 'dormant' });
+  await expect(dormant).toBeVisible();
+  await dormant.click();
+  await expect(page.getByRole('region', { name: 'dormant reasons' })).toContainText(
+    'Project is not marked invest'
+  );
+
+  const response = page.waitForResponse(
+    (candidate) =>
+      candidate.request().method() === 'PATCH' && /\/api\/projects\//.test(candidate.url())
+  );
+  await page.getByLabel('Intent for dormant').selectOption('invest');
+  expect((await response).status()).toBe(200);
+
+  await expect(page.locator('[data-project-row]')).toHaveCount(0);
+  await expect(page.getByText('No projects match this view.')).toBeVisible();
+  await page.getByRole('button', { name: /sort name/i }).click();
+  await expect(page.getByRole('button', { name: /dormant 0/i })).toBeVisible();
 });
 
 test('keeps metric meaning in the narrow catalog layout', async ({ page }) => {
@@ -95,13 +144,60 @@ test('persists personal organization controls and rejects forged mutations', asy
   await betaRow.click();
   const note = page.getByRole('textbox', { name: 'Note for beta' });
   await note.fill('ship after the catalog settles');
+  const noteResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'PATCH' && /\/api\/projects\//.test(response.url())
+  );
   await note.blur();
-  await expect(page.getByRole('status').filter({ hasText: 'saved locally' })).toBeVisible();
+  expect((await noteResponse).status()).toBe(200);
+  await expect(page.getByRole('status').filter({ hasText: 'saved locally' }).first()).toBeVisible();
   await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-hydrated', 'true');
   await page.locator('[data-project-row]').filter({ hasText: 'beta' }).click();
   await expect(page.getByRole('textbox', { name: 'Note for beta' })).toHaveValue(
     'ship after the catalog settles'
   );
+
+  let decisionResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'PATCH' && /\/api\/projects\//.test(response.url())
+  );
+  await page.getByLabel('Intent for beta').selectOption('invest');
+  expect((await decisionResponse).status()).toBe(200);
+  decisionResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'PATCH' && /\/api\/projects\//.test(response.url())
+  );
+  await page.getByLabel('Excitement for beta').selectOption('5');
+  expect((await decisionResponse).status()).toBe(200);
+  decisionResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'PATCH' && /\/api\/projects\//.test(response.url())
+  );
+  await page.getByLabel('Strategic importance for beta').selectOption('4');
+  expect((await decisionResponse).status()).toBe(200);
+  await page.getByLabel('Next action for beta').fill('publish the catalog release');
+  decisionResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'PATCH' && /\/api\/projects\//.test(response.url())
+  );
+  await page.getByLabel('Next action for beta').blur();
+  expect((await decisionResponse).status()).toBe(200);
+  decisionResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'PATCH' && /\/api\/projects\//.test(response.url())
+  );
+  await page.getByLabel('Review after for beta').fill('2026-08-15');
+  expect((await decisionResponse).status()).toBe(200);
+  await expect(page.getByRole('status').filter({ hasText: 'saved locally' })).toHaveCount(2);
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-hydrated', 'true');
+  await page.locator('[data-project-row]').filter({ hasText: 'beta' }).click();
+  await expect(page.getByLabel('Intent for beta')).toHaveValue('invest');
+  await expect(page.getByLabel('Excitement for beta')).toHaveValue('5');
+  await expect(page.getByLabel('Strategic importance for beta')).toHaveValue('4');
+  await expect(page.getByLabel('Next action for beta')).toHaveValue('publish the catalog release');
+  await expect(page.getByLabel('Review after for beta')).toHaveValue('2026-08-15');
 
   await page.goto('/?sort=manual&dir=asc&filter=all&group=none');
   const alphaHandle = page.getByRole('button', { name: 'Drag alpha to reorder' });
@@ -149,6 +245,14 @@ test('persists personal organization controls and rejects forged mutations', asy
     data: { note: 'x'.repeat(501) }
   });
   expect(longNote.status()).toBe(400);
+  const invalidDecision = await page.request.patch('/api/projects/not-a-database-id', {
+    data: { excitement: 6 }
+  });
+  expect(invalidDecision.status()).toBe(400);
+  const invalidDate = await page.request.patch('/api/projects/not-a-database-id', {
+    data: { reviewAfter: 'tomorrow' }
+  });
+  expect(invalidDate.status()).toBe(400);
   const duplicateOrder = await page.request.post('/api/projects/reorder', {
     data: { orderedIds: ['duplicate', 'duplicate'] }
   });
