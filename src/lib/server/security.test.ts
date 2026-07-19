@@ -19,11 +19,36 @@ describe('LAN sessions', () => {
 
   it('accepts signed live tokens and rejects expiry, tampering, and malformed input', () => {
     const token = createSessionToken(secret, 2_000);
+    const parts = token.split('.');
+    const tamperedNonce = `${parts[2][0] === 'A' ? 'B' : 'A'}${parts[2].slice(1)}`;
+    const tamperedPayload = [parts[0], parts[1], tamperedNonce, parts[3]].join('.');
     expect(verifySessionToken(token, secret, 1_999)).toBe(true);
     expect(verifySessionToken(token, secret, 2_000)).toBe(false);
-    expect(verifySessionToken(`${token.slice(0, -1)}x`, secret, 1_999)).toBe(false);
+    expect(verifySessionToken(tamperedPayload, secret, 1_999)).toBe(false);
     expect(verifySessionToken(token, 'different-test-secret', 1_999)).toBe(false);
     expect(verifySessionToken('malformed', secret, 1_999)).toBe(false);
+    expect(verifySessionToken([parts[0], parts[1], parts[2], '!'].join('.'), secret, 1_999)).toBe(
+      false
+    );
+  });
+
+  it('accepts noncanonical base64url text only when it decodes to the same signature bytes', () => {
+    const token = createSessionToken(secret, 2_000);
+    const parts = token.split('.');
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    const lastIndex = alphabet.indexOf(parts[3].at(-1)!);
+    const equivalentSignature = `${parts[3].slice(0, -1)}${alphabet[lastIndex + 1]}`;
+    expect(lastIndex % 4).toBe(0);
+    expect(Buffer.from(equivalentSignature, 'base64url')).toEqual(
+      Buffer.from(parts[3], 'base64url')
+    );
+    expect(
+      verifySessionToken(
+        [parts[0], parts[1], parts[2], equivalentSignature].join('.'),
+        secret,
+        1_999
+      )
+    ).toBe(true);
   });
 
   it('uses strict, HTTP-only cookies without Secure on trusted LAN HTTP', () => {
