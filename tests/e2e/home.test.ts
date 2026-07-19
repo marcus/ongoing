@@ -59,3 +59,76 @@ test('keeps metric meaning in the narrow catalog layout', async ({ page }) => {
     true
   );
 });
+
+test('persists personal organization controls and rejects forged mutations', async ({ page }) => {
+  await page.goto('/?sort=name&dir=asc&filter=all&group=none');
+  await expect(page.locator('html')).toHaveAttribute('data-hydrated', 'true');
+
+  const betaRow = page.locator('[data-project-row]').filter({ hasText: 'beta' });
+  const favoriteResponse = page.waitForResponse((response) => response.url().endsWith('/favorite'));
+  await betaRow.getByRole('button', { name: 'Favorite beta' }).click();
+  expect((await favoriteResponse).status()).toBe(200);
+  await expect(betaRow.getByRole('button', { name: 'Unfavorite beta' })).toBeVisible();
+
+  await betaRow.click();
+  const note = page.getByRole('textbox', { name: 'Note for beta' });
+  await note.fill('ship after the catalog settles');
+  await note.blur();
+  await expect(page.getByRole('status').filter({ hasText: 'saved locally' })).toBeVisible();
+  await page.reload();
+  await page.locator('[data-project-row]').filter({ hasText: 'beta' }).click();
+  await expect(page.getByRole('textbox', { name: 'Note for beta' })).toHaveValue(
+    'ship after the catalog settles'
+  );
+
+  await page.goto('/?sort=manual&dir=asc&filter=all&group=none');
+  const alphaHandle = page.getByRole('button', { name: 'Drag alpha to reorder' });
+  const betaHandle = page.getByRole('button', { name: 'Drag beta to reorder' });
+  await betaHandle.dragTo(alphaHandle);
+  await expect(page.locator('[data-project-row]').first()).toContainText('beta');
+  await page.reload();
+  await expect(page.locator('[data-project-row]').first()).toContainText('beta');
+
+  await page
+    .locator('[data-project-row]')
+    .first()
+    .getByRole('button', { name: 'Actions for beta' })
+    .click();
+  await page.getByRole('button', { name: 'move to bottom' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('[data-project-row]').last()).toContainText('beta');
+
+  await page
+    .locator('[data-project-row]')
+    .last()
+    .getByRole('button', { name: 'Actions for beta' })
+    .click();
+  await page.getByRole('button', { name: 'Hide' }).click();
+  await expect(page.locator('[data-project-row]').filter({ hasText: 'beta' })).toHaveCount(0);
+  await page.goto('/hidden');
+  await page.getByRole('searchbox', { name: 'Search hidden projects' }).fill('catalog settles');
+  await expect(page.getByRole('listitem')).toContainText('beta');
+  await page.getByRole('button', { name: /beta/ }).first().click();
+  await expect(page.getByRole('region', { name: 'beta details' })).toBeVisible();
+  await page.getByRole('button', { name: 'restore' }).first().click();
+  await expect(page.getByRole('listitem')).toHaveCount(0);
+  await page.goto('/?sort=manual&dir=asc&filter=all&group=none');
+  await expect(page.locator('[data-project-row]').last()).toContainText('beta');
+
+  const unknownFavorite = await page.request.post('/api/projects/not-a-database-id/favorite', {
+    data: { favorite: true }
+  });
+  expect(unknownFavorite.status()).toBe(404);
+  const forgedPath = await page.request.post('/api/projects/not-a-database-id', {
+    data: { action: 'finder', path: '/etc' }
+  });
+  expect(forgedPath.status()).toBe(400);
+  const longNote = await page.request.patch('/api/projects/not-a-database-id', {
+    data: { note: 'x'.repeat(501) }
+  });
+  expect(longNote.status()).toBe(400);
+  const duplicateOrder = await page.request.post('/api/projects/reorder', {
+    data: { orderedIds: ['duplicate', 'duplicate'] }
+  });
+  expect(duplicateOrder.status()).toBe(400);
+});

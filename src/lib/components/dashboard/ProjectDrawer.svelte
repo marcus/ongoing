@@ -3,57 +3,105 @@
   import { compactNumber, fullDate, oldestAge, relativeAge } from '$lib/dashboard/format';
   import ActivityBars from './ActivityBars.svelte';
 
-  let { project, onplaceholder } = $props<{
+  let {
+    project,
+    noteEditable = true,
+    onnote,
+    onhide,
+    onaction,
+    hideLabel = 'Hide'
+  } = $props<{
     project: DashboardProject;
-    onplaceholder: (action: string) => void;
+    noteEditable?: boolean;
+    onnote?: (note: string) => Promise<void>;
+    onhide?: () => void;
+    onaction?: (action: 'finder' | 'terminal') => Promise<void>;
+    hideLabel?: string;
   }>();
   let metrics = $derived(project.metrics);
+  let editedNote = $state<string | undefined>();
+  let persistedNote = $state<string | undefined>();
+  let note = $derived(editedNote ?? project.note);
+  let savedNote = $derived(persistedNote ?? project.note);
+  let saveState = $state<'idle' | 'saving' | 'saved' | 'error'>('saved');
+  let saveMessage = $state('saved locally');
+  let timer: ReturnType<typeof setTimeout> | undefined;
   let githubUrl = $derived(
     metrics?.githubOwner && metrics.githubName
       ? `https://github.com/${metrics.githubOwner}/${metrics.githubName}`
       : null
   );
+
+  async function saveNote() {
+    clearTimeout(timer);
+    if (!onnote || note === savedNote) return;
+    saveState = 'saving';
+    saveMessage = 'saving…';
+    const value = note;
+    try {
+      await onnote(value);
+      persistedNote = value;
+      saveState = 'saved';
+      saveMessage = 'saved locally';
+    } catch (error) {
+      saveState = 'error';
+      saveMessage = error instanceof Error ? error.message : 'save failed';
+    }
+  }
+  function editNote(event: Event) {
+    editedNote = (event.currentTarget as HTMLTextAreaElement).value;
+    saveState = 'idle';
+    saveMessage = `${500 - note.length} characters remaining`;
+    clearTimeout(timer);
+    timer = setTimeout(() => void saveNote(), 500);
+  }
+  async function localAction(action: 'finder' | 'terminal') {
+    if (!onaction) return;
+    saveMessage = `opening ${action}…`;
+    try {
+      await onaction(action);
+      saveMessage = `${action} opened`;
+    } catch (error) {
+      saveState = 'error';
+      saveMessage = error instanceof Error ? error.message : `unable to open ${action}`;
+    }
+  }
 </script>
 
 <section class="drawer" id={`details-${project.id}`} aria-label={`${project.name} details`}>
   <div class="drawer-column note-column">
     <p class="path">
-      ~/{project.relativePath}
-      {#if metrics?.branch}
-        · {metrics.branch}{/if}
-      {#if metrics?.dirtyFiles}
-        · {metrics.dirtyFiles} dirty{/if}
-      {#if metrics?.aheadCount || metrics?.behindCount}
+      ~/{project.relativePath}{#if metrics?.branch}
+        · {metrics.branch}{/if}{#if metrics?.dirtyFiles}
+        · {metrics.dirtyFiles} dirty{/if}{#if metrics?.aheadCount || metrics?.behindCount}
         · ↑{metrics.aheadCount ?? 0} ↓{metrics.behindCount ?? 0}{/if}
     </p>
     <h3>Note</h3>
     <textarea
-      readonly
       maxlength="500"
-      value={project.note}
+      readonly={!noteEditable}
+      value={note}
       aria-label={`Note for ${project.name}`}
-      title="Note editing arrives in the next dashboard story"
-      onclick={() => onplaceholder('note editing')}></textarea>
-    <p class="saved">cached locally · editing arrives next</p>
+      oninput={editNote}
+      onblur={() => void saveNote()}></textarea>
+    <p class="saved" class:error-save={saveState === 'error'} role="status">
+      {noteEditable ? saveMessage : 'saved locally · read only while hidden'}
+    </p>
     <div class="actions" aria-label="Project actions">
-      <button type="button" onclick={() => onplaceholder('Open in Finder')}>Open in Finder</button>
-      <button type="button" onclick={() => onplaceholder('Open in Terminal')}>Terminal</button>
+      {#if onaction}<button type="button" onclick={() => void localAction('finder')}
+          >Open in Finder</button
+        ><button type="button" onclick={() => void localAction('terminal')}>Terminal</button>{/if}
       <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
       {#if githubUrl}<a class="button" href={githubUrl} target="_blank" rel="noreferrer">GitHub ↗</a
         >{/if}
-      <button class="danger" type="button" onclick={() => onplaceholder('hide project')}
-        >Hide</button
-      >
+      {#if onhide}<button class="danger" type="button" onclick={onhide}>{hideLabel}</button>{/if}
     </div>
-    {#if project.errors.length}
-      <div class="error-list" role="status">
-        {#each project.errors as error (error.collector)}
-          <p><b>{error.collector}</b> · {error.message} · {relativeAge(error.occurredAt)} ago</p>
-        {/each}
-      </div>
-    {/if}
+    {#if project.errors.length}<div class="error-list" role="status">
+        {#each project.errors as error (error.collector)}<p>
+            <b>{error.collector}</b> · {error.message} · {relativeAge(error.occurredAt)} ago
+          </p>{/each}
+      </div>{/if}
   </div>
-
   <div class="drawer-column">
     <h3>Repository</h3>
     <dl class="kv">
@@ -101,7 +149,6 @@
       </dd>
     </dl>
   </div>
-
   <div class="drawer-column">
     <h3>Trend · commits · 7 / 30 / 90d</h3>
     <ActivityBars
@@ -112,8 +159,7 @@
       height={34}
     />
     <h3 class="section-heading">GitHub · cached</h3>
-    {#if metrics?.githubRepoId}
-      <dl class="kv">
+    {#if metrics?.githubRepoId}<dl class="kv">
         <dt>★ trend 30d</dt>
         <dd class="up">
           {project.githubStarsGained30d === null
@@ -139,16 +185,13 @@
         </dd>
         <dt>collected</dt>
         <dd>{relativeAge(metrics.githubScannedAt)} ago</dd>
-      </dl>
-    {:else}
-      <dl class="kv">
+      </dl>{:else}<dl class="kv">
         <dt>remote</dt>
         <dd>
           {metrics?.githubAvailability === 'unauthenticated'
             ? 'authentication needed'
             : 'none — local only'}
         </dd>
-      </dl>
-    {/if}
+      </dl>{/if}
   </div>
 </section>

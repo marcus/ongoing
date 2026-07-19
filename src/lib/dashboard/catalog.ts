@@ -53,6 +53,23 @@ export interface DashboardPageModel extends DashboardCatalog {
   loadError: string | null;
 }
 
+function dashboardProject(
+  repository: CatalogRepository,
+  project: ReturnType<CatalogRepository['listProjects']>[number],
+  now: Date
+): DashboardProject {
+  const metrics = repository.getMetrics(project.id);
+  const snapshots = repository.listSnapshots(project.id);
+  const base = {
+    ...project,
+    metrics,
+    snapshots,
+    errors: repository.listCollectionErrors(project.id, true),
+    githubStarsGained30d: starDelta30d(snapshots, metrics?.githubStars ?? null, now.getTime())
+  };
+  return { ...base, views: classifyProject(base, now.getTime()) };
+}
+
 function member<T extends readonly string[]>(values: T, value: string | null): value is T[number] {
   return value !== null && values.includes(value);
 }
@@ -137,18 +154,7 @@ export function readDashboardCatalog(
   const allProjects = repository.listProjects({ includeHidden: true });
   const projects = allProjects
     .filter((project) => !project.isHidden)
-    .map((project) => {
-      const metrics = repository.getMetrics(project.id);
-      const snapshots = repository.listSnapshots(project.id);
-      const base = {
-        ...project,
-        metrics,
-        snapshots,
-        errors: repository.listCollectionErrors(project.id, true),
-        githubStarsGained30d: starDelta30d(snapshots, metrics?.githubStars ?? null, now.getTime())
-      };
-      return { ...base, views: classifyProject(base, now.getTime()) };
-    });
+    .map((project) => dashboardProject(repository, project, now));
   return {
     projects,
     hiddenCount: allProjects.length - projects.length,
@@ -156,6 +162,16 @@ export function readDashboardCatalog(
     scan: repository.getLatestScanRun(),
     generatedAt: now.toISOString()
   };
+}
+
+export function readHiddenProjects(
+  repository: CatalogRepository,
+  now = new Date()
+): DashboardProject[] {
+  return repository
+    .listProjects({ includeHidden: true })
+    .filter((project) => project.isHidden)
+    .map((project) => dashboardProject(repository, project, now));
 }
 
 export function applyDashboardQuery(

@@ -4,13 +4,32 @@
   import ActivityBars from './ActivityBars.svelte';
   import ProjectDrawer from './ProjectDrawer.svelte';
 
-  let { project, open, active, ontoggle, onplaceholder } = $props<{
+  let {
+    project,
+    open,
+    active,
+    manual,
+    ontoggle,
+    ondragstart,
+    onfavorite,
+    onnote,
+    onhide,
+    onaction,
+    onmove
+  } = $props<{
     project: DashboardProject;
     open: boolean;
     active: boolean;
     ontoggle: () => void;
-    onplaceholder: (action: string) => void;
+    manual: boolean;
+    ondragstart: () => void;
+    onfavorite: (favorite: boolean) => void;
+    onnote: (note: string) => Promise<void>;
+    onhide: () => void;
+    onaction: (action: 'finder' | 'terminal') => Promise<void>;
+    onmove: (where: 'up' | 'down' | 'top' | 'bottom') => void;
   }>();
+  let menuOpen = $state(false);
   let metrics = $derived(project.metrics);
   let oldExternalPr = $derived(
     metrics?.githubOldestExternalPrAt
@@ -28,6 +47,24 @@
       ontoggle();
     }
   }
+
+  function rowClick(event: MouseEvent) {
+    const interactive = (event.target as Element).closest('button, a, textarea, [role="button"]');
+    if (interactive && interactive !== event.currentTarget) return;
+    ontoggle();
+  }
+  function chooseMove(where: 'up' | 'down' | 'top' | 'bottom') {
+    menuOpen = false;
+    onmove(where);
+  }
+  function chooseAction(action: 'finder' | 'terminal') {
+    menuOpen = false;
+    void onaction(action);
+  }
+  function chooseHide() {
+    menuOpen = false;
+    onhide();
+  }
 </script>
 
 <div
@@ -41,20 +78,27 @@
   aria-controls={`details-${project.id}`}
   aria-label={`${project.name}, ${metrics?.branch ?? 'no branch'}, last commit ${relativeAge(metrics?.latestCommitAt ?? null)} ago`}
   data-project-row={project.id}
-  onclick={ontoggle}
+  onclick={rowClick}
   onkeydown={rowKeydown}
 >
-  <button
-    type="button"
-    class="star"
-    class:on={project.isFavorite}
-    aria-label={`${project.isFavorite ? 'Unfavorite' : 'Favorite'} ${project.name}; available in the next story`}
-    title="Favorite changes arrive in the next dashboard story"
-    onclick={(event) => {
-      event.stopPropagation();
-      onplaceholder('favorite');
-    }}>{project.isFavorite ? '★' : '☆'}</button
-  >
+  {#if manual}
+    <span
+      class="drag-handle"
+      role="button"
+      tabindex="0"
+      draggable="true"
+      aria-label={`Drag ${project.name} to reorder`}
+      {ondragstart}>⠿</span
+    >
+  {:else}
+    <button
+      type="button"
+      class="star"
+      class:on={project.isFavorite}
+      aria-label={`${project.isFavorite ? 'Unfavorite' : 'Favorite'} ${project.name}`}
+      onclick={() => onfavorite(!project.isFavorite)}>{project.isFavorite ? '★' : '☆'}</button
+    >
+  {/if}
   <div
     class="project-name"
     data-label="project"
@@ -138,12 +182,32 @@
     <button
       type="button"
       class="menu"
-      aria-label={`Actions for ${project.name}; available in next story`}
-      onclick={(event) => {
-        event.stopPropagation();
-        onplaceholder('project actions');
-      }}>⋮</button
+      aria-label={`Actions for ${project.name}`}
+      aria-expanded={menuOpen}
+      onclick={() => (menuOpen = !menuOpen)}>⋮</button
     >
+    {#if menuOpen}
+      <div
+        class="row-menu"
+        role="menu"
+        tabindex="-1"
+        onkeydown={(event) => event.stopPropagation()}
+      >
+        {#if manual}<button type="button" onclick={() => chooseMove('top')}>move to top</button
+          ><button type="button" onclick={() => chooseMove('up')}>move up</button><button
+            type="button"
+            onclick={() => chooseMove('down')}>move down</button
+          ><button type="button" onclick={() => chooseMove('bottom')}>move to bottom</button>{/if}
+        <button type="button" onclick={() => chooseAction('finder')}>Open in Finder</button>
+        <button type="button" onclick={() => chooseAction('terminal')}>Open in terminal</button>
+        {#if metrics?.githubOwner && metrics.githubName}<!-- eslint-disable-next-line svelte/no-navigation-without-resolve --><a
+            href={`https://github.com/${metrics.githubOwner}/${metrics.githubName}`}
+            target="_blank"
+            rel="noreferrer">Open on GitHub</a
+          >{/if}
+        <button class="danger" type="button" onclick={chooseHide}>Hide</button>
+      </div>
+    {/if}
   </div>
 </div>
-{#if open}<ProjectDrawer {project} {onplaceholder} />{/if}
+{#if open}<ProjectDrawer {project} {onnote} {onhide} {onaction} />{/if}

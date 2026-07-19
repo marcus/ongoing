@@ -2,6 +2,7 @@
   import type { DashboardQuery, ViewKey } from '$lib/dashboard/catalog';
   import { filterOptions, groupOptions, sortOptions, viewOptions } from '$lib/dashboard/options';
   import type { SortKey } from '$lib/domain/sorting';
+  import { resolve } from '$app/paths';
 
   let { query, viewCounts, hiddenCount, onchange } = $props<{
     query: DashboardQuery;
@@ -14,8 +15,15 @@
     const option = sortOptions.find((candidate) => candidate.key === key)!;
     onchange({
       sort: key,
+      ...(key === 'manual' ? { direction: 'asc' as const, group: 'none' as const } : {}),
       direction:
-        query.sort === key ? (query.direction === 'asc' ? 'desc' : 'asc') : option.defaultDirection
+        key === 'manual'
+          ? 'asc'
+          : query.sort === key
+            ? query.direction === 'asc'
+              ? 'desc'
+              : 'asc'
+            : option.defaultDirection
     });
   }
 </script>
@@ -77,12 +85,8 @@
         {option.label}
       </button>
     {/each}
-    <button
-      type="button"
-      disabled
-      title="Hidden project management is implemented in the next story"
+    <a class="flyout-link" href={resolve('/hidden')}
+      >show hidden <span class="count">{hiddenCount}</span></a
     >
-      show hidden <span class="count">{hiddenCount}</span>
-    </button>
   </div>
 </div>

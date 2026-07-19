@@ -16,7 +16,36 @@
   let flyoutOpen = $state(false);
   let openId = $state<string | null>(null);
   let activeIndex = $state(0);
-  let activeId = $derived(data.visibleProjects[activeIndex]?.id ?? null);
+  let favoriteOverrides = $state<Record<string, boolean>>({});
+  let noteOverrides = $state<Record<string, string>>({});
+  let hiddenIds = $state<string[]>([]);
+  let manualOrder = $state<string[] | null>(null);
+  let projects = $derived.by(() => {
+    let visible = data.visibleProjects
+      .filter((project) => !hiddenIds.includes(project.id))
+      .map((project) => ({
+        ...project,
+        isFavorite: favoriteOverrides[project.id] ?? project.isFavorite,
+        note: noteOverrides[project.id] ?? project.note
+      }));
+    if (manualOrder) {
+      const positions = new Map(manualOrder.map((id, index) => [id, index]));
+      visible = [...visible].sort(
+        (left, right) =>
+          (positions.get(left.id) ?? Infinity) - (positions.get(right.id) ?? Infinity)
+      );
+    }
+    return visible;
+  });
+  let manualEnabled = $derived(
+    data.query.sort === 'manual' &&
+      data.query.direction === 'asc' &&
+      !data.query.search &&
+      data.query.filter === 'all' &&
+      !data.query.view &&
+      data.query.group === 'none'
+  );
+  let activeId = $derived(projects[activeIndex]?.id ?? null);
   let searchValue = $state('');
   let announcement = $state('');
   let scanLabel = $state('');
@@ -28,7 +57,7 @@
 
   $effect(() => {
     searchValue = data.query.search;
-    const ids = data.visibleProjects.map(({ id }) => id);
+    const ids = projects.map(({ id }) => id);
     if (activeIndex >= ids.length) activeIndex = Math.max(0, ids.length - 1);
     if (openId && !ids.includes(openId)) openId = null;
   });
@@ -64,13 +93,68 @@
   }
 
   function toggleDetails(id: string) {
-    const index = data.visibleProjects.findIndex((project) => project.id === id);
+    const index = projects.findIndex((project) => project.id === id);
     if (index >= 0) activeIndex = index;
     openId = openId === id ? null : id;
   }
 
-  function placeholder(action: string) {
-    announcement = `${action} is a placeholder in this read-only catalog story.`;
+  async function apiMutation(path: string, body: Record<string, unknown>) {
+    const response = await fetch(path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const result = (await response.json()) as { error?: string };
+    if (!response.ok) throw new Error(result.error ?? 'Unable to save change');
+  }
+  async function toggleFavorite(id: string, favorite: boolean) {
+    const previous = projects.find((project) => project.id === id)?.isFavorite ?? !favorite;
+    favoriteOverrides = { ...favoriteOverrides, [id]: favorite };
+    announcement = favorite ? 'Project favorited.' : 'Project unfavorited.';
+    try {
+      await apiMutation(`/api/projects/${encodeURIComponent(id)}/favorite`, { favorite });
+    } catch (error) {
+      favoriteOverrides = { ...favoriteOverrides, [id]: previous };
+      announcement = error instanceof Error ? error.message : 'Unable to update favorite';
+    }
+  }
+  async function saveNote(id: string, note: string) {
+    const response = await fetch(`/api/projects/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ note })
+    });
+    const result = (await response.json()) as { error?: string };
+    if (!response.ok) throw new Error(result.error ?? 'Unable to save note');
+    noteOverrides = { ...noteOverrides, [id]: note };
+  }
+  async function hideProject(id: string) {
+    hiddenIds = [...hiddenIds, id];
+    openId = null;
+    announcement = 'Project hidden. Manage hidden projects to restore it.';
+    try {
+      await apiMutation(`/api/projects/${encodeURIComponent(id)}/hide`, { hidden: true });
+    } catch (error) {
+      hiddenIds = hiddenIds.filter((candidate) => candidate !== id);
+      announcement = error instanceof Error ? error.message : 'Unable to hide project';
+    }
+  }
+  async function projectAction(id: string, action: 'finder' | 'terminal') {
+    await apiMutation(`/api/projects/${encodeURIComponent(id)}`, { action });
+    announcement = `${action} opened.`;
+  }
+  async function reorderProjects(orderedIds: string[]) {
+    if (!manualEnabled) return;
+    const previous = manualOrder ?? projects.map((project) => project.id);
+    manualOrder = orderedIds;
+    announcement = 'Saving manual order…';
+    try {
+      await apiMutation('/api/projects/reorder', { orderedIds });
+      announcement = 'Manual order saved.';
+    } catch (error) {
+      manualOrder = previous;
+      announcement = error instanceof Error ? error.message : 'Unable to save manual order';
+    }
   }
 
   function focusProject(id: string) {
@@ -80,7 +164,7 @@
   }
 
   function moveSelection(delta: number) {
-    const ids = data.visibleProjects.map(({ id }) => id);
+    const ids = projects.map(({ id }) => id);
     if (!ids.length) return;
     activeIndex = (activeIndex + delta + ids.length) % ids.length;
     const nextId = ids[activeIndex];
@@ -96,12 +180,15 @@
     if (!option) return;
     changeQuery({
       sort: option.key,
+      ...(option.key === 'manual' ? { group: 'none' as const } : {}),
       direction:
-        data.query.sort === option.key
-          ? data.query.direction === 'asc'
-            ? 'desc'
-            : 'asc'
-          : option.defaultDirection
+        option.key === 'manual'
+          ? 'asc'
+          : data.query.sort === option.key
+            ? data.query.direction === 'asc'
+              ? 'desc'
+              : 'asc'
+            : option.defaultDirection
     });
   }
 
@@ -135,10 +222,10 @@
       chooseShortcut(Number(event.key) - 1);
     } else if (['s', 'n', 'h'].includes(event.key) && activeId) {
       event.preventDefault();
+      const project = projects.find(({ id }) => id === activeId);
       if (event.key === 'n') openId = activeId;
-      placeholder(
-        event.key === 's' ? 'favorite' : event.key === 'n' ? 'note editing' : 'hide project'
-      );
+      else if (event.key === 's' && project) void toggleFavorite(project.id, !project.isFavorite);
+      else if (event.key === 'h') void hideProject(activeId);
     }
   }
 
@@ -268,7 +355,7 @@
         remain visible during later scans.</span
       ><button class="button" type="button" onclick={rescan}>scan now</button>
     </section>
-  {:else if data.visibleProjects.length === 0}
+  {:else if projects.length === 0}
     <section class="state-panel">
       <strong>No projects match this view.</strong><span
         >Clear search, attention view, or filters to return to the catalog.</span
@@ -280,18 +367,22 @@
     </section>
   {:else}
     <ProjectList
-      projects={data.visibleProjects}
+      {projects}
       {openId}
       {activeId}
+      manual={manualEnabled}
       ontoggle={toggleDetails}
-      onplaceholder={placeholder}
+      onfavorite={(id, favorite) => void toggleFavorite(id, favorite)}
+      onnote={saveNote}
+      onhide={(id) => void hideProject(id)}
+      onaction={projectAction}
+      onreorder={(ids) => void reorderProjects(ids)}
     />
+    {#if data.query.sort === 'manual' && !manualEnabled}<p class="manual-hint" role="status">
+        Clear search, filters, views, and favorite grouping to edit the complete manual order.
+      </p>{/if}
   {/if}
 </main>
 
 <p class="sr-only" aria-live="polite">{announcement}</p>
-<KeyboardFooter
-  visible={data.visibleProjects.length}
-  total={data.totalCount}
-  hidden={data.hiddenCount}
-/>
+<KeyboardFooter visible={projects.length} total={data.totalCount} hidden={data.hiddenCount} />
