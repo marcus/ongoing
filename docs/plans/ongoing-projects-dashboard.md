@@ -6,7 +6,7 @@ Build a small local web app that scans Git repositories under `~/code`, enriches
 
 The app will use SvelteKit and Svelte 5, run with Bun, and keep its own SQLite database. The filesystem remains the source of truth for which projects exist. TD supplies issue data for repositories that use TD, and GitHub supplies public interest and maintenance data for repositories with a GitHub remote.
 
-This is a local, single-user application. It should stay easy to run, easy to inspect, and tolerant of repositories that are missing tools, remotes, commits, or credentials.
+This is a private, single-user application for the local network. Development may happen on different machines, but `aerie.local` is the canonical runtime and owns the production SQLite database. The app should stay easy to run, easy to inspect, and tolerant of repositories that are missing tools, remotes, commits, or credentials.
 
 ## Goals
 
@@ -18,12 +18,13 @@ This is a local, single-user application. It should stay easy to run, easy to in
 - Collect enough history to show trends instead of static counters.
 - Refresh cheaply when nothing has changed and degrade gracefully when GitHub, TD, or `cloc` is unavailable.
 - Keep TD and GitHub behind adapters so neither external data model leaks into the core project model.
+- Produce the same build on any development machine and deploy it predictably to `aerie.local`.
 
 ## Non-goals
 
 - Editing TD issues from the dashboard in the first release.
 - Replacing TD's monitor or GitHub's issue and pull-request interfaces.
-- Hosting the app publicly or supporting multiple users.
+- Exposing the app outside the LAN or supporting multiple users.
 - Building a universal source-code analytics platform.
 - Producing a single opaque score that claims to know which project matters most.
 - Continuously watching every file beneath `~/code`.
@@ -59,7 +60,66 @@ Use a modular SvelteKit application rather than separate frontend, API, and work
 - Tests: Vitest for unit and integration tests; Playwright for a small browser smoke suite.
 - Formatting and static checks: Prettier, ESLint, and `svelte-check`.
 
-The app should bind to loopback by default and require no authentication in that mode.
+Development servers should bind to loopback by default. The production service on `aerie.local` should bind to its LAN interface on a fixed configurable port so other machines can reach it at `http://aerie.local:<port>`.
+
+## Development and deployment topology
+
+Code may be written and tested on any of Marcus's machines on the LAN. Source control is the handoff between those machines; no build output, `node_modules`, SQLite files, notes, credentials, or machine-specific configuration should be committed.
+
+Before the first deployment, create a new private GitHub repository for this project and push `main` to it. Verify the repository's visibility is private before pushing any source. The exact repository name can be chosen at implementation time. Commit the Bun lockfile and an exact Bun version declaration so local development and `aerie.local` use the same toolchain.
+
+`aerie.local` is the production host:
+
+- SSH account: `marcus@aerie.local`.
+- Application checkout: `~/code/<repo-name>`.
+- Project scan root: `~/code` unless production configuration overrides it.
+- Persistent application data: the checkout's ignored `.data/` directory or a configured path beneath Marcus's home directory.
+- LAN URL: `http://aerie.local:4173` by default.
+- Process manager: a user-level macOS LaunchAgent so the app starts after login and restarts after a crash.
+
+The application repository will itself appear beneath the scan root. It can remain visible as a project or be hidden through the normal UI.
+
+### Implementing-agent authorization
+
+The implementing agent has permission and working access to connect to the production machine with:
+
+```sh
+ssh marcus@aerie.local
+```
+
+When the application has passed its launch checks, the implementing agent should use that access to perform the first deployment. This authorization covers connecting over SSH, cloning the new private GitHub repository into `~/code/`, installing the locked application dependencies, building the app, applying its migrations, configuring and starting the user-level service, and running deployment verification. It does not authorize `sudo`, broad operating-system changes, opening the service to the public internet, or changing unrelated projects on `aerie.local`.
+
+Do not copy an uncommitted working tree to the server. The commit on `aerie.local` must match the tested commit on `main` in the private GitHub repository.
+
+### First-launch runbook
+
+Once the application is ready to launch:
+
+1. Run all required checks on the implementation machine and record the commit SHA being deployed.
+2. Create the GitHub repository as private, add it as `origin`, push `main`, and verify its private visibility.
+3. Run `ssh marcus@aerie.local` and verify the host identity, available disk space, Bun version, Git access to the private repository, and the availability of `git`, `td`, and `cloc`.
+4. Create `~/code/` if needed and clone the private repository to `~/code/<repo-name>`.
+5. Install the exact Bun version declared by the project if it is not already available. Install dependencies from the lockfile without updating them.
+6. Create production configuration outside Git, including the scan root, database path, host, port, GitHub authentication mode, and any LAN access secret.
+7. Build the production application, run database migrations, and perform a one-shot scan.
+8. Install and load a user-level LaunchAgent that runs the built server with Bun, uses `HOST=0.0.0.0` and the configured port, writes logs to a known user-owned directory, and restarts on failure.
+9. Verify the health endpoint locally on `aerie.local`, then open the app from a second LAN machine through `http://aerie.local:4173`.
+10. Confirm that the catalog scans `~/code`, notes and ordering survive a restart, hidden projects remain hidden, TD enrichment works, and GitHub failures degrade cleanly.
+
+If any verification fails, stop the new service, preserve its logs and database, and fix the issue through a new commit. Do not patch the production checkout by hand.
+
+### Updates and rollback
+
+Add a documented deployment command or script that performs this sequence over SSH:
+
+1. Confirm the remote checkout is clean.
+2. Record the currently deployed commit.
+3. Fetch and fast-forward to the selected commit on `main`.
+4. Install from the lockfile, build, back up the SQLite file, and apply migrations.
+5. Restart the LaunchAgent.
+6. Wait for the health check and run a LAN smoke test.
+
+Rollback should check out the recorded prior commit, rebuild it, restore the pre-migration database backup when the migration is not backward-compatible, restart the service, and verify health. Keep a small fixed number of timestamped database backups rather than growing an unbounded archive.
 
 ## User experience
 
@@ -442,8 +502,10 @@ Do not ship a grand priority score in the first version. Once several weeks of s
 
 ## Security and privacy
 
-- Bind to `127.0.0.1` by default.
-- Do not expose repository paths or notes to a non-loopback listener without adding authentication.
+- Bind development servers to `127.0.0.1` by default. Bind the production service to the LAN on `aerie.local` only through explicit production configuration.
+- Require a simple shared access secret for the non-loopback production listener and keep it outside Git. Use an HTTP-only session cookie after login rather than putting the secret in URLs.
+- Restrict the production port to the LAN with the host firewall. Do not configure router port forwarding, public DNS, or a public tunnel.
+- Plain HTTP is acceptable for the first release only on Marcus's trusted LAN. If the service becomes available on any less-trusted network, add HTTPS before using it there.
 - Store no GitHub tokens in SQLite. Let `gh` or environment-based credential handling own them.
 - Invoke subprocesses without a shell and validate every path remains beneath a configured scan root.
 - Avoid following symlinks outside scan roots.
@@ -488,6 +550,15 @@ Keep Playwright coverage focused on the important flows:
 4. Add and persist a note.
 5. Hide a project, confirm it leaves the main list, then restore it from the hidden view.
 6. Trigger a scan and observe progress without losing the current list state.
+
+### Deployment tests
+
+- Build and run the production adapter with the pinned Bun version.
+- Verify an unauthenticated LAN request is rejected and a valid session can reach the app.
+- Verify the health endpoint without exposing repository data.
+- Restart the LaunchAgent and confirm the app returns with the same SQLite state.
+- Run the deployment script in a dry-run mode that performs no remote mutations.
+- After first launch, run a smoke test from a second LAN machine against `http://aerie.local:4173`.
 
 ## Implementation phases
 
@@ -546,6 +617,18 @@ Exit criteria: authenticated GitHub repositories show current counters and trend
 
 Exit criteria: every derived view explains why a project appears and links back to the underlying metrics.
 
+### Phase 7: private repository and `aerie.local` launch
+
+- Create the new private GitHub repository and verify its visibility.
+- Push the tested `main` branch.
+- Add production configuration documentation and the SSH deployment/update script.
+- Use the authorized `ssh marcus@aerie.local` access to clone the repository under `~/code/`.
+- Install locked dependencies, build, migrate, scan, and configure the LaunchAgent.
+- Verify authentication, health, persistence, restart behavior, and LAN access from another machine.
+- Document the deployed commit, service controls, log location, data location, update command, and rollback command.
+
+Exit criteria: `aerie.local` serves the tested commit on the LAN, restarts cleanly, retains application state, and can be updated or rolled back without editing production files by hand.
+
 ## Definition of done for the first release
 
 - The app discovers and displays the eligible repositories under `~/code`.
@@ -557,7 +640,11 @@ Exit criteria: every derived view explains why a project appears and links back 
 - TD and GitHub enrichment is asynchronous and failure-isolated.
 - New repositories appear automatically; missing repositories are marked rather than silently deleted.
 - Repeated scans avoid unnecessary LOC and remote API work.
-- The app binds to loopback and does not execute shell-interpolated paths.
+- Development binds to loopback; production is reachable only on the LAN at `aerie.local` and requires the configured access secret.
+- The source is stored in a verified private GitHub repository.
+- The tested commit is cloned under `~/code/` on `aerie.local` and runs as a user-level persistent service.
+- Restart, update, database-backup, health-check, and rollback procedures are documented and verified.
+- The app does not execute shell-interpolated paths.
 - Unit, integration, browser smoke, type, lint, and production-build checks pass under the pinned Bun version.
 
 ## Open questions to resolve during implementation
