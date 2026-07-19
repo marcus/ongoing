@@ -47,6 +47,28 @@ test('supports keyboard navigation, details, and persistent themes', async ({ pa
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'ink');
 });
 
+test('renders TD counts, freshness, stale warnings, and attention membership', async ({ page }) => {
+  await page.goto('/?sort=name&dir=asc&filter=all&group=none');
+  const alpha = page.locator('[data-project-row]').filter({ hasText: 'alpha' });
+  const td = alpha.locator('[data-label="td"]');
+  await expect(td).toContainText('4');
+  await expect(td).toContainText('1blk');
+  await expect(td).toHaveAttribute(
+    'title',
+    /TD collected .* · 2 open · 1 in progress · 1 in review/
+  );
+  await expect(alpha.locator('[title="1 stale TD issues"]')).toBeVisible();
+
+  await alpha.click();
+  const drawer = page.getByRole('region', { name: 'alpha details' });
+  await expect(drawer).toContainText('td open / blocked / review');
+  await expect(drawer).toContainText('td in progress / stale');
+  await expect(drawer).toContainText('td collected');
+
+  await page.goto('/?view=attention&filter=all&group=none');
+  await expect(page.locator('[data-project-row]').filter({ hasText: 'alpha' })).toBeVisible();
+});
+
 test('keeps metric meaning in the narrow catalog layout', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/?sort=name&dir=asc&filter=all&group=none');

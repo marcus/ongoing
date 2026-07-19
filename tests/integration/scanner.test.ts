@@ -416,6 +416,7 @@ describe('resilient scan orchestration', () => {
       'project-started',
       'collector-completed',
       'collector-completed',
+      'collector-completed',
       'completed'
     ]);
     expect(progress.eventsAfter('scan_progress', events[2].id)[0].id).toBe(events[3].id);
@@ -467,6 +468,63 @@ describe('resilient scan orchestration', () => {
     const result = await scanner.scan({ reason: 'scheduled' });
     expect(result.updatedCount).toBe(0);
     expect(collectGit).not.toHaveBeenCalled();
+  });
+
+  it('preserves successful TD metrics across a per-project failure and resolves on recovery', async () => {
+    const { repository, projects } = await fixture();
+    let run = 0;
+    const collectIssues = vi
+      .fn()
+      .mockResolvedValueOnce({
+        openCount: 60,
+        inProgressCount: 8,
+        blockedCount: 2,
+        reviewCount: 4,
+        totalNonClosedCount: 74,
+        staleCount: 9
+      })
+      .mockRejectedValueOnce(new Error('TD CLI timed out'))
+      .mockResolvedValueOnce({
+        openCount: 3,
+        inProgressCount: 1,
+        blockedCount: 0,
+        reviewCount: 1,
+        totalNonClosedCount: 5,
+        staleCount: 0
+      });
+    const scanner = new Scanner(repository, config, {
+      now: () => now,
+      createRunId: () => `scan_td_${++run}`,
+      discover: discovery(projects),
+      collectGit: async () => gitMetrics,
+      collectIssues
+    });
+
+    await scanner.scan({ reason: 'scheduled', refresh: 'cheap' });
+    expect(repository.getMetrics(projects[0].id)).toMatchObject({
+      tdTotalNonClosedCount: 74,
+      tdBlockedCount: 2,
+      tdScannedAt: now
+    });
+
+    await scanner.scan({ reason: 'scheduled', refresh: 'cheap' });
+    expect(repository.getMetrics(projects[0].id)).toMatchObject({
+      tdTotalNonClosedCount: 74,
+      tdBlockedCount: 2,
+      tdScannedAt: now
+    });
+    expect(repository.listCollectionErrors(projects[0].id, true)).toEqual([
+      expect.objectContaining({ collector: 'issues', message: 'TD CLI timed out' })
+    ]);
+
+    await scanner.scan({ reason: 'scheduled', refresh: 'cheap' });
+    expect(repository.getMetrics(projects[0].id)).toMatchObject({
+      tdTotalNonClosedCount: 5,
+      tdBlockedCount: 0,
+      tdStaleCount: 0,
+      tdScannedAt: now
+    });
+    expect(repository.listCollectionErrors(projects[0].id, true)).toEqual([]);
   });
 });
 

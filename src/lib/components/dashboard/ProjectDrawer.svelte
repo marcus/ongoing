@@ -147,6 +147,10 @@
         {metrics?.tdTotalNonClosedCount ?? '—'} / {metrics?.tdBlockedCount ?? '—'} / {metrics?.tdReviewCount ??
           '—'}
       </dd>
+      <dt>td in progress / stale</dt>
+      <dd>{metrics?.tdInProgressCount ?? '—'} / {metrics?.tdStaleCount ?? '—'}</dd>
+      <dt>td collected</dt>
+      <dd>{metrics?.tdScannedAt ? `${relativeAge(metrics.tdScannedAt)} ago` : 'unavailable'}</dd>
     </dl>
   </div>
   <div class="drawer-column">

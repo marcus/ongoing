@@ -39,6 +39,9 @@
   let staleGit = $derived(
     metrics?.gitScannedAt ? Date.now() - Date.parse(metrics.gitScannedAt) > 15 * 60_000 : false
   );
+  let staleTd = $derived(
+    metrics?.tdScannedAt ? Date.now() - Date.parse(metrics.tdScannedAt) > 10 * 60_000 : false
+  );
 
   function rowKeydown(event: KeyboardEvent) {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -136,6 +139,9 @@
   <div
     class="td"
     data-label="td"
+    title={metrics?.tdScannedAt
+      ? `TD collected ${relativeAge(metrics.tdScannedAt)} ago · ${metrics.tdOpenCount ?? 0} open · ${metrics.tdInProgressCount ?? 0} in progress · ${metrics.tdReviewCount ?? 0} in review`
+      : 'TD unavailable'}
     aria-label={`${metrics?.tdTotalNonClosedCount ?? 'no'} open TD issues, ${metrics?.tdBlockedCount ?? 'no'} blocked`}
   >
     <strong>{metrics?.tdTotalNonClosedCount ?? '—'}</strong>
@@ -174,6 +180,7 @@
           title={`${metrics.tdStaleCount} stale TD issues`}>~</span
         >{/if}
       {#if staleGit}<span class="warn" title="Local Git metrics are stale">◷</span>{/if}
+      {#if staleTd}<span class="warn" title="TD metrics are stale">◷</span>{/if}
       {#each project.errors as error (error.collector)}<span
           class="warn"
           title={`${error.collector}: ${error.message}`}>!</span

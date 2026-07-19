@@ -35,9 +35,12 @@ await repository.updateMetrics(alpha.id, {
   behindCount: 0,
   locCode: 4_812,
   dominantLanguage: 'TypeScript',
+  tdOpenCount: 2,
+  tdInProgressCount: 1,
   tdTotalNonClosedCount: 4,
   tdBlockedCount: 1,
   tdReviewCount: 1,
+  tdStaleCount: 1,
   githubRepoId: 'R_alpha',
   githubOwner: 'example',
   githubName: 'alpha',
@@ -46,7 +49,8 @@ await repository.updateMetrics(alpha.id, {
   githubOpenPrs: 2,
   githubExternalPrs: 1,
   githubCiState: 'success',
-  gitScannedAt: '2026-07-19T11:59:00.000Z'
+  gitScannedAt: '2026-07-19T11:59:00.000Z',
+  tdScannedAt: '2026-07-19T11:59:00.000Z'
 });
 await repository.saveSnapshot({
   projectId: alpha.id,

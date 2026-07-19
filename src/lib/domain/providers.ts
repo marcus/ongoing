@@ -45,7 +45,7 @@ export interface TrafficMetrics {
 }
 
 export interface IssueMetricsProvider {
-  collect(projectPath: string, signal?: AbortSignal): Promise<IssueMetrics>;
+  collect(projectPath: string, signal?: AbortSignal): Promise<IssueMetrics | null>;
 }
 
 export interface HostingMetricsProvider {

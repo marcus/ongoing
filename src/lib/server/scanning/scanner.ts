@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { ScanReason, ScanRun } from '$lib/domain/metrics';
 import type { Project } from '$lib/domain/project';
+import type { IssueMetrics } from '$lib/domain/providers';
 import type { AppConfig } from '$lib/server/config';
 import {
   ScanLeaseLostError,
@@ -9,6 +10,7 @@ import {
 } from '$lib/server/catalog/repository';
 import { collectGitMetrics, type GitMetrics } from '$lib/server/collectors/git';
 import { collectLocMetrics, type LocCollectionResult } from '$lib/server/collectors/loc';
+import { collectTdMetrics } from '$lib/server/collectors/td';
 import { discoverAndReconcile, type ReconciledDiscovery } from '$lib/server/collectors/discover';
 import { createConcurrencyLimit } from './limit';
 import { scanProgress, type ScanProgressBus } from './progress';
@@ -61,6 +63,10 @@ export interface ScannerDependencies {
     repositoryPath: string,
     options: { previousFingerprint: string | null; force: boolean; signal: AbortSignal }
   ) => Promise<LocCollectionResult>;
+  collectIssues?: (
+    repositoryPath: string,
+    options: { signal: AbortSignal }
+  ) => Promise<IssueMetrics | null>;
 }
 
 export class ScanInProgressError extends Error {
@@ -87,6 +93,7 @@ export class Scanner {
   private readonly discover: NonNullable<ScannerDependencies['discover']>;
   private readonly collectGit: NonNullable<ScannerDependencies['collectGit']>;
   private readonly collectLoc: NonNullable<ScannerDependencies['collectLoc']>;
+  private readonly collectIssues: NonNullable<ScannerDependencies['collectIssues']>;
 
   constructor(
     private readonly repository: CatalogRepository,
@@ -135,6 +142,10 @@ export class Scanner {
           now: this.now,
           signal: options.signal
         }));
+    this.collectIssues =
+      dependencies.collectIssues ??
+      ((path, options) =>
+        collectTdMetrics(path, { now: () => new Date(this.now()), signal: options.signal }));
   }
 
   async start(request: ScanRequest): Promise<ScanHandle> {
@@ -293,6 +304,65 @@ export class Scanner {
                 at: this.now(),
                 projectId: project.id,
                 collector: 'git',
+                message
+              });
+            }
+
+            try {
+              if (signal.aborted) throw new ScanLeaseLostError(runId);
+              const metrics = await this.collectIssues(project.canonicalPath, { signal });
+              await this.repository.updateMetrics(
+                project.id,
+                metrics
+                  ? {
+                      tdOpenCount: metrics.openCount,
+                      tdInProgressCount: metrics.inProgressCount,
+                      tdBlockedCount: metrics.blockedCount,
+                      tdReviewCount: metrics.reviewCount,
+                      tdTotalNonClosedCount: metrics.totalNonClosedCount,
+                      tdStaleCount: metrics.staleCount,
+                      tdScannedAt: this.now()
+                    }
+                  : {
+                      tdOpenCount: null,
+                      tdInProgressCount: null,
+                      tdBlockedCount: null,
+                      tdReviewCount: null,
+                      tdTotalNonClosedCount: null,
+                      tdStaleCount: null,
+                      tdScannedAt: null
+                    },
+                lease
+              );
+              await this.repository.resolveCollectionError(project.id, 'issues', this.now(), lease);
+              if (metrics) updated = true;
+              this.progress.publish({
+                runId,
+                type: 'collector-completed',
+                at: this.now(),
+                projectId: project.id,
+                collector: 'issues'
+              });
+            } catch (error) {
+              if (error instanceof ScanLeaseLostError || signal.aborted)
+                throw new ScanLeaseLostError(runId);
+              counts.errorCount += 1;
+              const message = errorMessage(error);
+              await this.repository.recordCollectionError(
+                {
+                  projectId: project.id,
+                  collector: 'issues',
+                  message,
+                  occurredAt: this.now()
+                },
+                lease
+              );
+              this.progress.publish({
+                runId,
+                type: 'collector-failed',
+                at: this.now(),
+                projectId: project.id,
+                collector: 'issues',
                 message
               });
             }
