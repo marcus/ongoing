@@ -39,6 +39,11 @@ try {
   console.log('Production adapter authentication smoke passed.');
 } finally {
   child.kill('SIGTERM');
-  await child.exited;
+  const stopped = await Promise.race([
+    child.exited.then(() => true),
+    Bun.sleep(2_000).then(() => false)
+  ]);
+  if (!stopped) child.kill('SIGKILL');
+  child.unref();
   await rm(directory, { recursive: true, force: true });
 }

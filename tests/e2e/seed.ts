@@ -1,9 +1,11 @@
-import { rmSync } from 'node:fs';
+import { mkdirSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { CatalogDatabase } from '../../src/lib/server/catalog/database';
 import { CatalogRepository } from '../../src/lib/server/catalog/repository';
 
 const path = resolve(process.env.DATABASE_PATH ?? '.data/ongoing-e2e.sqlite');
+const scanRoot = resolve(process.env.SCAN_ROOTS ?? '/private/tmp/ongoing-e2e-unscanned');
+mkdirSync(scanRoot, { recursive: true });
 rmSync(path, { force: true });
 rmSync(`${path}-shm`, { force: true });
 rmSync(`${path}-wal`, { force: true });
@@ -152,6 +154,39 @@ await repository.saveSnapshot({
   capturedOn: '2026-06-18',
   value: 0
 });
+
+const unicode = await repository.upsertDiscovered({
+  canonicalPath: '/code/tools/café catalog',
+  relativePath: 'tools/café catalog',
+  name: 'café catalog',
+  scanRoot: '/code'
+});
+await repository.updateNote(unicode.id, 'small Unicode-path utility ready for a focused pass');
+await repository.updateMetrics(unicode.id, {
+  branch: 'main',
+  latestCommitAt: '2026-07-12T08:00:00.000Z',
+  latestCommitSubject: 'Normalize catalog labels',
+  commitCount: 38,
+  commits7d: 1,
+  commits30d: 5,
+  activeDays30d: 3,
+  dirtyFiles: 1,
+  locCode: 3_240,
+  dominantLanguage: 'Rust',
+  tdTotalNonClosedCount: 3,
+  gitScannedAt: '2026-07-19T11:59:00.000Z',
+  tdScannedAt: '2026-07-19T11:59:00.000Z'
+});
+
+const hidden = await repository.upsertDiscovered({
+  canonicalPath: '/code/archive/manual-notes',
+  relativePath: 'archive/manual-notes',
+  name: 'manual-notes',
+  scanRoot: '/code'
+});
+await repository.updateNote(hidden.id, 'hidden intentionally; revisit after autumn');
+await repository.setFavorite(hidden.id, true);
+await repository.setHidden(hidden.id, true);
 
 await repository.createScanRun({
   id: 'scan-e2e',

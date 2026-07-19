@@ -1,5 +1,25 @@
 import { expect, test } from '@playwright/test';
 
+function channel(value: number): number {
+  const normalized = value / 255;
+  return normalized <= 0.04045 ? normalized / 12.92 : Math.pow((normalized + 0.055) / 1.055, 2.4);
+}
+
+function luminance(color: string): number {
+  const value = color.trim();
+  const [red, green, blue] = value.startsWith('#')
+    ? [value.slice(1, 3), value.slice(3, 5), value.slice(5, 7)].map((part) =>
+        Number.parseInt(part, 16)
+      )
+    : value.match(/\d+/g)!.slice(0, 3).map(Number);
+  return 0.2126 * channel(red) + 0.7152 * channel(green) + 0.0722 * channel(blue);
+}
+
+function contrast(first: string, second: string): number {
+  const [lighter, darker] = [luminance(first), luminance(second)].sort((a, b) => b - a);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
 test.beforeEach(async ({ page }) => {
   page.on('pageerror', (error) => {
     throw error;
@@ -31,6 +51,103 @@ test('loads the cached catalog and round-trips sort and search through the URL',
   );
   expect(api.ok()).toBe(true);
   expect((await api.json()).visibleProjects[0].name).toBe('beta');
+});
+
+test('accepts every planned sort in URL state and exposes its semantic label', async ({ page }) => {
+  const sorts = [
+    ['manual', 'manual'],
+    ['latestCommit', 'latest commit'],
+    ['commits30d', 'commits 30d'],
+    ['activeDays30d', 'active days'],
+    ['linesOfCode', 'lines of code'],
+    ['lifetimeCommits', 'lifetime commits'],
+    ['openTdIssues', 'td open'],
+    ['githubStars', 'github stars'],
+    ['githubStarsGained30d', '★ gained 30d'],
+    ['githubOpenPrs', 'open prs'],
+    ['githubOldestExternalPr', 'oldest external pr'],
+    ['githubTraffic', 'github traffic'],
+    ['name', 'name']
+  ] as const;
+
+  for (const [key, label] of sorts) {
+    await page.goto(`/?sort=${key}&dir=asc&filter=all&group=none`);
+    await expect(page.locator('html')).toHaveAttribute('data-hydrated', 'true');
+    await expect(
+      page.getByRole('button', { name: new RegExp(`sort ${label}`, 'i') })
+    ).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`sort=${key}`));
+  }
+});
+
+test('streams scan completion without dropping catalog or URL state', async ({ page }) => {
+  await page.goto('/?sort=name&dir=asc&filter=all&group=none&q=alpha');
+  await expect(page.locator('html')).toHaveAttribute('data-hydrated', 'true');
+  await expect(page.locator('[data-project-row]')).toHaveCount(1);
+  const search = page.getByRole('searchbox', { name: 'Filter projects' });
+  await search.focus();
+
+  const eventStream = page.waitForRequest(
+    (request) => new URL(request.url()).pathname === '/api/scan/events'
+  );
+  await page.getByRole('button', { name: 'rescan' }).click();
+  await eventStream;
+  await expect(page.getByRole('status').filter({ hasText: /scan complete|completed/ })).toBeVisible(
+    {
+      timeout: 15_000
+    }
+  );
+  await expect(page).toHaveURL(/q=alpha/);
+  await expect(page.locator('[data-project-row]')).toHaveCount(1);
+});
+
+test('provides visible keyboard focus, reduced motion, and a recoverable empty result', async ({
+  page
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/?sort=name&dir=asc&filter=all&group=none');
+  await expect(page.locator('html')).toHaveAttribute('data-hydrated', 'true');
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('link', { name: 'Skip to project catalog' })).toBeFocused();
+  expect(
+    await page
+      .getByRole('link', { name: 'Skip to project catalog' })
+      .evaluate((element) => getComputedStyle(element).outlineStyle)
+  ).not.toBe('none');
+  expect(
+    await page.locator('.scanline i').evaluate((element) => getComputedStyle(element).animationName)
+  ).toBe('none');
+
+  const search = page.getByRole('searchbox', { name: 'Filter projects' });
+  await search.fill('no-project-has-this-name');
+  await expect(page.getByText('No projects match this view.')).toBeVisible();
+  await page.getByRole('button', { name: 'clear filters' }).click();
+  await expect(page.getByRole('list', { name: 'Projects' })).toBeVisible();
+});
+
+test('keeps every text hierarchy token above normal-text contrast in all themes', async ({
+  page
+}) => {
+  await page.goto('/?sort=name&dir=asc&filter=all&group=none');
+  await expect(page.locator('html')).toHaveAttribute('data-hydrated', 'true');
+  for (const theme of ['ember', 'ink', 'paper', 'moss', 'port']) {
+    await page.getByRole('button', { name: `${theme} theme` }).click();
+    const colors = await page.locator('html').evaluate((element) => {
+      const styles = getComputedStyle(element);
+      return {
+        background: styles.getPropertyValue('--bg'),
+        text: styles.getPropertyValue('--ink'),
+        dim: styles.getPropertyValue('--ink-dim'),
+        faint: styles.getPropertyValue('--ink-faint')
+      };
+    });
+    for (const foreground of [colors.text, colors.dim, colors.faint]) {
+      expect(
+        contrast(foreground, colors.background),
+        `${theme}: ${foreground}`
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  }
 });
 
 test('supports keyboard navigation, details, and persistent themes', async ({ page }) => {
@@ -225,7 +342,8 @@ test('persists personal organization controls and rejects forged mutations', asy
   await expect(page.locator('[data-project-row]').filter({ hasText: 'beta' })).toHaveCount(0);
   await page.goto('/hidden');
   await page.getByRole('searchbox', { name: 'Search hidden projects' }).fill('catalog settles');
-  await expect(page.getByRole('listitem')).toContainText('beta');
+  await expect(page.getByRole('listitem').filter({ hasText: 'beta' })).toBeVisible();
+  await expect(page.getByRole('listitem').filter({ hasText: 'manual-notes' })).toHaveCount(0);
   await page.getByRole('button', { name: /beta/ }).first().click();
   await expect(page.getByRole('region', { name: 'beta details' })).toBeVisible();
   await page.getByRole('button', { name: 'restore' }).first().click();
