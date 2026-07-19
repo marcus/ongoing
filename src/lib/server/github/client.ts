@@ -18,6 +18,7 @@ export interface GitHubGraphqlError {
   message: string;
   path?: readonly (string | number)[];
   type?: string;
+  extensions?: Record<string, unknown>;
 }
 
 export interface GitHubGraphqlResult<T> {
@@ -57,6 +58,31 @@ function resetFrom(headers: Headers, now: Date): string | null {
     : null;
 }
 
+function stringReset(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+}
+
+function graphqlReset<T>(
+  result: GitHubGraphqlResult<T>,
+  headers: Headers,
+  now: Date
+): string | null {
+  const data = result.data as Record<string, unknown> | null;
+  const rateLimit = data?.rateLimit as Record<string, unknown> | undefined;
+  for (const error of result.errors ?? []) {
+    const reset = stringReset(error.extensions?.resetAt);
+    if (reset) return reset;
+  }
+  return stringReset(rateLimit?.resetAt) ?? resetFrom(headers, now);
+}
+
+function isRateLimitError(error: GitHubGraphqlError): boolean {
+  const code = error.extensions?.code ?? error.extensions?.type;
+  return error.type === 'RATE_LIMITED' || code === 'RATE_LIMITED' || code === 'RATE_LIMIT';
+}
+
 function requestError(response: Response, now: Date): GitHubRequestError {
   const remaining = response.headers.get('x-ratelimit-remaining');
   if (response.status === 429 || (response.status === 403 && remaining === '0')) {
@@ -89,6 +115,12 @@ export class GitHubHttpClient implements GitHubClient {
   private readonly apiUrl: string;
   private tokenPromise: Promise<string | null> | null = null;
   private limitedUntil = 0;
+
+  private rememberRateLimit(resetAt: string | null): void {
+    if (!resetAt) return;
+    const parsed = Date.parse(resetAt);
+    if (Number.isFinite(parsed)) this.limitedUntil = Math.max(this.limitedUntil, parsed);
+  }
 
   constructor(options: GitHubHttpClientOptions = {}) {
     this.env = options.env ?? process.env;
@@ -137,8 +169,7 @@ export class GitHubHttpClient implements GitHubClient {
     });
     if (!response.ok) {
       const error = requestError(response, this.now());
-      if (error.failure === 'rate_limited' && error.resetAt)
-        this.limitedUntil = Date.parse(error.resetAt);
+      if (error.failure === 'rate_limited') this.rememberRateLimit(error.resetAt);
       throw error;
     }
     return response;
@@ -174,7 +205,20 @@ export class GitHubHttpClient implements GitHubClient {
       },
       signal
     );
-    return (await response.json()) as GitHubGraphqlResult<T>;
+    const result = (await response.json()) as GitHubGraphqlResult<T>;
+    const headerLimited = response.headers.get('x-ratelimit-remaining') === '0';
+    const bodyRateLimit = result.errors?.some(isRateLimitError) ?? false;
+    const data = result.data as Record<string, unknown> | null;
+    const rateLimit = data?.rateLimit as Record<string, unknown> | undefined;
+    const dataLimited = rateLimit?.remaining === 0;
+    if (headerLimited || bodyRateLimit || dataLimited) {
+      const resetAt = graphqlReset(result, response.headers, this.now());
+      this.rememberRateLimit(resetAt);
+      throw new GitHubRequestError('GitHub rate limit reached', 'rate_limited', 200, resetAt);
+    }
+    if (result.errors?.some((error) => !error.path?.length))
+      throw new GitHubRequestError('GitHub GraphQL request failed', 'error', 200);
+    return result;
   }
 
   async rest<T>(path: string, signal?: AbortSignal): Promise<GitHubRestResult<T>> {

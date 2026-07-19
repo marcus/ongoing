@@ -1,15 +1,21 @@
-import type { ProviderAvailability, SnapshotMetric } from '$lib/domain/metrics';
+import type { ProjectMetrics, ProviderAvailability, SnapshotMetric } from '$lib/domain/metrics';
 import type { Project } from '$lib/domain/project';
 import type { HostingMetrics, TrafficMetrics } from '$lib/domain/providers';
 import type { CatalogRepository, ScanLeaseOwnership } from '$lib/server/catalog/repository';
 import { GitHubRequestError } from '$lib/server/github/client';
-import type { GitHubRepositoryRef } from '$lib/server/github/provider';
+import type { GitHubHostingMetrics, GitHubRepositoryRef } from '$lib/server/github/provider';
 import { runCommand, type CommandRunner } from './process';
 
 export interface GitHubRemote {
   owner: string;
   name: string;
 }
+
+export type GitHubOriginResult =
+  | { status: 'github'; remote: GitHubRemote }
+  | { status: 'absent' | 'non_github' }
+  | { status: 'invalid'; message: string }
+  | { status: 'error'; message: string };
 
 export interface GitHubEnrichmentOptions {
   provider: GitHubEnrichmentProvider;
@@ -25,7 +31,7 @@ export interface GitHubEnrichmentProvider {
   collectMany(
     refs: readonly GitHubRepositoryRef[],
     signal?: AbortSignal
-  ): Promise<Map<string, HostingMetrics | Error>>;
+  ): Promise<Map<string, HostingMetrics | GitHubHostingMetrics | Error>>;
   collectTraffic(owner: string, name: string, signal?: AbortSignal): Promise<TrafficMetrics>;
 }
 
@@ -59,21 +65,63 @@ export function parseGitHubRemote(value: string): GitHubRemote | null {
     .split('/');
   if (parts.length !== 2 || parts.some((part) => !part || part === '.' || part === '..'))
     return null;
-  return { owner: decodeURIComponent(parts[0]), name: decodeURIComponent(parts[1]) };
+  try {
+    return { owner: decodeURIComponent(parts[0]), name: decodeURIComponent(parts[1]) };
+  } catch {
+    return null;
+  }
+}
+
+function classifyOrigin(value: string): GitHubOriginResult {
+  const trimmed = value.trim();
+  if (!trimmed) return { status: 'absent' };
+  if (/\r|\n/.test(trimmed))
+    return { status: 'error', message: 'Unable to read Git origin: malformed command output' };
+  const github = parseGitHubRemote(trimmed);
+  if (github) return { status: 'github', remote: github };
+
+  const scp = trimmed.match(/^[^@\s]+@([^:\s]+):(.+)$/);
+  if (scp)
+    return scp[1].toLowerCase() === 'github.com'
+      ? { status: 'invalid', message: 'GitHub origin URL is invalid' }
+      : { status: 'non_github' };
+  try {
+    const url = new URL(trimmed);
+    if (!['https:', 'http:', 'ssh:', 'git:'].includes(url.protocol))
+      return { status: 'error', message: 'Unable to read Git origin: unsupported command output' };
+    return url.hostname.toLowerCase() === 'github.com'
+      ? { status: 'invalid', message: 'GitHub origin URL is invalid' }
+      : { status: 'non_github' };
+  } catch {
+    return { status: 'error', message: 'Unable to read Git origin: malformed command output' };
+  }
 }
 
 export async function readGitHubOrigin(
   repositoryPath: string,
   runner: CommandRunner = runCommand,
   signal?: AbortSignal
-): Promise<GitHubRemote | null> {
-  const result = await runner(['git', 'config', '--get', 'remote.origin.url'], {
-    cwd: repositoryPath,
-    timeoutMs: 5_000,
-    signal
-  });
-  if (result.exitCode !== 0 || result.timedOut || result.aborted) return null;
-  return parseGitHubRemote(result.stdout);
+): Promise<GitHubOriginResult> {
+  let result: Awaited<ReturnType<CommandRunner>>;
+  try {
+    result = await runner(['git', 'config', '--get', 'remote.origin.url'], {
+      cwd: repositoryPath,
+      timeoutMs: 5_000,
+      signal
+    });
+  } catch {
+    return { status: 'error', message: 'Unable to read Git origin: process failed' };
+  }
+  if (result.timedOut)
+    return { status: 'error', message: 'Unable to read Git origin: command timed out' };
+  if (result.aborted)
+    return { status: 'error', message: 'Unable to read Git origin: command was aborted' };
+  if (result.exitCode !== 0) {
+    if (result.exitCode === 1 && !result.stdout.trim() && !result.stderr.trim())
+      return { status: 'absent' };
+    return { status: 'error', message: 'Unable to read Git origin: command failed' };
+  }
+  return classifyOrigin(result.stdout);
 }
 
 function due(
@@ -87,47 +135,94 @@ function due(
   return !Number.isFinite(timestamp) || now.getTime() - timestamp >= interval;
 }
 
-function hostingUpdate(metrics: HostingMetrics, timestamp: string) {
-  return {
+type MetricsUpdate = Partial<Omit<ProjectMetrics, 'projectId'>>;
+
+function hostingUpdate(
+  metrics: HostingMetrics | GitHubHostingMetrics,
+  timestamp: string
+): MetricsUpdate {
+  const update: MetricsUpdate = {
     githubRepoId: metrics.repositoryId,
     githubOwner: metrics.owner,
     githubName: metrics.name,
-    githubVisibility: metrics.visibility,
-    githubIsArchived: metrics.isArchived,
-    githubStars: metrics.stars,
-    githubForks: metrics.forks,
-    githubWatchers: metrics.watchers,
-    githubOpenIssues: metrics.openIssues,
-    githubOpenPrs: metrics.openPullRequests,
-    githubDraftPrs: metrics.draftPullRequests,
-    githubReadyPrs: metrics.readyPullRequests,
-    githubOwnerPrs: metrics.ownerPullRequests,
-    githubExternalPrs: metrics.externalPullRequests,
-    githubOldestExternalPrAt: metrics.oldestExternalPullRequestAt,
-    githubMergedPrs30d: metrics.mergedPullRequests30d,
-    githubMergedPrs90d: metrics.mergedPullRequests90d,
-    githubExternalIssues30d: metrics.externalIssues30d,
-    githubExternalIssues90d: metrics.externalIssues90d,
-    githubLatestReleaseAt: metrics.latestReleaseAt,
-    githubLatestReleaseTag: metrics.latestReleaseTag,
-    githubReleaseDownloads: metrics.releaseDownloads,
-    githubCiState: metrics.workflowState,
-    githubContributorCount: metrics.contributorCount,
-    githubAvailability: 'available' as const,
-    githubScannedAt: timestamp
+    githubAvailability: 'available'
   };
+  const mappings = [
+    ['visibility', 'githubVisibility'],
+    ['isArchived', 'githubIsArchived'],
+    ['stars', 'githubStars'],
+    ['forks', 'githubForks'],
+    ['watchers', 'githubWatchers'],
+    ['openIssues', 'githubOpenIssues'],
+    ['openPullRequests', 'githubOpenPrs'],
+    ['draftPullRequests', 'githubDraftPrs'],
+    ['readyPullRequests', 'githubReadyPrs'],
+    ['ownerPullRequests', 'githubOwnerPrs'],
+    ['externalPullRequests', 'githubExternalPrs'],
+    ['oldestExternalPullRequestAt', 'githubOldestExternalPrAt'],
+    ['mergedPullRequests30d', 'githubMergedPrs30d'],
+    ['mergedPullRequests90d', 'githubMergedPrs90d'],
+    ['externalIssues30d', 'githubExternalIssues30d'],
+    ['externalIssues90d', 'githubExternalIssues90d'],
+    ['latestReleaseAt', 'githubLatestReleaseAt'],
+    ['latestReleaseTag', 'githubLatestReleaseTag'],
+    ['releaseDownloads', 'githubReleaseDownloads'],
+    ['workflowState', 'githubCiState'],
+    ['contributorCount', 'githubContributorCount']
+  ] as const;
+  for (const [source, target] of mappings) {
+    if (source in metrics && metrics[source] !== undefined)
+      (update as Record<string, unknown>)[target] = metrics[source];
+  }
+  if (!('graphqlComplete' in metrics) || metrics.graphqlComplete)
+    update.githubScannedAt = timestamp;
+  return update;
 }
 
-function trafficUpdate(metrics: TrafficMetrics, timestamp: string) {
-  return {
-    githubTrafficViews: metrics.views,
-    githubTrafficUniqueVisitors: metrics.uniqueVisitors,
-    githubTrafficClones: metrics.clones,
-    githubTrafficUniqueCloners: metrics.uniqueCloners,
-    githubTrafficAvailability: metrics.availability,
-    githubTrafficScannedAt: timestamp
-  };
+function trafficUpdate(metrics: TrafficMetrics, timestamp: string): MetricsUpdate {
+  const update: MetricsUpdate = { githubTrafficAvailability: metrics.availability };
+  if (metrics.views !== null) update.githubTrafficViews = metrics.views;
+  if (metrics.uniqueVisitors !== null) update.githubTrafficUniqueVisitors = metrics.uniqueVisitors;
+  if (metrics.clones !== null) update.githubTrafficClones = metrics.clones;
+  if (metrics.uniqueCloners !== null) update.githubTrafficUniqueCloners = metrics.uniqueCloners;
+  if (metrics.availability === 'available') update.githubTrafficScannedAt = timestamp;
+  return update;
 }
+
+const clearGitHubUpdate: MetricsUpdate = {
+  githubRepoId: null,
+  githubOwner: null,
+  githubName: null,
+  githubVisibility: null,
+  githubIsArchived: null,
+  githubStars: null,
+  githubForks: null,
+  githubWatchers: null,
+  githubOpenIssues: null,
+  githubOpenPrs: null,
+  githubDraftPrs: null,
+  githubReadyPrs: null,
+  githubOwnerPrs: null,
+  githubExternalPrs: null,
+  githubOldestExternalPrAt: null,
+  githubMergedPrs30d: null,
+  githubMergedPrs90d: null,
+  githubExternalIssues30d: null,
+  githubExternalIssues90d: null,
+  githubLatestReleaseAt: null,
+  githubLatestReleaseTag: null,
+  githubReleaseDownloads: null,
+  githubCiState: null,
+  githubContributorCount: null,
+  githubTrafficViews: null,
+  githubTrafficUniqueVisitors: null,
+  githubTrafficClones: null,
+  githubTrafficUniqueCloners: null,
+  githubAvailability: 'unavailable',
+  githubTrafficAvailability: 'unavailable',
+  githubScannedAt: null,
+  githubTrafficScannedAt: null
+};
 
 async function snapshots(
   repository: CatalogRepository,
@@ -157,32 +252,63 @@ export async function collectGitHubEnrichment(
   const capturedOn = timestamp.slice(0, 10);
   const updated = new Set<string>();
   let errorCount = 0;
-  const mapped = (
-    await Promise.all(
-      projects.map(async (project) => ({
-        project,
-        remote: await readGitHubOrigin(project.canonicalPath, options.runner, options.signal),
-        cached: repository.getMetrics(project.id)
-      }))
-    )
-  ).filter(({ remote }) => remote !== null) as {
+  const originResults = await Promise.all(
+    projects.map(async (project) => ({
+      project,
+      origin: await readGitHubOrigin(project.canonicalPath, options.runner, options.signal),
+      cached: repository.getMetrics(project.id)
+    }))
+  );
+  const mapped: {
     project: Project;
     remote: GitHubRemote;
     cached: ReturnType<CatalogRepository['getMetrics']>;
-  }[];
+  }[] = [];
 
-  const mappedIds = new Set(mapped.map(({ project }) => project.id));
-  for (const project of projects) {
-    if (!mappedIds.has(project.id) && !repository.getMetrics(project.id)?.githubRepoId) {
-      await repository.updateMetrics(
-        project.id,
-        { githubAvailability: 'unavailable' },
+  for (const { project, origin, cached } of originResults) {
+    if (origin.status === 'github') {
+      mapped.push({ project, remote: origin.remote, cached });
+      const activeOriginError = repository
+        .listCollectionErrors(project.id, true)
+        .find(
+          ({ collector, message }) =>
+            collector === 'hosting' &&
+            (message.startsWith('Unable to read Git origin') ||
+              message.startsWith('GitHub origin URL is invalid'))
+        );
+      if (activeOriginError)
+        await repository.resolveCollectionError(project.id, 'hosting', timestamp, options.lease);
+      continue;
+    }
+    if (origin.status === 'error') {
+      errorCount += 1;
+      await repository.recordCollectionError(
+        {
+          projectId: project.id,
+          collector: 'hosting',
+          message: origin.message,
+          occurredAt: timestamp
+        },
         options.lease
       );
-      await repository.resolveCollectionError(project.id, 'hosting', timestamp, options.lease);
+      continue;
     }
+    await repository.updateMetrics(project.id, clearGitHubUpdate, options.lease);
+    if (origin.status === 'invalid') {
+      errorCount += 1;
+      await repository.recordCollectionError(
+        {
+          projectId: project.id,
+          collector: 'hosting',
+          message: origin.message,
+          occurredAt: timestamp
+        },
+        options.lease
+      );
+    } else await repository.resolveCollectionError(project.id, 'hosting', timestamp, options.lease);
+    await repository.resolveCollectionError(project.id, 'traffic', timestamp, options.lease);
   }
-  if (mapped.length === 0) return { updatedProjectIds: [], errorCount: 0 };
+  if (mapped.length === 0) return { updatedProjectIds: [], errorCount };
 
   let availability: ProviderAvailability;
   try {
@@ -251,9 +377,9 @@ export async function collectGitHubEnrichment(
           repository,
           project.id,
           [
-            ['github_stars', result.stars],
-            ['github_open_issues', result.openIssues],
-            ['github_open_prs', result.openPullRequests]
+            ['github_stars', result.stars ?? null],
+            ['github_open_issues', result.openIssues ?? null],
+            ['github_open_prs', result.openPullRequests ?? null]
           ],
           capturedOn,
           options.lease
@@ -308,6 +434,25 @@ export async function collectGitHubEnrichment(
         options.lease
       );
       if (traffic.availability === 'available') {
+        await snapshots(
+          repository,
+          item.project.id,
+          [
+            ['github_traffic_views', traffic.views],
+            ['github_traffic_unique_visitors', traffic.uniqueVisitors],
+            ['github_traffic_clones', traffic.clones],
+            ['github_traffic_unique_cloners', traffic.uniqueCloners]
+          ],
+          capturedOn,
+          options.lease
+        );
+        updated.add(item.project.id);
+      } else if (
+        traffic.views !== null ||
+        traffic.uniqueVisitors !== null ||
+        traffic.clones !== null ||
+        traffic.uniqueCloners !== null
+      ) {
         await snapshots(
           repository,
           item.project.id,

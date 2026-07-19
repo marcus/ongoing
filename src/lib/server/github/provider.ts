@@ -8,20 +8,27 @@ export interface GitHubRepositoryRef {
   repositoryId?: string | null;
 }
 
+export type GitHubHostingMetrics = Pick<HostingMetrics, 'repositoryId' | 'owner' | 'name'> &
+  Partial<Omit<HostingMetrics, 'repositoryId' | 'owner' | 'name'>> & {
+    graphqlComplete: boolean;
+  };
+
+export function clampGitHubPageSize(value: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(100, Math.max(1, Math.trunc(value)));
+}
+
 interface GraphRepository {
   id: string;
   name: string;
   owner: { login: string };
-  visibility: 'PUBLIC' | 'PRIVATE' | 'INTERNAL';
-  isArchived: boolean;
-  stargazerCount: number;
-  forkCount: number;
-  watchers: { totalCount: number };
-  issues: { totalCount: number };
-  pullRequests: {
-    totalCount: number;
-    nodes: { isDraft: boolean; createdAt: string; author: { login: string } | null }[];
-  };
+  visibility?: 'PUBLIC' | 'PRIVATE' | 'INTERNAL' | null;
+  isArchived?: boolean | null;
+  stargazerCount?: number | null;
+  forkCount?: number | null;
+  watchers?: { totalCount: number } | null;
+  issues?: { totalCount: number } | null;
+  pullRequests?: { totalCount: number } | null;
   defaultBranchRef: { name: string } | null;
 }
 
@@ -30,7 +37,7 @@ interface SearchCount {
   nodes?: { createdAt: string }[];
 }
 
-type BatchData = Record<string, GraphRepository | SearchCount | null>;
+type BatchData = Record<string, GraphRepository | SearchCount | null | undefined>;
 
 interface Release {
   published_at: string | null;
@@ -59,6 +66,13 @@ function errorForAlias(errors: readonly GitHubGraphqlError[] | undefined, alias:
   return errors?.some((error) => error.path?.[0] === alias) ?? false;
 }
 
+function rootErrorForAlias(
+  errors: readonly GitHubGraphqlError[] | undefined,
+  alias: string
+): boolean {
+  return errors?.some((error) => error.path?.length === 1 && error.path[0] === alias) ?? false;
+}
+
 function workflowState(run: WorkflowRuns['workflow_runs'][number] | undefined): WorkflowState {
   if (!run) return 'unknown';
   if (run.status !== 'completed') return 'pending';
@@ -77,7 +91,8 @@ function lastPage(headers: Headers, currentLength: number): number {
 export class GitHubHostingMetricsProvider implements HostingMetricsProvider {
   constructor(
     private readonly client: GitHubClient,
-    private readonly now: () => Date = () => new Date()
+    private readonly now: () => Date = () => new Date(),
+    private readonly pageSizes: { connection?: number; pullRequests?: number } = {}
   ) {}
 
   availability(signal?: AbortSignal): Promise<ProviderAvailability> {
@@ -89,13 +104,38 @@ export class GitHubHostingMetricsProvider implements HostingMetricsProvider {
     const result = results.get(`${owner}/${name}`);
     if (result instanceof Error) throw result;
     if (!result) throw new GitHubRequestError('GitHub repository is unavailable', 'unavailable');
-    return result;
+    const required: (keyof HostingMetrics)[] = [
+      'visibility',
+      'isArchived',
+      'stars',
+      'forks',
+      'watchers',
+      'openIssues',
+      'openPullRequests',
+      'draftPullRequests',
+      'readyPullRequests',
+      'ownerPullRequests',
+      'externalPullRequests',
+      'oldestExternalPullRequestAt',
+      'mergedPullRequests30d',
+      'mergedPullRequests90d',
+      'externalIssues30d',
+      'externalIssues90d',
+      'latestReleaseAt',
+      'latestReleaseTag',
+      'releaseDownloads',
+      'workflowState',
+      'contributorCount'
+    ];
+    if (required.some((key) => !(key in result)))
+      throw new GitHubRequestError('GitHub repository response was incomplete', 'error', 200);
+    return result as HostingMetrics;
   }
 
   async collectMany(
     refs: readonly GitHubRepositoryRef[],
     signal?: AbortSignal
-  ): Promise<Map<string, HostingMetrics | Error>> {
+  ): Promise<Map<string, GitHubHostingMetrics | Error>> {
     const date30 = queryDate(this.now(), 30);
     const date90 = queryDate(this.now(), 90);
     const fragments = refs.map((ref, index) => {
@@ -104,77 +144,103 @@ export class GitHubHostingMetricsProvider implements HostingMetricsProvider {
         : `repository(owner:${gqlString(ref.owner)},name:${gqlString(ref.name)}) { ...RepoFields }`;
       const repo = `repo:${gqlString(`${ref.owner}/${ref.name}`)}`;
       return `r${index}: ${repository}
-        d_${index}: search(query:${gqlString(`${repo} is:pr is:open draft:true`)},type:ISSUE){issueCount}
-        y_${index}: search(query:${gqlString(`${repo} is:pr is:open draft:false`)},type:ISSUE){issueCount}
-        o_${index}: search(query:${gqlString(`${repo} is:pr is:open author:${ref.owner}`)},type:ISSUE){issueCount}
-        x_${index}: search(query:${gqlString(`${repo} is:pr is:open -author:${ref.owner} sort:created-asc`)},type:ISSUE){issueCount nodes{... on PullRequest{createdAt}}}
-        m30_${index}: search(query:${gqlString(`${repo} is:pr is:merged merged:>=${date30}`)},type:ISSUE){issueCount}
-        m90_${index}: search(query:${gqlString(`${repo} is:pr is:merged merged:>=${date90}`)},type:ISSUE){issueCount}
-        e30_${index}: search(query:${gqlString(`${repo} is:issue created:>=${date30} -author:${ref.owner}`)},type:ISSUE){issueCount}
-        e90_${index}: search(query:${gqlString(`${repo} is:issue created:>=${date90} -author:${ref.owner}`)},type:ISSUE){issueCount}`;
+        d_${index}: search(query:${gqlString(`${repo} is:pr is:open draft:true`)},type:ISSUE,first:$connectionPage){issueCount}
+        y_${index}: search(query:${gqlString(`${repo} is:pr is:open draft:false`)},type:ISSUE,first:$connectionPage){issueCount}
+        o_${index}: search(query:${gqlString(`${repo} is:pr is:open author:${ref.owner}`)},type:ISSUE,first:$connectionPage){issueCount}
+        x_${index}: search(query:${gqlString(`${repo} is:pr is:open -author:${ref.owner} sort:created-asc`)},type:ISSUE,first:$connectionPage){issueCount nodes{... on PullRequest{createdAt}}}
+        m30_${index}: search(query:${gqlString(`${repo} is:pr is:merged merged:>=${date30}`)},type:ISSUE,first:$connectionPage){issueCount}
+        m90_${index}: search(query:${gqlString(`${repo} is:pr is:merged merged:>=${date90}`)},type:ISSUE,first:$connectionPage){issueCount}
+        e30_${index}: search(query:${gqlString(`${repo} is:issue created:>=${date30} -author:${ref.owner}`)},type:ISSUE,first:$connectionPage){issueCount}
+        e90_${index}: search(query:${gqlString(`${repo} is:issue created:>=${date90} -author:${ref.owner}`)},type:ISSUE,first:$connectionPage){issueCount}`;
     });
-    const query = `query { ${fragments.join('\n')} }
+    const query = `query($connectionPage:Int!,$pullRequestPage:Int!) { ${fragments.join('\n')} rateLimit{remaining resetAt} }
       fragment RepoFields on Repository {
-        id name owner{login} visibility isArchived stargazerCount forkCount watchers{totalCount}
-        issues(states:OPEN){totalCount}
-        pullRequests(states:OPEN,first:100,orderBy:{field:CREATED_AT,direction:ASC}){
-          totalCount nodes{isDraft createdAt author{login}}
-        }
+        id name owner{login} visibility isArchived stargazerCount forkCount watchers(first:$connectionPage){totalCount}
+        issues(states:OPEN,first:$connectionPage){totalCount}
+        pullRequests(states:OPEN,first:$pullRequestPage){totalCount}
         defaultBranchRef{name}
       }`;
-    const response = await this.client.graphql<BatchData>(query, {}, signal);
-    const results = new Map<string, HostingMetrics | Error>();
+    const response = await this.client.graphql<BatchData>(
+      query,
+      {
+        connectionPage: clampGitHubPageSize(this.pageSizes.connection ?? 1),
+        pullRequestPage: clampGitHubPageSize(this.pageSizes.pullRequests ?? 100)
+      },
+      signal
+    );
+    const results = new Map<string, GitHubHostingMetrics | Error>();
     await Promise.all(
       refs.map(async (ref, index) => {
         const key = `${ref.owner}/${ref.name}`;
         const repository = response.data[`r${index}`] as GraphRepository | null;
-        if (!repository || errorForAlias(response.errors, `r${index}`)) {
+        if (!repository || rootErrorForAlias(response.errors, `r${index}`)) {
           results.set(
             key,
             new GitHubRequestError('GitHub repository is unavailable', 'unavailable')
           );
           return;
         }
-        const pullRequests = repository.pullRequests.nodes;
-        const external = pullRequests.filter(
-          (pullRequest) =>
-            pullRequest.author?.login.toLowerCase() !== repository.owner.login.toLowerCase()
-        );
-        const ready = pullRequests.filter((pullRequest) => !pullRequest.isDraft).length;
-        const draftSearch = response.data[`d_${index}`] as SearchCount | null;
-        const readySearch = response.data[`y_${index}`] as SearchCount | null;
-        const ownerSearch = response.data[`o_${index}`] as SearchCount | null;
-        const externalSearch = response.data[`x_${index}`] as SearchCount | null;
-        const base: HostingMetrics = {
+        const alias = (name: string): SearchCount | undefined => {
+          if (errorForAlias(response.errors, name)) return undefined;
+          const value = response.data[name] as SearchCount | null | undefined;
+          return value ?? undefined;
+        };
+        const draftSearch = alias(`d_${index}`);
+        const readySearch = alias(`y_${index}`);
+        const ownerSearch = alias(`o_${index}`);
+        const externalSearch = alias(`x_${index}`);
+        const base: GitHubHostingMetrics = {
           repositoryId: repository.id,
           owner: repository.owner.login,
           name: repository.name,
-          visibility: repository.visibility.toLowerCase() as HostingMetrics['visibility'],
-          isArchived: repository.isArchived,
-          stars: repository.stargazerCount,
-          forks: repository.forkCount,
-          watchers: repository.watchers.totalCount,
-          openIssues: repository.issues.totalCount,
-          openPullRequests: repository.pullRequests.totalCount,
-          draftPullRequests:
-            draftSearch?.issueCount ?? pullRequests.filter(({ isDraft }) => isDraft).length,
-          readyPullRequests: readySearch?.issueCount ?? ready,
-          ownerPullRequests: ownerSearch?.issueCount ?? pullRequests.length - external.length,
-          externalPullRequests: externalSearch?.issueCount ?? external.length,
-          oldestExternalPullRequestAt:
-            externalSearch?.nodes?.[0]?.createdAt ?? external[0]?.createdAt ?? null,
-          mergedPullRequests30d:
-            (response.data[`m30_${index}`] as SearchCount | null)?.issueCount ?? 0,
-          mergedPullRequests90d:
-            (response.data[`m90_${index}`] as SearchCount | null)?.issueCount ?? 0,
-          externalIssues30d: (response.data[`e30_${index}`] as SearchCount | null)?.issueCount ?? 0,
-          externalIssues90d: (response.data[`e90_${index}`] as SearchCount | null)?.issueCount ?? 0,
-          latestReleaseAt: null,
-          latestReleaseTag: null,
-          releaseDownloads: null,
-          workflowState: 'unknown',
-          contributorCount: null
+          graphqlComplete: false
         };
+        if (repository.visibility)
+          base.visibility = repository.visibility.toLowerCase() as HostingMetrics['visibility'];
+        if (typeof repository.isArchived === 'boolean') base.isArchived = repository.isArchived;
+        if (typeof repository.stargazerCount === 'number') base.stars = repository.stargazerCount;
+        if (typeof repository.forkCount === 'number') base.forks = repository.forkCount;
+        if (typeof repository.watchers?.totalCount === 'number')
+          base.watchers = repository.watchers.totalCount;
+        if (typeof repository.issues?.totalCount === 'number')
+          base.openIssues = repository.issues.totalCount;
+        if (typeof repository.pullRequests?.totalCount === 'number')
+          base.openPullRequests = repository.pullRequests.totalCount;
+        if (draftSearch) base.draftPullRequests = draftSearch.issueCount;
+        if (readySearch) base.readyPullRequests = readySearch.issueCount;
+        if (ownerSearch) base.ownerPullRequests = ownerSearch.issueCount;
+        if (externalSearch) {
+          base.externalPullRequests = externalSearch.issueCount;
+          if (externalSearch.issueCount === 0 || externalSearch.nodes?.length)
+            base.oldestExternalPullRequestAt = externalSearch.nodes?.[0]?.createdAt ?? null;
+        }
+        for (const [aliasName, field] of [
+          [`m30_${index}`, 'mergedPullRequests30d'],
+          [`m90_${index}`, 'mergedPullRequests90d'],
+          [`e30_${index}`, 'externalIssues30d'],
+          [`e90_${index}`, 'externalIssues90d']
+        ] as const) {
+          const value = alias(aliasName);
+          if (value) base[field] = value.issueCount;
+        }
+        base.graphqlComplete = [
+          'visibility',
+          'isArchived',
+          'stars',
+          'forks',
+          'watchers',
+          'openIssues',
+          'openPullRequests',
+          'draftPullRequests',
+          'readyPullRequests',
+          'ownerPullRequests',
+          'externalPullRequests',
+          'oldestExternalPullRequestAt',
+          'mergedPullRequests30d',
+          'mergedPullRequests90d',
+          'externalIssues30d',
+          'externalIssues90d'
+        ].every((field) => field in base);
         const path = `/repos/${encodeURIComponent(base.owner)}/${encodeURIComponent(base.name)}`;
         const [release, workflows, contributors] = await Promise.all([
           this.optionalRest<Release>(`${path}/releases/latest`, signal),
@@ -192,7 +258,7 @@ export class GitHubHostingMetricsProvider implements HostingMetricsProvider {
             0
           );
         }
-        base.workflowState = workflowState(workflows?.data.workflow_runs[0]);
+        if (workflows) base.workflowState = workflowState(workflows.data.workflow_runs[0]);
         if (contributors)
           base.contributorCount = lastPage(contributors.headers, contributors.data.length);
         results.set(key, base);
@@ -208,35 +274,44 @@ export class GitHubHostingMetricsProvider implements HostingMetricsProvider {
     try {
       return await this.client.rest<T>(path, signal);
     } catch (error) {
-      if (error instanceof GitHubRequestError && error.failure === 'unavailable') return null;
-      throw error;
+      if (signal?.aborted) throw error;
+      return null;
     }
   }
 
   async collectTraffic(owner: string, name: string, signal?: AbortSignal): Promise<TrafficMetrics> {
     const path = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/traffic`;
-    try {
-      const [views, clones] = await Promise.all([
-        this.client.rest<TrafficResponse>(`${path}/views`, signal),
-        this.client.rest<TrafficResponse>(`${path}/clones`, signal)
-      ]);
-      return {
-        availability: 'available',
-        views: views.data.count,
-        uniqueVisitors: views.data.uniques,
-        clones: clones.data.count,
-        uniqueCloners: clones.data.uniques
-      };
-    } catch (error) {
-      if (error instanceof GitHubRequestError && error.failure === 'unavailable')
-        return {
-          availability: 'unavailable',
-          views: null,
-          uniqueVisitors: null,
-          clones: null,
-          uniqueCloners: null
-        };
-      throw error;
-    }
+    const [views, clones] = await Promise.allSettled([
+      this.client.rest<TrafficResponse>(`${path}/views`, signal),
+      this.client.rest<TrafficResponse>(`${path}/clones`, signal)
+    ]);
+    if (signal?.aborted) throw signal.reason;
+    const failures = [views, clones]
+      .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+      .map(({ reason }) => reason);
+    if (
+      failures.length === 2 &&
+      failures.some((failure) => !(failure instanceof GitHubRequestError))
+    )
+      throw failures.find((failure) => !(failure instanceof GitHubRequestError));
+    const typed = failures.filter(
+      (failure): failure is GitHubRequestError => failure instanceof GitHubRequestError
+    );
+    const availability: ProviderAvailability = typed.some(
+      ({ failure }) => failure === 'rate_limited'
+    )
+      ? 'rate_limited'
+      : typed.some(({ failure }) => failure === 'unauthenticated')
+        ? 'unauthenticated'
+        : failures.length
+          ? 'unavailable'
+          : 'available';
+    return {
+      availability,
+      views: views.status === 'fulfilled' ? views.value.data.count : null,
+      uniqueVisitors: views.status === 'fulfilled' ? views.value.data.uniques : null,
+      clones: clones.status === 'fulfilled' ? clones.value.data.count : null,
+      uniqueCloners: clones.status === 'fulfilled' ? clones.value.data.uniques : null
+    };
   }
 }
