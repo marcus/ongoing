@@ -1,0 +1,20 @@
+# Dependencies and generated application state
+node_modules/
+.svelte-kit/
+build/
+coverage/
+playwright-report/
+test-results/
+
+# Local configuration, credentials, and persistent data
+.env
+.env.*
+!.env.example
+.data/
+
+# TD is local workflow state, not application source
+.todos/
+
+# Editors and operating systems
+.DS_Store
+*.swp
