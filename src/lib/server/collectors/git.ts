@@ -33,10 +33,11 @@ export interface GitCollectionOptions {
   timeoutMs?: number;
   runner?: CommandRunner;
   now?: () => string;
+  signal?: AbortSignal;
 }
 
 function successful(result: CommandResult): string | null {
-  return !result.timedOut && result.exitCode === 0 ? result.stdout : null;
+  return !result.timedOut && !result.aborted && result.exitCode === 0 ? result.stdout : null;
 }
 
 function strictInteger(output: string | null): number | null {
@@ -88,9 +89,10 @@ async function git(
   runner: CommandRunner,
   repositoryPath: string,
   timeoutMs: number,
-  args: readonly string[]
+  args: readonly string[],
+  signal?: AbortSignal
 ): Promise<CommandResult> {
-  return runner(['git', ...args], { cwd: repositoryPath, timeoutMs });
+  return runner(['git', ...args], { cwd: repositoryPath, timeoutMs, signal });
 }
 
 export async function collectGitMetrics(
@@ -99,7 +101,8 @@ export async function collectGitMetrics(
 ): Promise<GitMetrics> {
   const runner = options.runner ?? runCommand;
   const timeoutMs = options.timeoutMs ?? 10_000;
-  const run = (args: readonly string[]) => git(runner, repositoryPath, timeoutMs, args);
+  const run = (args: readonly string[]) =>
+    git(runner, repositoryPath, timeoutMs, args, options.signal);
   const headResult = await run(['rev-parse', '--verify', 'HEAD']);
   const headOutput = successful(headResult);
   const headSha = headOutput && /^[0-9a-f]{40,64}\s*$/i.test(headOutput) ? headOutput.trim() : null;
@@ -262,13 +265,19 @@ export function createScanFingerprint(parts: readonly (string | null | undefined
 /** Fingerprint HEAD plus staged and unstaged changes to tracked files. */
 export async function collectTrackedWorktreeFingerprint(
   repositoryPath: string,
-  options: Pick<GitCollectionOptions, 'runner' | 'timeoutMs'> = {}
+  options: Pick<GitCollectionOptions, 'runner' | 'timeoutMs' | 'signal'> = {}
 ): Promise<string | null> {
   const runner = options.runner ?? runCommand;
   const timeoutMs = options.timeoutMs ?? 10_000;
   const [head, diff] = await Promise.all([
-    git(runner, repositoryPath, timeoutMs, ['rev-parse', '--verify', 'HEAD']),
-    git(runner, repositoryPath, timeoutMs, ['diff', '--binary', '--no-ext-diff', 'HEAD', '--'])
+    git(runner, repositoryPath, timeoutMs, ['rev-parse', '--verify', 'HEAD'], options.signal),
+    git(
+      runner,
+      repositoryPath,
+      timeoutMs,
+      ['diff', '--binary', '--no-ext-diff', 'HEAD', '--'],
+      options.signal
+    )
   ]);
   const headOutput = successful(head);
   const diffOutput = successful(diff);

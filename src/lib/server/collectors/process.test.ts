@@ -29,6 +29,20 @@ describe('subprocess runner', () => {
     expect(performance.now() - startedAt).toBeLessThan(2_000);
   });
 
+  it('terminates a running process when its scan is aborted', async () => {
+    const controller = new AbortController();
+    const startedAt = performance.now();
+    setTimeout(() => controller.abort(new Error('lease lost')), 50);
+    const result = await runCommand([process.execPath, '-e', 'await Bun.sleep(10_000)'], {
+      cwd: process.cwd(),
+      timeoutMs: 5_000,
+      signal: controller.signal
+    });
+    expect(result.aborted).toBe(true);
+    expect(result.timedOut).toBe(false);
+    expect(performance.now() - startedAt).toBeLessThan(2_000);
+  });
+
   it('terminates descendants in the timed-out process group', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'ongoing-process-group-'));
     const marker = join(directory, 'descendant-survived');

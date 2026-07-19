@@ -18,10 +18,22 @@ import {
   type Project,
   type ProjectDecisionUpdate
 } from '$lib/domain/project';
-import { CatalogDatabase } from './database';
+import type { CatalogDatabase } from './database';
 
 type Row = Record<string, string | number | null>;
 type ProjectMetricsUpdate = Partial<Omit<ProjectMetrics, 'projectId'>>;
+
+export interface ScanLeaseOwnership {
+  runId: string;
+  owner: string;
+}
+
+export class ScanLeaseLostError extends Error {
+  constructor(readonly runId: string) {
+    super(`Scan lease lost: ${runId}`);
+    this.name = 'ScanLeaseLostError';
+  }
+}
 
 const metricColumns: Record<keyof ProjectMetricsUpdate, string> = {
   headSha: 'head_sha',
@@ -212,6 +224,26 @@ function requireChanged(changes: number, projectId: string): void {
   if (changes === 0) throw new Error(`Unknown project ID: ${projectId}`);
 }
 
+function withLease<T>(
+  database: Database,
+  lease: ScanLeaseOwnership | undefined,
+  operation: () => T
+): T {
+  const transaction = database.transaction(() => {
+    if (lease) {
+      const current = database
+        .query<{ current: number }, [string, string]>(
+          `SELECT 1 AS current FROM scan_runs
+           WHERE id = ? AND status = 'running' AND lease_owner = ?`
+        )
+        .get(lease.runId, lease.owner);
+      if (!current) throw new ScanLeaseLostError(lease.runId);
+    }
+    return operation();
+  });
+  return transaction.immediate();
+}
+
 export function stableProjectId(canonicalPath: string): string {
   const normalized = resolve(canonicalPath);
   return `project_${createHash('sha256').update(normalized).digest('hex').slice(0, 24)}`;
@@ -227,11 +259,11 @@ export class CatalogRepository {
     return this.catalog.sqlite;
   }
 
-  async upsertDiscovered(project: DiscoveredProject): Promise<Project> {
+  async upsertDiscovered(project: DiscoveredProject, lease?: ScanLeaseOwnership): Promise<Project> {
     return this.catalog.write((database) => {
       const timestamp = this.now();
       const id = stableProjectId(project.canonicalPath);
-      const transaction = database.transaction(() => {
+      const operation = () => {
         const rank =
           Number(
             database
@@ -268,8 +300,8 @@ export class CatalogRepository {
         return database
           .query<Row, [string]>('SELECT * FROM projects WHERE canonical_path = ?')
           .get(resolve(project.canonicalPath));
-      });
-      const row = transaction.immediate();
+      };
+      const row = withLease(database, lease, operation);
       if (!row) throw new Error('Failed to persist discovered project');
       return projectFromRow(row);
     });
@@ -344,11 +376,12 @@ export class CatalogRepository {
 
   async markUnseenMissing(
     scanRoots: readonly string[],
-    seenProjectIds: readonly string[]
+    seenProjectIds: readonly string[],
+    lease?: ScanLeaseOwnership
   ): Promise<void> {
     await this.catalog.write((database) => {
       const seen = new Set(seenProjectIds);
-      const transaction = database.transaction(() => {
+      const operation = () => {
         for (const scanRoot of scanRoots) {
           const rows = database
             .query<{ id: string }, [string]>('SELECT id FROM projects WHERE scan_root = ?')
@@ -360,8 +393,8 @@ export class CatalogRepository {
                 .run(this.now(), id);
           }
         }
-      });
-      transaction.immediate();
+      };
+      withLease(database, lease, operation);
     });
   }
 
@@ -390,40 +423,48 @@ export class CatalogRepository {
     return row ? metricsFromRow(row) : null;
   }
 
-  async updateMetrics(projectId: string, update: ProjectMetricsUpdate): Promise<void> {
+  async updateMetrics(
+    projectId: string,
+    update: ProjectMetricsUpdate,
+    lease?: ScanLeaseOwnership
+  ): Promise<void> {
     const entries = Object.entries(update).filter(([, value]) => value !== undefined) as [
       keyof ProjectMetricsUpdate,
       Exclude<ProjectMetricsUpdate[keyof ProjectMetricsUpdate], undefined>
     ][];
     if (entries.length === 0) return;
     await this.catalog.write((database) => {
-      if (!this.getProject(projectId)) throw new Error(`Unknown project ID: ${projectId}`);
-      database
-        .query(
-          'INSERT INTO project_metrics (project_id) VALUES (?) ON CONFLICT(project_id) DO NOTHING'
-        )
-        .run(projectId);
-      const assignments = entries.map(([key]) => `${metricColumns[key]} = ?`).join(', ');
-      const values: SQLQueryBindings[] = entries.map(([, value]) =>
-        typeof value === 'boolean' ? (value ? 1 : 0) : value
-      );
-      database
-        .query(`UPDATE project_metrics SET ${assignments} WHERE project_id = ?`)
-        .run(...values, projectId);
+      withLease(database, lease, () => {
+        if (!this.getProject(projectId)) throw new Error(`Unknown project ID: ${projectId}`);
+        database
+          .query(
+            'INSERT INTO project_metrics (project_id) VALUES (?) ON CONFLICT(project_id) DO NOTHING'
+          )
+          .run(projectId);
+        const assignments = entries.map(([key]) => `${metricColumns[key]} = ?`).join(', ');
+        const values: SQLQueryBindings[] = entries.map(([, value]) =>
+          typeof value === 'boolean' ? (value ? 1 : 0) : value
+        );
+        database
+          .query(`UPDATE project_metrics SET ${assignments} WHERE project_id = ?`)
+          .run(...values, projectId);
+      });
     });
   }
 
-  async saveSnapshot(snapshot: MetricSnapshot): Promise<void> {
+  async saveSnapshot(snapshot: MetricSnapshot, lease?: ScanLeaseOwnership): Promise<void> {
     await this.catalog.write((database) => {
-      database
-        .query(
-          `
+      withLease(database, lease, () =>
+        database
+          .query(
+            `
         INSERT INTO metric_snapshots (project_id, metric, captured_on, value)
         VALUES (?, ?, ?, ?)
         ON CONFLICT(project_id, metric, captured_on) DO UPDATE SET value = excluded.value
       `
-        )
-        .run(snapshot.projectId, snapshot.metric, snapshot.capturedOn, snapshot.value);
+          )
+          .run(snapshot.projectId, snapshot.metric, snapshot.capturedOn, snapshot.value)
+      );
     });
   }
 
@@ -447,32 +488,40 @@ export class CatalogRepository {
     }));
   }
 
-  async recordCollectionError(error: Omit<CollectionError, 'resolvedAt'>): Promise<void> {
+  async recordCollectionError(
+    error: Omit<CollectionError, 'resolvedAt'>,
+    lease?: ScanLeaseOwnership
+  ): Promise<void> {
     await this.catalog.write((database) => {
-      database
-        .query(
-          `
+      withLease(database, lease, () =>
+        database
+          .query(
+            `
         INSERT INTO collection_errors (project_id, collector, message, occurred_at, resolved_at)
         VALUES (?, ?, ?, ?, NULL)
         ON CONFLICT(project_id, collector) DO UPDATE SET
           message = excluded.message, occurred_at = excluded.occurred_at, resolved_at = NULL
       `
-        )
-        .run(error.projectId, error.collector, error.message, error.occurredAt);
+          )
+          .run(error.projectId, error.collector, error.message, error.occurredAt)
+      );
     });
   }
 
   async resolveCollectionError(
     projectId: string,
     collector: Collector,
-    resolvedAt = this.now()
+    resolvedAt = this.now(),
+    lease?: ScanLeaseOwnership
   ): Promise<void> {
     await this.catalog.write((database) => {
-      database
-        .query(
-          'UPDATE collection_errors SET resolved_at = ? WHERE project_id = ? AND collector = ?'
-        )
-        .run(resolvedAt, projectId, collector);
+      withLease(database, lease, () =>
+        database
+          .query(
+            'UPDATE collection_errors SET resolved_at = ? WHERE project_id = ? AND collector = ?'
+          )
+          .run(resolvedAt, projectId, collector)
+      );
     });
   }
 
@@ -512,18 +561,105 @@ export class CatalogRepository {
     });
   }
 
+  /**
+   * Atomically recovers expired owners, then acquires the catalog-wide scan lease.
+   * Rows without lease metadata predate lease support and are safe to recover after upgrade.
+   */
+  async tryCreateScanRun(
+    run: ScanRun,
+    lease: { owner: string; heartbeatAt: string; staleBefore: string }
+  ): Promise<boolean> {
+    return this.catalog.write((database) => {
+      const transaction = database.transaction(() => {
+        database
+          .query(
+            `UPDATE scan_runs
+             SET status = 'cancelled', finished_at = ?
+             WHERE status = 'running'
+               AND (lease_owner IS NULL OR heartbeat_at IS NULL OR heartbeat_at < ?)`
+          )
+          .run(lease.heartbeatAt, lease.staleBefore);
+        const active = database
+          .query<{ id: string }, []>("SELECT id FROM scan_runs WHERE status = 'running' LIMIT 1")
+          .get();
+        if (active) return false;
+        database
+          .query(
+            `
+          INSERT INTO scan_runs (
+            id, reason, status, started_at, finished_at, discovered_count, updated_count,
+            error_count, lease_owner, heartbeat_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `
+          )
+          .run(
+            run.id,
+            run.reason,
+            run.status,
+            run.startedAt,
+            run.finishedAt,
+            run.discoveredCount,
+            run.updatedCount,
+            run.errorCount,
+            lease.owner,
+            lease.heartbeatAt
+          );
+        return true;
+      });
+      return transaction.immediate();
+    });
+  }
+
+  async renewScanLease(id: string, owner: string, heartbeatAt: string): Promise<boolean> {
+    return this.catalog.write(
+      (database) =>
+        database
+          .query(
+            `UPDATE scan_runs SET heartbeat_at = ?
+           WHERE id = ? AND status = 'running' AND lease_owner = ?`
+          )
+          .run(heartbeatAt, id, owner).changes > 0
+    );
+  }
+
+  async updateScanRunProgress(
+    id: string,
+    counts: Pick<ScanRun, 'discoveredCount' | 'updatedCount' | 'errorCount'>,
+    lease?: ScanLeaseOwnership
+  ): Promise<void> {
+    await this.catalog.write((database) => {
+      const result = database
+        .query(
+          `UPDATE scan_runs SET discovered_count = ?, updated_count = ?, error_count = ?
+           WHERE id = ? AND status = 'running'${lease ? ' AND lease_owner = ?' : ''}`
+        )
+        .run(
+          counts.discoveredCount,
+          counts.updatedCount,
+          counts.errorCount,
+          id,
+          ...(lease ? [lease.owner] : [])
+        );
+      if (result.changes === 0) {
+        if (lease) throw new ScanLeaseLostError(id);
+        throw new Error(`Unknown or already finished scan run: ${id}`);
+      }
+    });
+  }
+
   async finishScanRun(
     id: string,
     status: Exclude<ScanStatus, 'running'>,
     counts: Pick<ScanRun, 'discoveredCount' | 'updatedCount' | 'errorCount'>,
-    finishedAt = this.now()
+    finishedAt = this.now(),
+    lease?: ScanLeaseOwnership
   ): Promise<void> {
     await this.catalog.write((database) => {
       const result = database
         .query(
           `
         UPDATE scan_runs SET status = ?, finished_at = ?, discovered_count = ?, updated_count = ?, error_count = ?
-        WHERE id = ? AND status = 'running'
+        WHERE id = ? AND status = 'running'${lease ? ' AND lease_owner = ?' : ''}
       `
         )
         .run(
@@ -532,9 +668,13 @@ export class CatalogRepository {
           counts.discoveredCount,
           counts.updatedCount,
           counts.errorCount,
-          id
+          id,
+          ...(lease ? [lease.owner] : [])
         );
-      if (result.changes === 0) throw new Error(`Unknown or already finished scan run: ${id}`);
+      if (result.changes === 0) {
+        if (lease) throw new ScanLeaseLostError(id);
+        throw new Error(`Unknown or already finished scan run: ${id}`);
+      }
     });
   }
 
@@ -547,6 +687,25 @@ export class CatalogRepository {
       status: String(row.status) as ScanStatus,
       startedAt: String(row.started_at),
       finishedAt: row.finished_at === null ? null : String(row.finished_at),
+      discoveredCount: Number(row.discovered_count),
+      updatedCount: Number(row.updated_count),
+      errorCount: Number(row.error_count)
+    };
+  }
+
+  getActiveScanRun(): ScanRun | null {
+    const row = this.database
+      .query<Row, []>(
+        "SELECT * FROM scan_runs WHERE status = 'running' ORDER BY started_at LIMIT 1"
+      )
+      .get();
+    if (!row) return null;
+    return {
+      id: String(row.id),
+      reason: String(row.reason) as ScanRun['reason'],
+      status: String(row.status) as ScanStatus,
+      startedAt: String(row.started_at),
+      finishedAt: null,
       discoveredCount: Number(row.discovered_count),
       updatedCount: Number(row.updated_count),
       errorCount: Number(row.error_count)

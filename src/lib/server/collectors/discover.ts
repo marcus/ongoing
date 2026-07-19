@@ -1,7 +1,7 @@
 import { opendir, realpath, stat } from 'node:fs/promises';
 import { basename, isAbsolute, relative, resolve, sep } from 'node:path';
 import type { DiscoveredProject, Project } from '$lib/domain/project';
-import { CatalogRepository } from '$lib/server/catalog/repository';
+import type { CatalogRepository, ScanLeaseOwnership } from '$lib/server/catalog/repository';
 import { runCommand, type CommandRunner } from './process';
 
 const PRUNED_DIRECTORY_NAMES = new Set([
@@ -170,17 +170,20 @@ export async function discoverRepositories(
 /** Marks missing rows only after the entire filesystem discovery has succeeded. */
 export async function discoverAndReconcile(
   repository: CatalogRepository,
-  options: DiscoveryOptions
+  options: DiscoveryOptions,
+  lease?: ScanLeaseOwnership
 ): Promise<ReconciledDiscovery> {
   const discovered = await discoverRepositories(options);
   const successfulRoots = await Promise.all(
     options.scanRoots.map((scanRoot) => realpath(resolve(scanRoot)))
   );
   const projects: Project[] = [];
-  for (const project of discovered) projects.push(await repository.upsertDiscovered(project));
+  for (const project of discovered)
+    projects.push(await repository.upsertDiscovered(project, lease));
   await repository.markUnseenMissing(
     successfulRoots,
-    projects.map(({ id }) => id)
+    projects.map(({ id }) => id),
+    lease
   );
   return { projects, enrichmentProjects: projects.filter(({ isHidden }) => !isHidden) };
 }

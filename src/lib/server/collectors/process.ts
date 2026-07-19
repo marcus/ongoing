@@ -3,6 +3,7 @@ export interface CommandOptions {
   timeoutMs?: number;
   maxBufferBytes?: number;
   env?: Record<string, string | undefined>;
+  signal?: AbortSignal;
 }
 
 export interface CommandResult {
@@ -12,6 +13,7 @@ export interface CommandResult {
   stdout: string;
   stderr: string;
   timedOut: boolean;
+  aborted?: boolean;
 }
 
 export type CommandRunner = (
@@ -51,6 +53,7 @@ function signalProcessGroup(pid: number, signal: NodeJS.Signals): void {
  */
 export const runCommand: CommandRunner = async (command, options) => {
   if (command.length === 0) throw new TypeError('A command must contain an executable');
+  if (options.signal?.aborted) throw options.signal.reason ?? new Error('Command aborted');
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0)
     throw new RangeError('Command timeout must be positive');
@@ -74,14 +77,23 @@ export const runCommand: CommandRunner = async (command, options) => {
   const subprocess = Bun.spawn(spawnOptions);
 
   let timedOut = false;
+  let aborted = false;
   let forceKillTimer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = setTimeout(() => {
-    timedOut = true;
+  const terminate = () => {
     signalProcessGroup(subprocess.pid, 'SIGTERM');
-    forceKillTimer = setTimeout(
+    forceKillTimer ??= setTimeout(
       () => signalProcessGroup(subprocess.pid, 'SIGKILL'),
       FORCE_KILL_DELAY_MS
     );
+  };
+  const abort = () => {
+    aborted = true;
+    terminate();
+  };
+  options.signal?.addEventListener('abort', abort, { once: true });
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    terminate();
   }, timeoutMs);
 
   const [exitCode, stdout, stderr] = await Promise.all([
@@ -90,6 +102,7 @@ export const runCommand: CommandRunner = async (command, options) => {
     new Response(subprocess.stderr).text()
   ]);
   clearTimeout(timeout);
+  options.signal?.removeEventListener('abort', abort);
   if (forceKillTimer) clearTimeout(forceKillTimer);
 
   return {
@@ -98,7 +111,8 @@ export const runCommand: CommandRunner = async (command, options) => {
     exitCode,
     stdout,
     stderr,
-    timedOut
+    timedOut,
+    aborted
   };
 };
 
@@ -107,6 +121,7 @@ export async function runSuccessfulCommand(
   options: CommandOptions
 ): Promise<string> {
   const result = await runCommand(command, options);
+  if (result.aborted) throw options.signal?.reason ?? new Error('Command aborted');
   if (result.timedOut)
     throw new CommandError(
       `Command timed out after ${options.timeoutMs ?? DEFAULT_TIMEOUT_MS}ms`,

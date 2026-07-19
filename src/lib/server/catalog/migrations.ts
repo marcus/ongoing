@@ -1,12 +1,16 @@
 import type { Database } from 'bun:sqlite';
 import initialSchema from './migrations/001_initial.sql?raw';
+import scanLeases from './migrations/002_scan_leases.sql?raw';
 
 interface Migration {
   version: number;
   sql: string;
 }
 
-const migrations: readonly Migration[] = [{ version: 1, sql: initialSchema }];
+const migrations: readonly Migration[] = [
+  { version: 1, sql: initialSchema },
+  { version: 2, sql: scanLeases }
+];
 
 export function migrateDatabase(database: Database): void {
   database.exec(`

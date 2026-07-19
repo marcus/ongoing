@@ -17,7 +17,7 @@
     "format:check": "prettier --check .",
     "test": "bun --bun vitest run",
     "test:e2e": "playwright test",
-    "scan": "bun run src/scan.ts"
+    "scan": "bun run scripts/scan.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

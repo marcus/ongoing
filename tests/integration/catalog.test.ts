@@ -49,9 +49,10 @@ describe('catalog migrations', () => {
       }
 
       const first = new CatalogDatabase(path);
-      expect(first.sqlite.query('SELECT version FROM schema_migrations').all()).toEqual([
-        { version: latestSchemaVersion }
-      ]);
+      const applied = first.sqlite
+        .query<{ version: number }, []>('SELECT version FROM schema_migrations ORDER BY version')
+        .all();
+      expect(applied.at(-1)).toEqual({ version: latestSchemaVersion });
       expect(
         first.sqlite.query("SELECT name FROM sqlite_master WHERE type = 'table'").all()
       ).toEqual(
@@ -77,9 +78,7 @@ describe('catalog migrations', () => {
       const reopened = new CatalogDatabase(path);
       expect(
         reopened.sqlite.query('SELECT COUNT(*) AS count FROM schema_migrations').get()
-      ).toEqual({
-        count: 1
-      });
+      ).toEqual({ count: latestSchemaVersion });
       reopened.close();
     }
   );
