@@ -172,8 +172,15 @@
         </dd>
         <dt>stars / forks</dt>
         <dd>{compactNumber(metrics.githubStars)} / {compactNumber(metrics.githubForks)}</dd>
-        <dt>issues / prs</dt>
-        <dd>{metrics.githubOpenIssues ?? '—'} / {metrics.githubOpenPrs ?? '—'}</dd>
+        <dt>watchers / contributors</dt>
+        <dd>
+          {compactNumber(metrics.githubWatchers)} / {compactNumber(metrics.githubContributorCount)}
+        </dd>
+        <dt>issues / prs (draft · ready)</dt>
+        <dd>
+          {metrics.githubOpenIssues ?? '—'} / {metrics.githubOpenPrs ?? '—'} ({metrics.githubDraftPrs ??
+            '—'} · {metrics.githubReadyPrs ?? '—'})
+        </dd>
         <dt>external prs</dt>
         <dd>
           {metrics.githubExternalPrs ?? '—'} · oldest {oldestAge(metrics.githubOldestExternalPrAt)}
@@ -181,11 +188,41 @@
         <dt>traffic views / clones</dt>
         <dd>
           {compactNumber(metrics.githubTrafficViews)} / {compactNumber(metrics.githubTrafficClones)}
+          {#if project.githubTrafficViewsDelta30d !== null}
+            · Δ {project.githubTrafficViewsDelta30d >= 0
+              ? '+'
+              : ''}{project.githubTrafficViewsDelta30d}{/if}
         </dd>
+        <dt>unique visitors / cloners</dt>
+        <dd>
+          {compactNumber(metrics.githubTrafficUniqueVisitors)} / {compactNumber(
+            metrics.githubTrafficUniqueCloners
+          )}
+        </dd>
+        <dt>merged prs 30 / 90d</dt>
+        <dd>{metrics.githubMergedPrs30d ?? '—'} / {metrics.githubMergedPrs90d ?? '—'}</dd>
+        <dt>external issues 30 / 90d</dt>
+        <dd>{metrics.githubExternalIssues30d ?? '—'} / {metrics.githubExternalIssues90d ?? '—'}</dd>
+        <dt>owner / external prs</dt>
+        <dd>{metrics.githubOwnerPrs ?? '—'} / {metrics.githubExternalPrs ?? '—'}</dd>
+        <dt>visibility / archive</dt>
+        <dd>
+          {metrics.githubVisibility ?? '—'}{#if metrics.githubIsArchived}
+            · archived{/if}
+        </dd>
+        <dt>workflow</dt>
+        <dd>{metrics.githubCiState ?? 'unknown'}</dd>
         <dt>last release</dt>
         <dd>
           {metrics.githubLatestReleaseTag ?? '—'}{#if metrics.githubLatestReleaseAt}
             · {relativeAge(metrics.githubLatestReleaseAt)} ago{/if}
+        </dd>
+        <dt>release downloads</dt>
+        <dd>{compactNumber(metrics.githubReleaseDownloads)}</dd>
+        <dt>traffic status</dt>
+        <dd>
+          {metrics.githubTrafficAvailability ?? 'unavailable'}{#if metrics.githubTrafficScannedAt}
+            · {relativeAge(metrics.githubTrafficScannedAt)} ago{/if}
         </dd>
         <dt>collected</dt>
         <dd>{relativeAge(metrics.githubScannedAt)} ago</dd>

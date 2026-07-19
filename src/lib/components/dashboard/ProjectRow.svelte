@@ -42,6 +42,11 @@
   let staleTd = $derived(
     metrics?.tdScannedAt ? Date.now() - Date.parse(metrics.tdScannedAt) > 10 * 60_000 : false
   );
+  let staleGithub = $derived(
+    metrics?.githubScannedAt
+      ? Date.now() - Date.parse(metrics.githubScannedAt) > 60 * 60_000
+      : false
+  );
 
   function rowKeydown(event: KeyboardEvent) {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -165,6 +170,9 @@
           >pr{#if metrics.githubExternalPrs}·{metrics.githubExternalPrs}e{/if}</small
         ></span
       >
+      {#if metrics.githubTrafficAvailability === 'available'}<span
+          ><strong>{compactNumber(metrics.githubTrafficViews)}</strong><small>views</small></span
+        >{/if}
     {:else}<span class="none"
         >{metrics?.githubAvailability === 'unauthenticated' ? 'auth needed' : 'no remote'}</span
       >{/if}
@@ -181,6 +189,11 @@
         >{/if}
       {#if staleGit}<span class="warn" title="Local Git metrics are stale">◷</span>{/if}
       {#if staleTd}<span class="warn" title="TD metrics are stale">◷</span>{/if}
+      {#if staleGithub}<span class="warn" title="GitHub metrics are stale">◷</span>{/if}
+      {#if metrics?.githubAvailability === 'rate_limited'}<span
+          class="warn"
+          title="GitHub rate limited; cached metrics preserved">⌛</span
+        >{/if}
       {#each project.errors as error (error.collector)}<span
           class="warn"
           title={`${error.collector}: ${error.message}`}>!</span

@@ -67,6 +67,11 @@ export interface ScannerDependencies {
     repositoryPath: string,
     options: { signal: AbortSignal }
   ) => Promise<IssueMetrics | null>;
+  collectHosting?: (
+    repository: CatalogRepository,
+    projects: readonly Project[],
+    options: { force: boolean; signal: AbortSignal; lease: ScanLeaseOwnership }
+  ) => Promise<{ updatedProjectIds: string[]; errorCount: number }>;
 }
 
 export class ScanInProgressError extends Error {
@@ -94,6 +99,7 @@ export class Scanner {
   private readonly collectGit: NonNullable<ScannerDependencies['collectGit']>;
   private readonly collectLoc: NonNullable<ScannerDependencies['collectLoc']>;
   private readonly collectIssues: NonNullable<ScannerDependencies['collectIssues']>;
+  private readonly collectHosting: ScannerDependencies['collectHosting'];
 
   constructor(
     private readonly repository: CatalogRepository,
@@ -146,6 +152,7 @@ export class Scanner {
       dependencies.collectIssues ??
       ((path, options) =>
         collectTdMetrics(path, { now: () => new Date(this.now()), signal: options.signal }));
+    this.collectHosting = dependencies.collectHosting;
   }
 
   async start(request: ScanRequest): Promise<ScanHandle> {
@@ -260,6 +267,7 @@ export class Scanner {
       const localLimit = createConcurrencyLimit(this.config.gitConcurrency);
       const clocLimit = createConcurrencyLimit(this.config.clocConcurrency);
       const policy = request.refresh ?? refreshPolicyByReason[request.reason];
+      const updatedProjects = new Set<string>();
       await Promise.all(
         projects.map((project) =>
           localLimit(async () => {
@@ -424,11 +432,29 @@ export class Scanner {
               }
             }
 
-            if (updated) counts.updatedCount += 1;
+            if (updated) {
+              updatedProjects.add(project.id);
+              counts.updatedCount += 1;
+            }
             await this.repository.updateScanRunProgress(runId, counts, lease);
           })
         )
       );
+
+      if (this.collectHosting && projects.length > 0) {
+        if (signal.aborted) throw new ScanLeaseLostError(runId);
+        const enrichment = await this.collectHosting(this.repository, projects, {
+          force: policy === 'full',
+          signal,
+          lease
+        });
+        for (const id of enrichment.updatedProjectIds) {
+          if (!updatedProjects.has(id)) counts.updatedCount += 1;
+          updatedProjects.add(id);
+        }
+        counts.errorCount += enrichment.errorCount;
+        await this.repository.updateScanRunProgress(runId, counts, lease);
+      }
 
       await this.repository.finishScanRun(runId, 'completed', counts, this.now(), lease);
       this.progress.publish({ runId, type: 'completed', at: this.now(), ...counts });

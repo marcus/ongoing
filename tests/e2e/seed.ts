@@ -45,18 +45,54 @@ await repository.updateMetrics(alpha.id, {
   githubOwner: 'example',
   githubName: 'alpha',
   githubStars: 120,
+  githubForks: 14,
+  githubWatchers: 9,
+  githubVisibility: 'public',
+  githubIsArchived: false,
   githubOpenIssues: 3,
   githubOpenPrs: 2,
+  githubDraftPrs: 1,
+  githubReadyPrs: 1,
+  githubOwnerPrs: 1,
   githubExternalPrs: 1,
+  githubOldestExternalPrAt: '2026-06-12T10:00:00.000Z',
+  githubMergedPrs30d: 4,
+  githubMergedPrs90d: 11,
+  githubExternalIssues30d: 2,
+  githubExternalIssues90d: 6,
+  githubLatestReleaseAt: '2026-07-01T10:00:00.000Z',
+  githubLatestReleaseTag: 'v2.1.0',
+  githubReleaseDownloads: 1400,
   githubCiState: 'success',
+  githubContributorCount: 12,
+  githubTrafficViews: 820,
+  githubTrafficUniqueVisitors: 210,
+  githubTrafficClones: 94,
+  githubTrafficUniqueCloners: 37,
+  githubAvailability: 'available',
+  githubTrafficAvailability: 'available',
   gitScannedAt: '2026-07-19T11:59:00.000Z',
-  tdScannedAt: '2026-07-19T11:59:00.000Z'
+  tdScannedAt: '2026-07-19T11:59:00.000Z',
+  githubScannedAt: '2026-07-19T11:59:00.000Z',
+  githubTrafficScannedAt: '2026-07-19T11:59:00.000Z'
 });
 await repository.saveSnapshot({
   projectId: alpha.id,
   metric: 'github_stars',
   capturedOn: '2026-06-18',
   value: 110
+});
+await repository.saveSnapshot({
+  projectId: alpha.id,
+  metric: 'github_traffic_views',
+  capturedOn: '2026-06-18',
+  value: 700
+});
+await repository.saveSnapshot({
+  projectId: alpha.id,
+  metric: 'github_traffic_clones',
+  capturedOn: '2026-06-18',
+  value: 70
 });
 
 const beta = await repository.upsertDiscovered({

@@ -34,6 +34,16 @@
       [
         `+${source.reduce((sum, project) => sum + Math.max(0, project.githubStarsGained30d ?? 0), 0)}`,
         '★ gained 30d'
+      ],
+      [
+        compactNumber(
+          source.reduce((sum, project) => sum + (project.metrics?.githubTrafficViews ?? 0), 0)
+        ),
+        'github views'
+      ],
+      [
+        `+${source.reduce((sum, project) => sum + Math.max(0, project.githubTrafficClonesDelta30d ?? 0), 0)}`,
+        'clones gained 30d'
       ]
     ];
   });

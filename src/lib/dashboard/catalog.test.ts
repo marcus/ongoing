@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectMetrics } from '$lib/domain/metrics';
 import type { DashboardProject } from './catalog';
-import { applyDashboardQuery, classifyProject, parseDashboardQuery } from './catalog';
+import {
+  applyDashboardQuery,
+  classifyProject,
+  metricDelta30d,
+  parseDashboardQuery
+} from './catalog';
 
 function project(
   id: string,
@@ -34,6 +39,8 @@ function project(
     updatedAt: '2026-01-01T00:00:00Z',
     metrics: { projectId: id, ...options.metrics } as ProjectMetrics,
     githubStarsGained30d: options.starsDelta ?? null,
+    githubTrafficViewsDelta30d: null,
+    githubTrafficClonesDelta30d: null,
     errors: [],
     snapshots: []
   };
@@ -97,5 +104,20 @@ describe('dashboard catalog model', () => {
       'c',
       'a'
     ]);
+  });
+
+  it('calculates stable 30-day deltas from the latest snapshot at or before the cutoff', () => {
+    expect(
+      metricDelta30d(
+        [
+          { projectId: 'a', metric: 'github_traffic_views', capturedOn: '2026-06-17', value: 30 },
+          { projectId: 'a', metric: 'github_traffic_views', capturedOn: '2026-06-19', value: 40 },
+          { projectId: 'a', metric: 'github_traffic_views', capturedOn: '2026-07-10', value: 70 }
+        ],
+        'github_traffic_views',
+        100,
+        Date.parse('2026-07-19T12:00:00Z')
+      )
+    ).toBe(60);
   });
 });

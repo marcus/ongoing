@@ -27,6 +27,8 @@ export interface DashboardProject extends SortableProject {
   errors: CollectionError[];
   snapshots: MetricSnapshot[];
   views: ViewKey[];
+  githubTrafficViewsDelta30d: number | null;
+  githubTrafficClonesDelta30d: number | null;
 }
 
 export interface DashboardQuery {
@@ -65,7 +67,24 @@ function dashboardProject(
     metrics,
     snapshots,
     errors: repository.listCollectionErrors(project.id, true),
-    githubStarsGained30d: starDelta30d(snapshots, metrics?.githubStars ?? null, now.getTime())
+    githubStarsGained30d: metricDelta30d(
+      snapshots,
+      'github_stars',
+      metrics?.githubStars ?? null,
+      now.getTime()
+    ),
+    githubTrafficViewsDelta30d: metricDelta30d(
+      snapshots,
+      'github_traffic_views',
+      metrics?.githubTrafficViews ?? null,
+      now.getTime()
+    ),
+    githubTrafficClonesDelta30d: metricDelta30d(
+      snapshots,
+      'github_traffic_clones',
+      metrics?.githubTrafficClones ?? null,
+      now.getTime()
+    )
   };
   return { ...base, views: classifyProject(base, now.getTime()) };
 }
@@ -96,17 +115,16 @@ function daysSince(value: string | null, now: number): number | null {
   return Number.isFinite(timestamp) ? Math.max(0, (now - timestamp) / 86_400_000) : null;
 }
 
-function starDelta30d(
+export function metricDelta30d(
   snapshots: readonly MetricSnapshot[],
+  metric: MetricSnapshot['metric'],
   current: number | null,
   now: number
 ): number | null {
   if (current === null) return null;
   const cutoff = now - 30 * 86_400_000;
   const candidates = snapshots
-    .filter(
-      (snapshot) => snapshot.metric === 'github_stars' && Date.parse(snapshot.capturedOn) <= cutoff
-    )
+    .filter((snapshot) => snapshot.metric === metric && Date.parse(snapshot.capturedOn) <= cutoff)
     .sort((left, right) => Date.parse(right.capturedOn) - Date.parse(left.capturedOn));
   return candidates[0] ? current - candidates[0].value : null;
 }
