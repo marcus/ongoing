@@ -2,7 +2,7 @@
 
 A private, single-user dashboard for deciding which local software projects deserve attention. Ongoing discovers Git repositories, caches local and provider metrics in an app-owned SQLite catalog, and presents them using the interaction and visual direction in `docs/mockups/dashboard.html`.
 
-The repository currently contains the Bun and SvelteKit application foundation. Catalog and scanner implementation follows in later stories.
+The complete Bun and SvelteKit application includes the local catalog, scanner, personal organization controls, TD and GitHub enrichment, attention views, LAN authentication, and private-host release tooling.
 
 ## Local setup
 
@@ -29,6 +29,8 @@ Development and preview bind to loopback by default. Production may set `HOST` a
 | `bun run scan`         | Run the scanner CLI (placeholder until the catalog story) |
 
 LAN authentication and production operations are documented in [docs/deployment.md](docs/deployment.md). Non-loopback listeners fail closed unless `ONGOING_ACCESS_SECRET` is configured; do not expose this trusted-LAN application to the public internet.
+
+The production source of truth is the private repository `git@github.com:marcus/ongoing.git`. Its tested `main` branch deploys to `/Users/marcusvorwaller/code/ongoing` on `aerie.local` as the user LaunchAgent `com.marcusvorwaller.ongoing` at `http://aerie.local:4173`.
 
 ## Architecture
 
