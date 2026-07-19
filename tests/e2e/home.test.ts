@@ -233,27 +233,34 @@ test('persists personal organization controls and rejects forged mutations', asy
   await page.goto('/?sort=manual&dir=asc&filter=all&group=none');
   await expect(page.locator('[data-project-row]').last()).toContainText('beta');
 
+  const trustedHeaders = { origin: 'http://127.0.0.1:5173' };
   const unknownFavorite = await page.request.post('/api/projects/not-a-database-id/favorite', {
+    headers: trustedHeaders,
     data: { favorite: true }
   });
   expect(unknownFavorite.status()).toBe(404);
   const forgedPath = await page.request.post('/api/projects/not-a-database-id', {
+    headers: trustedHeaders,
     data: { action: 'finder', path: '/etc' }
   });
   expect(forgedPath.status()).toBe(400);
   const longNote = await page.request.patch('/api/projects/not-a-database-id', {
+    headers: trustedHeaders,
     data: { note: 'x'.repeat(501) }
   });
   expect(longNote.status()).toBe(400);
   const invalidDecision = await page.request.patch('/api/projects/not-a-database-id', {
+    headers: trustedHeaders,
     data: { excitement: 6 }
   });
   expect(invalidDecision.status()).toBe(400);
   const invalidDate = await page.request.patch('/api/projects/not-a-database-id', {
+    headers: trustedHeaders,
     data: { reviewAfter: 'tomorrow' }
   });
   expect(invalidDate.status()).toBe(400);
   const duplicateOrder = await page.request.post('/api/projects/reorder', {
+    headers: trustedHeaders,
     data: { orderedIds: ['duplicate', 'duplicate'] }
   });
   expect(duplicateOrder.status()).toBe(400);

@@ -17,7 +17,13 @@ const config: AppConfig = {
   maxScanDepth: 3,
   ignoreGlobs: [],
   gitConcurrency: 6,
-  clocConcurrency: 2
+  clocConcurrency: 2,
+  security: {
+    authenticationRequired: false,
+    sessionMaxAgeSeconds: 43_200,
+    cookieSecure: false,
+    maxRequestBytes: 16_384
+  }
 };
 
 const gitMetrics: GitMetrics = {

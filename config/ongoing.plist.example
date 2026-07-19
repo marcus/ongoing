@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.marcusvorwaller.ongoing</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/bun</string>
+    <string>/Users/marcusvorwaller/code/ongoing/build/index.js</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/marcusvorwaller/code/ongoing</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOST</key><string>0.0.0.0</string>
+    <key>PORT</key><string>4173</string>
+    <key>ORIGIN</key><string>http://aerie.local:4173</string>
+    <key>APP_ORIGIN</key><string>http://aerie.local:4173</string>
+    <key>SESSION_COOKIE_SECURE</key><string>false</string>
+    <key>BODY_SIZE_LIMIT</key><string>16384</string>
+    <key>SCAN_ROOTS</key><string>/Users/marcusvorwaller/code</string>
+    <key>DATABASE_PATH</key><string>/Users/marcusvorwaller/Library/Application Support/Ongoing/ongoing.sqlite</string>
+    <key>ONGOING_ACCESS_SECRET</key><string>REPLACE_OUTSIDE_GIT_WITH_A_LONG_RANDOM_SECRET</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/Users/marcusvorwaller/Library/Logs/Ongoing/stdout.log</string>
+  <key>StandardErrorPath</key><string>/Users/marcusvorwaller/Library/Logs/Ongoing/stderr.log</string>
+</dict>
+</plist>

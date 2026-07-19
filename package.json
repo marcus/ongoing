@@ -17,6 +17,12 @@
     "format:check": "prettier --check .",
     "test": "bun --bun vitest run",
     "test:e2e": "playwright test",
+    "test:e2e:auth": "AUTH_E2E=1 playwright test tests/e2e/auth.test.ts --config playwright.auth.config.ts",
+    "test:production": "bun run build && bun run scripts/production-smoke.ts",
+    "deploy": "bun run scripts/deploy.ts",
+    "rollback": "bun run scripts/rollback.ts",
+    "smoke": "bun run scripts/smoke.ts",
+    "migrate": "bun run scripts/migrate.ts",
     "scan": "bun run scripts/scan.ts"
   },
   "devDependencies": {

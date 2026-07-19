@@ -10,6 +10,16 @@ export interface AppConfig {
   ignoreGlobs: string[];
   gitConcurrency: number;
   clocConcurrency: number;
+  security: SecurityConfig;
+}
+
+export interface SecurityConfig {
+  authenticationRequired: boolean;
+  accessSecret?: string;
+  sessionMaxAgeSeconds: number;
+  cookieSecure: boolean;
+  appOrigin?: string;
+  maxRequestBytes: number;
 }
 
 const defaultIgnoreGlobs = [
@@ -34,7 +44,55 @@ function positiveInteger(value: string | undefined, fallback: number, name: stri
   return parsed;
 }
 
+export function isLoopbackHost(host: string): boolean {
+  const normalized = host
+    .trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/g, '');
+  if (normalized === 'localhost' || normalized === '::1') return true;
+  const match = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(normalized);
+  return Boolean(
+    match &&
+    Number(match[1]) === 127 &&
+    match.slice(1).every((part) => Number(part) >= 0 && Number(part) <= 255)
+  );
+}
+
+function optionalOrigin(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error('APP_ORIGIN must be an absolute http(s) origin');
+  }
+  if (
+    !['http:', 'https:'].includes(url.protocol) ||
+    url.origin !== value ||
+    url.username ||
+    url.password
+  )
+    throw new Error('APP_ORIGIN must be an absolute http(s) origin without a path');
+  return url.origin;
+}
+
 export function loadConfig(env: Record<string, string | undefined> = process.env): AppConfig {
+  const host = (env.HOST || '127.0.0.1').trim();
+  if (!host) throw new Error('HOST must not be empty');
+  if (env.ONGOING_REQUIRE_AUTH && !['true', 'false'].includes(env.ONGOING_REQUIRE_AUTH))
+    throw new Error('ONGOING_REQUIRE_AUTH must be true or false');
+  const authenticationRequired = !isLoopbackHost(host) || env.ONGOING_REQUIRE_AUTH === 'true';
+  const accessSecret = env.ONGOING_ACCESS_SECRET;
+  if (authenticationRequired && !accessSecret)
+    throw new Error('ONGOING_ACCESS_SECRET is required for a non-loopback HOST');
+  if (accessSecret && accessSecret.length < 16)
+    throw new Error('ONGOING_ACCESS_SECRET must contain at least 16 characters');
+  const appOrigin = optionalOrigin(env.APP_ORIGIN);
+  const cookieSecure = env.SESSION_COOKIE_SECURE
+    ? env.SESSION_COOKIE_SECURE === 'true'
+    : appOrigin?.startsWith('https://') === true;
+  if (env.SESSION_COOKIE_SECURE && !['true', 'false'].includes(env.SESSION_COOKIE_SECURE))
+    throw new Error('SESSION_COOKIE_SECURE must be true or false');
   const scanRoots = (env.SCAN_ROOTS ?? '~/code')
     .split(',')
     .map((root) => root.trim())
@@ -43,7 +101,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   if (scanRoots.length === 0) throw new Error('SCAN_ROOTS must contain at least one path');
 
   return {
-    host: env.HOST || '127.0.0.1',
+    host,
     port: positiveInteger(env.PORT, 4173, 'PORT'),
     scanRoots,
     databasePath: expandPath(env.DATABASE_PATH || '.data/ongoing.sqlite'),
@@ -54,6 +112,18 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
           .filter(Boolean)
       : defaultIgnoreGlobs,
     gitConcurrency: positiveInteger(env.GIT_CONCURRENCY, 6, 'GIT_CONCURRENCY'),
-    clocConcurrency: positiveInteger(env.CLOC_CONCURRENCY, 2, 'CLOC_CONCURRENCY')
+    clocConcurrency: positiveInteger(env.CLOC_CONCURRENCY, 2, 'CLOC_CONCURRENCY'),
+    security: {
+      authenticationRequired,
+      accessSecret,
+      sessionMaxAgeSeconds: positiveInteger(
+        env.SESSION_MAX_AGE_SECONDS,
+        43_200,
+        'SESSION_MAX_AGE_SECONDS'
+      ),
+      cookieSecure,
+      appOrigin,
+      maxRequestBytes: positiveInteger(env.MAX_REQUEST_BYTES, 16_384, 'MAX_REQUEST_BYTES')
+    }
   };
 }

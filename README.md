@@ -28,6 +28,8 @@ Development and preview bind to loopback by default. Production may set `HOST` a
 | `bun run test:e2e`     | Run Playwright browser tests                              |
 | `bun run scan`         | Run the scanner CLI (placeholder until the catalog story) |
 
+LAN authentication and production operations are documented in [docs/deployment.md](docs/deployment.md). Non-loopback listeners fail closed unless `ONGOING_ACCESS_SECRET` is configured; do not expose this trusted-LAN application to the public internet.
+
 ## Architecture
 
 The full product plan lives in `docs/plans/ongoing-projects-dashboard.md`. The initial architectural constraints are recorded in `docs/adr/`: app-owned storage, provider boundaries, and cache-first bounded scanning.
