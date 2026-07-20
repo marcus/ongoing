@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   decodeReleaseConfig,
@@ -11,6 +13,7 @@ import {
   PRODUCTION_BUN,
   PRODUCTION_BUN_VERSION,
   PRODUCTION_SCAN_LABEL,
+  PRODUCTION_SCAN_PATH,
   PRODUCTION_SCAN_PLIST,
   PRODUCTION_WEB_LABEL,
   PRODUCTION_WEB_PLIST,
@@ -90,6 +93,8 @@ describe('release tooling', () => {
       expect(plan.join('\n')).toContain('http://127.0.0.1:7766/api/health');
     }
     const deployText = deploy.join('\n');
+    expect(deployText).toContain(`validate ${PRODUCTION_SCAN_PATH}`);
+    expect(deployText.indexOf('validate')).toBeLessThan(deployText.indexOf('quiesce'));
     expect(deployText.indexOf('quiesce')).toBeLessThan(deployText.indexOf('back up'));
     expect(deployText.indexOf('back up')).toBeLessThan(deployText.indexOf('apply migrations'));
     expect(deploy.filter((step) => step.includes('apply migrations'))).toHaveLength(1);
@@ -111,6 +116,7 @@ describe('production LaunchAgent definitions', () => {
     scripts: Record<string, string>;
   };
   const productionSmoke = readFileSync(resolve('scripts/production-smoke.ts'), 'utf8');
+  const remoteRelease = readFileSync(resolve('scripts/remote-release.ts'), 'utf8');
 
   it('uses one exact app-scoped Bun 1.3.1 executable for both agents', () => {
     expect(web).toContain(`<string>${PRODUCTION_BUN}</string>`);
@@ -158,6 +164,15 @@ describe('production LaunchAgent definitions', () => {
     expect(scan).not.toContain('<key>RunAtLoad</key>');
     expect(scan).not.toContain('<key>KeepAlive</key>');
     expect(scan).toContain('/Users/marcus/code/ongoing/scripts/scan.ts');
+    expect(scan).toContain(`<key>PATH</key><string>${PRODUCTION_SCAN_PATH}</string>`);
+    expect(PRODUCTION_SCAN_PATH.split(':')).toEqual([
+      '/opt/homebrew/bin',
+      '/usr/bin',
+      '/bin',
+      '/usr/sbin',
+      '/sbin'
+    ]);
+    expect(PRODUCTION_SCAN_PATH).not.toMatch(/~|\.bun|Users\/marcus\/(bin|go)|mise/);
     for (const shared of [
       '<key>SCAN_ROOTS</key><string>/Users/marcus/code</string>',
       '<key>DATABASE_PATH</key><string>/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite</string>'
@@ -166,5 +181,51 @@ describe('production LaunchAgent definitions', () => {
       expect(scan).toContain(shared);
     }
     expect(PRODUCTION_SCAN_LABEL).not.toBe(PRODUCTION_WEB_LABEL);
+  });
+
+  it('resolves every scheduled tool with only the launchd PATH', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'ongoing-launchd-home-'));
+    const probes = [
+      [process.execPath, '--version'],
+      ['gh', '--version'],
+      ['gh', 'auth', 'status'],
+      ['td', '--version'],
+      ['cloc', '--version'],
+      ['git', '--version']
+    ];
+    try {
+      for (const probe of probes) {
+        const child = Bun.spawn(probe, {
+          cwd: process.cwd(),
+          env: { HOME: home, PATH: PRODUCTION_SCAN_PATH },
+          stdout: 'pipe',
+          stderr: 'pipe'
+        });
+        const [status, stderr] = await Promise.all([
+          child.exited,
+          new Response(child.stderr).text()
+        ]);
+        if (probe[1] === 'auth') expect([0, 1]).toContain(status);
+        else expect(status, `${probe[0]} was not available: ${stderr}`).toBe(0);
+      }
+    } finally {
+      await rm(home, { recursive: true, force: true });
+    }
+    expect(Bun.version).toBe(PRODUCTION_BUN_VERSION);
+  });
+
+  it('preflights tooling before quiescing and reloads the installed scan definition', () => {
+    expect(remoteRelease).toContain('await validateScanTooling(config);');
+    expect(remoteRelease).toContain("['gh', '--version']");
+    expect(remoteRelease).toContain("['td', '--version']");
+    expect(remoteRelease).toContain("['cloc', '--version']");
+    expect(remoteRelease).toContain("['git', '--version']");
+    expect(remoteRelease.indexOf('await validateScanTooling(config);')).toBeLessThan(
+      remoteRelease.indexOf('await quiesce(config);')
+    );
+    expect(remoteRelease).toContain('await installDefinition(scanSource, config.scanPlist);');
+    expect(remoteRelease).toContain(
+      "await command(['launchctl', 'bootstrap', domain, config.scanPlist], config.checkout);"
+    );
   });
 });

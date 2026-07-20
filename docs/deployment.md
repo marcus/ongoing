@@ -20,6 +20,8 @@ Ongoing is designed for one trusted user on a private LAN. It is not hardened fo
 
 Both agents use that one app-owned Bun executable, which must report the exact version in `.bun-version`. Provisioning scopes `/opt/homebrew/bin/mise` to Ongoing's own data directory; it does not install into, replace, or select Marcus's `~/.bun` runtime and does not change a global mise default. Release scripts reject different hosts, paths, labels, runtime versions, and health targets. They do not use `sudo`, modify the firewall/router, or touch unrelated services.
 
+The daily agent sets `PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin`, so launchd resolves Homebrew's `gh`, `td`, `cloc`, and `git` without inheriting interactive shell startup files or user runtime shims. Its `ProgramArguments` still selects the absolute app-owned Bun 1.3.1 executable. Deployment verifies the committed PATH and all four tools before stopping either agent, then installs the definition atomically and bootstraps the calendar agent from that installed file.
+
 The web process runs the committed `scripts/production-server.ts` boundary in front of adapter-node. It counts raw fixed-length and chunked mutation bytes before SvelteKit actions, then forwards bounded requests to a private ephemeral loopback adapter listener. It also has `ONGOING_ENABLE_SCAN_SCHEDULER=false`, so it creates neither the development startup scan nor the five-minute interval. The scan agent invokes the shared `scripts/scan.ts` once at 04:00 local time against the same database and scan root. Its definition has no `RunAtLoad` or `KeepAlive`; registering or restarting it does not cause an immediate scan. A manual or per-project scan remains available, and the durable scan lease prevents overlap.
 
 ## One-time setup
@@ -65,6 +67,10 @@ Inspect definitions and live state without starting a scan:
 
 ```sh
 plutil -lint config/ongoing.plist.example config/ongoing-scan.plist.example
+env -i HOME=/Users/marcus PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin /opt/homebrew/bin/gh auth status
+env -i HOME=/Users/marcus PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin /opt/homebrew/bin/td --version
+env -i HOME=/Users/marcus PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin /opt/homebrew/bin/cloc --version
+env -i HOME=/Users/marcus PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin /usr/bin/git --version
 launchctl print gui/$(id -u)/com.marcusvorwaller.ongoing
 launchctl print gui/$(id -u)/com.marcusvorwaller.ongoing.scan
 tail -n 100 /Users/marcus/Library/Logs/Ongoing/scan-stderr.log

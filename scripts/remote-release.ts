@@ -10,7 +10,7 @@ import {
   writeFile
 } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
-import { decodeReleaseConfig, type ReleaseConfig } from './release-config';
+import { decodeReleaseConfig, PRODUCTION_SCAN_PATH, type ReleaseConfig } from './release-config';
 
 interface ReleaseRecord {
   priorSha: string;
@@ -108,6 +108,23 @@ async function validateRuntime(config: ReleaseConfig): Promise<void> {
     throw new Error(`release must run with ${config.bunExecutable}`);
 }
 
+async function validateScanTooling(config: ReleaseConfig): Promise<void> {
+  const definition = await readFile(
+    join(config.checkout, 'config', 'ongoing-scan.plist.example'),
+    'utf8'
+  );
+  const configuredPath = /<key>PATH<\/key>\s*<string>([^<]+)<\/string>/.exec(definition)?.[1];
+  if (configuredPath !== PRODUCTION_SCAN_PATH)
+    throw new Error(`scan LaunchAgent PATH must be exactly ${PRODUCTION_SCAN_PATH}`);
+  for (const probe of [
+    ['gh', '--version'],
+    ['td', '--version'],
+    ['cloc', '--version'],
+    ['git', '--version']
+  ])
+    await command(probe, config.checkout, { PATH: PRODUCTION_SCAN_PATH });
+}
+
 async function quiesce(config: ReleaseConfig): Promise<void> {
   const uid = userId();
   for (const label of [config.scanLabel, config.webLabel]) {
@@ -164,6 +181,7 @@ async function deploy(config: ReleaseConfig, recordPath: string): Promise<void> 
   await command(['git', 'fetch', 'origin', 'main'], config.checkout);
   await command(['git', 'merge', '--ff-only', 'origin/main'], config.checkout);
   await validateRuntime(config);
+  await validateScanTooling(config);
   const deployedSha = await command(['git', 'rev-parse', 'HEAD'], config.checkout);
   await quiesce(config);
   const backup = await backupDatabase(config, priorSha);

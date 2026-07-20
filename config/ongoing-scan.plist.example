@@ -12,6 +12,7 @@
   <key>WorkingDirectory</key><string>/Users/marcus/code/ongoing</string>
   <key>EnvironmentVariables</key>
   <dict>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     <key>SCAN_ROOTS</key><string>/Users/marcus/code</string>
     <key>DATABASE_PATH</key><string>/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite</string>
   </dict>

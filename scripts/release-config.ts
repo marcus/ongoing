@@ -12,6 +12,7 @@ export const PRODUCTION_SCAN_PLIST =
   '/Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.scan.plist';
 export const PRODUCTION_BUN_VERSION = '1.3.1';
 export const PRODUCTION_BUN = '/Users/marcus/.local/share/ongoing/mise/installs/bun/1.3.1/bin/bun';
+export const PRODUCTION_SCAN_PATH = '/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin';
 
 export interface ReleaseConfig {
   host: string;
@@ -119,6 +120,7 @@ export function releasePlan(
         `record current SHA for ${config.checkout}`,
         'fetch origin main and fast-forward only',
         `verify ${config.bunExecutable} still matches the fetched .bun-version`,
+        `validate ${PRODUCTION_SCAN_PATH} resolves gh, td, cloc, and git for the daily scanner`,
         `quiesce ${config.webLabel} and ${config.scanLabel}`,
         `back up ${config.database} and retain ${config.backupRetention} backups`,
         `install frozen lockfile and build with ${config.bunExecutable}`,
