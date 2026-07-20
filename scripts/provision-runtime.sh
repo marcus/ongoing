@@ -4,10 +4,10 @@ set -euo pipefail
 readonly checkout=/Users/marcus/code/ongoing
 readonly mise=/opt/homebrew/bin/mise
 readonly mise_data=/Users/marcus/.local/share/ongoing/mise
-readonly bun=/Users/marcus/.local/share/ongoing/mise/installs/bun/1.3.1/bin/bun
+readonly bun=/Users/marcus/.local/share/ongoing/mise/installs/bun/1.3.9/bin/bun
 readonly required_version="$(tr -d '[:space:]' < "$checkout/.bun-version")"
 
-if [[ "$required_version" != 1.3.1 ]]; then
+if [[ "$required_version" != 1.3.9 ]]; then
   print -u2 "unsupported pinned Bun version: $required_version"
   exit 1
 fi

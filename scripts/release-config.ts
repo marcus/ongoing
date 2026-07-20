@@ -10,8 +10,8 @@ export const PRODUCTION_WEB_PLIST =
   '/Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist';
 export const PRODUCTION_SCAN_PLIST =
   '/Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.scan.plist';
-export const PRODUCTION_BUN_VERSION = '1.3.1';
-export const PRODUCTION_BUN = '/Users/marcus/.local/share/ongoing/mise/installs/bun/1.3.1/bin/bun';
+export const PRODUCTION_BUN_VERSION = '1.3.9';
+export const PRODUCTION_BUN = '/Users/marcus/.local/share/ongoing/mise/installs/bun/1.3.9/bin/bun';
 export const PRODUCTION_SCAN_PATH = '/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin';
 
 export interface ReleaseConfig {

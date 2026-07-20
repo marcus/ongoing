@@ -55,7 +55,7 @@ describe('release tooling', () => {
     expect(decodeReleaseConfig(encodeReleaseConfig(config))).toEqual(config);
     expect(() => decodeReleaseConfig('not valid config!')).toThrow(/base64url/);
     expect(() =>
-      decodeReleaseConfig(encodeReleaseConfig({ ...config, bunVersion: '1.3.9' }))
+      decodeReleaseConfig(encodeReleaseConfig({ ...config, bunVersion: '1.3.1' }))
     ).toThrow(/unsupported targets/);
   });
 
@@ -66,7 +66,7 @@ describe('release tooling', () => {
       database: '/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite',
       webPlist: '/Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist',
       scanPlist: '/Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.scan.plist',
-      bunExecutable: '/Users/marcus/.local/share/ongoing/mise/installs/bun/1.3.1/bin/bun'
+      bunExecutable: '/Users/marcus/.local/share/ongoing/mise/installs/bun/1.3.9/bin/bun'
     });
   });
 
@@ -118,7 +118,7 @@ describe('production LaunchAgent definitions', () => {
   const productionSmoke = readFileSync(resolve('scripts/production-smoke.ts'), 'utf8');
   const remoteRelease = readFileSync(resolve('scripts/remote-release.ts'), 'utf8');
 
-  it('uses one exact app-scoped Bun 1.3.1 executable for both agents', () => {
+  it('uses one exact app-scoped Bun 1.3.9 executable for both agents', () => {
     expect(web).toContain(`<string>${PRODUCTION_BUN}</string>`);
     expect(web).toContain(
       '<string>/Users/marcus/code/ongoing/scripts/production-server.ts</string>'

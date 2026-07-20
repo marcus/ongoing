@@ -6,7 +6,7 @@ The complete Bun and SvelteKit application includes the local catalog, scanner, 
 
 ## Local setup
 
-1. Install Bun `1.3.1` (the exact version in `.bun-version`).
+1. Install Bun `1.3.9` (the exact version in `.bun-version`).
 2. Run `bun install --frozen-lockfile`.
 3. Copy `.env.example` to `.env` and adjust the local paths if needed.
 4. Run `bun run dev` and open `http://127.0.0.1:5173`.
