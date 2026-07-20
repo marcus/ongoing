@@ -31,6 +31,11 @@ async function command(argv: string[], cwd: string, env?: Record<string, string>
   return output.trim();
 }
 
+async function commandSucceeds(argv: string[], cwd: string): Promise<boolean> {
+  const child = Bun.spawn(argv, { cwd, stdout: 'ignore', stderr: 'ignore' });
+  return (await child.exited) === 0;
+}
+
 async function record(path: string, value: ReleaseRecord): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   const temporary = `${path}.new`;
@@ -89,29 +94,87 @@ async function waitForHealth(url: string): Promise<void> {
   throw new Error('service did not become healthy within 30 seconds');
 }
 
-async function restart(config: ReleaseConfig): Promise<void> {
+function userId(): number {
   const uid = process.getuid?.();
-  if (uid === undefined) throw new Error('user LaunchAgent restart requires a Unix user ID');
-  await command(['launchctl', 'kickstart', '-k', `gui/${uid}/${config.label}`], config.checkout);
+  if (uid === undefined) throw new Error('user LaunchAgent operation requires a Unix user ID');
+  return uid;
+}
+
+async function validateRuntime(config: ReleaseConfig): Promise<void> {
+  const pinned = (await readFile(join(config.checkout, '.bun-version'), 'utf8')).trim();
+  if (pinned !== config.bunVersion || Bun.version !== pinned)
+    throw new Error(`Bun version mismatch: expected ${pinned}, got ${Bun.version}`);
+  if (resolve(process.execPath) !== resolve(config.bunExecutable))
+    throw new Error(`release must run with ${config.bunExecutable}`);
+}
+
+async function quiesce(config: ReleaseConfig): Promise<void> {
+  const uid = userId();
+  for (const label of [config.scanLabel, config.webLabel]) {
+    const target = `gui/${uid}/${label}`;
+    if (await commandSucceeds(['launchctl', 'print', target], config.checkout))
+      await command(['launchctl', 'bootout', target], config.checkout);
+  }
+}
+
+function accessSecret(plist: string): string {
+  const match = /<key>ONGOING_ACCESS_SECRET<\/key>\s*<string>([^<]+)<\/string>/.exec(plist);
+  if (!match || match[1].includes('REPLACE_OUTSIDE_GIT'))
+    throw new Error('installed web LaunchAgent must contain its machine-local access secret');
+  return match[1];
+}
+
+async function installDefinition(source: string, destination: string, content?: string) {
+  const value = content ?? (await readFile(source, 'utf8'));
+  const temporary = `${destination}.new`;
+  await writeFile(temporary, value, { mode: 0o600 });
+  await rename(temporary, destination);
+}
+
+async function installAgentDefinitions(config: ReleaseConfig): Promise<void> {
+  const webSource = join(config.checkout, 'config', 'ongoing.plist.example');
+  const scanSource = join(config.checkout, 'config', 'ongoing-scan.plist.example');
+  const installedWeb = await readFile(config.webPlist, 'utf8');
+  const secret = accessSecret(installedWeb);
+  const webDefinition = (await readFile(webSource, 'utf8')).replace(
+    'REPLACE_OUTSIDE_GIT_WITH_A_LONG_RANDOM_SECRET',
+    () => secret
+  );
+  await mkdir(dirname(config.webPlist), { recursive: true });
+  await mkdir('/Users/marcusvorwaller/Library/Logs/Ongoing', { recursive: true });
+  await installDefinition(webSource, config.webPlist, webDefinition);
+  await installDefinition(scanSource, config.scanPlist);
+}
+
+async function startAgents(config: ReleaseConfig): Promise<void> {
+  const domain = `gui/${userId()}`;
+  // The scan definition deliberately has neither RunAtLoad nor KeepAlive, so bootstrapping it
+  // only registers the 04:00 calendar event. The web definition starts immediately.
+  await command(['launchctl', 'bootstrap', domain, config.scanPlist], config.checkout);
+  await command(['launchctl', 'bootstrap', domain, config.webPlist], config.checkout);
   await waitForHealth(config.healthUrl);
 }
 
 async function deploy(config: ReleaseConfig, recordPath: string): Promise<void> {
+  await validateRuntime(config);
   if (await command(['git', 'status', '--porcelain'], config.checkout))
     throw new Error('production checkout is not clean');
   await command(['git', 'switch', 'main'], config.checkout);
   const priorSha = await command(['git', 'rev-parse', 'HEAD'], config.checkout);
-  const backup = await backupDatabase(config, priorSha);
   await command(['git', 'fetch', 'origin', 'main'], config.checkout);
   await command(['git', 'merge', '--ff-only', 'origin/main'], config.checkout);
+  await validateRuntime(config);
   const deployedSha = await command(['git', 'rev-parse', 'HEAD'], config.checkout);
-  await command(['bun', 'install', '--frozen-lockfile'], config.checkout);
-  await command(['bun', 'run', 'build'], config.checkout);
-  await command(['bun', 'run', 'scripts/migrate.ts'], config.checkout, {
+  await quiesce(config);
+  const backup = await backupDatabase(config, priorSha);
+  await command([config.bunExecutable, 'install', '--frozen-lockfile'], config.checkout);
+  await command([config.bunExecutable, 'run', 'build'], config.checkout);
+  await command([config.bunExecutable, 'run', 'scripts/migrate.ts'], config.checkout, {
     DATABASE_PATH: config.database
   });
+  await installAgentDefinitions(config);
+  await startAgents(config);
   await record(recordPath, { priorSha, deployedSha, backup, recordedAt: new Date().toISOString() });
-  await restart(config);
   console.log(`Deployed ${deployedSha}; prior ${priorSha}.`);
 }
 
@@ -120,29 +183,36 @@ async function rollback(
   recordPath: string,
   restoreDatabase: boolean
 ): Promise<void> {
+  await validateRuntime(config);
   if (await command(['git', 'status', '--porcelain'], config.checkout))
     throw new Error('production checkout is not clean');
   const release = JSON.parse(await readFile(recordPath, 'utf8')) as ReleaseRecord;
   if (!/^[a-f0-9]{40}$/.test(release.priorSha)) throw new Error('recorded prior SHA is invalid');
+  const priorVersion = await command(
+    ['git', 'show', `${release.priorSha}:.bun-version`],
+    config.checkout
+  );
+  if (priorVersion !== config.bunVersion)
+    throw new Error(`recorded release requires unsupported Bun ${priorVersion}`);
   const current = await command(['git', 'rev-parse', 'HEAD'], config.checkout);
+  await quiesce(config);
   const safetyBackup = await backupDatabase(config, current);
   await command(['git', 'switch', '--detach', release.priorSha], config.checkout);
-  await command(['bun', 'install', '--frozen-lockfile'], config.checkout);
-  await command(['bun', 'run', 'build'], config.checkout);
+  await validateRuntime(config);
+  await command([config.bunExecutable, 'install', '--frozen-lockfile'], config.checkout);
+  await command([config.bunExecutable, 'run', 'build'], config.checkout);
   if (restoreDatabase) {
     if (!release.backup) throw new Error('release record has no database backup');
     if (dirname(resolve(release.backup)) !== resolve(`${config.database}.backups`))
       throw new Error('recorded database backup is outside the managed backup directory');
-    const uid = process.getuid?.();
-    if (uid === undefined) throw new Error('database restore requires a Unix user ID');
-    await command(['launchctl', 'kill', 'SIGTERM', `gui/${uid}/${config.label}`], config.checkout);
     await copyFile(release.backup, config.database);
     await Promise.all([
       removeIfPresent(`${config.database}-shm`),
       removeIfPresent(`${config.database}-wal`)
     ]);
   }
-  await restart(config);
+  await installAgentDefinitions(config);
+  await startAgents(config);
   await record(recordPath, {
     priorSha: current,
     deployedSha: release.priorSha,

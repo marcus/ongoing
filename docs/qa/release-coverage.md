@@ -48,13 +48,15 @@ live repositories.
 
 ## Release and operations coverage
 
-| Release boundary                                                                                         | Executable evidence                                                                                                        |
-| -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Pinned Bun and frozen dependency graph                                                                   | `.bun-version`, `package.json`, `bun.lock`; `bun install --frozen-lockfile`                                                |
-| Format, lint, strict Svelte/type checks, unit/integration, and Playwright                                | Package scripts `format:check`, `lint`, `check`, `test`, `test:e2e`, and `test:e2e:auth`                                   |
-| Adapter-node production build/run and health without catalog leakage                                     | `bun run test:production` and `scripts/production-smoke.ts`                                                                |
-| Non-loopback authentication fails closed and valid sessions work                                         | Config/security tests plus `bun run test:e2e:auth`                                                                         |
-| Scan CLI/smoke and parameterized adapter boundaries                                                      | `scripts/scan.ts`, `scripts/smoke.ts`, collector tests, and production smoke                                               |
-| Exact-target deploy/rollback dry-runs with no remote mutation                                            | `tests/release.test.ts`, `bun run deploy -- --dry-run ...`, and `bun run rollback -- --dry-run ...`                        |
-| Restart, SQLite persistence/backup, LaunchAgent controls, update, rollback, and second-machine LAN smoke | Scripted and documented in `docs/deployment.md`; live-host verification belongs to the deployment checkpoint, not local QA |
-| Private remote and deployed commit identity                                                              | Verified at the deployment checkpoint because local release QA must not create or mutate remote infrastructure             |
+| Release boundary                                                                                 | Executable evidence                                                                                                        |
+| ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| Exact app-scoped Bun 1.3.1 and frozen dependency graph                                           | `.bun-version`, both plists, `scripts/provision-runtime.sh`, `tests/release.test.ts`; `bun install --frozen-lockfile`      |
+| Format, lint, strict Svelte/type checks, unit/integration, and Playwright                        | Package scripts `format:check`, `lint`, `check`, `test`, `test:e2e`, and `test:e2e:auth`                                   |
+| Adapter-node production build/run and health without catalog leakage                             | `bun run test:production` and `scripts/production-smoke.ts`                                                                |
+| Non-loopback authentication fails closed and valid sessions work                                 | Config/security tests plus `bun run test:e2e:auth`                                                                         |
+| Production web scheduler disabled while development/manual/project scanning remains available    | `src/lib/server/config.test.ts`, `src/lib/server/scanning/automatic.test.ts`, `tests/integration/scanner.test.ts`          |
+| Daily 04:00 scan definition, shared database/root, distinct labels, and no load/keepalive scan   | `config/ongoing-scan.plist.example`, `config/ongoing.plist.example`, `tests/release.test.ts`, `plutil -lint`               |
+| Scan CLI/smoke and parameterized adapter boundaries                                              | `scripts/scan.ts`, `scripts/smoke.ts`, collector tests, and production smoke                                               |
+| Exact-target, two-agent deploy/rollback dry-runs with no remote mutation                         | `tests/release.test.ts`, `bun run deploy -- --dry-run ...`, and `bun run rollback -- --dry-run ...`                        |
+| Port 7766 health, SQLite persistence/backup, two-agent controls, update, rollback, and LAN smoke | Scripted and documented in `docs/deployment.md`; live-host verification belongs to the deployment checkpoint, not local QA |
+| Private remote and deployed commit identity                                                      | Verified at the deployment checkpoint because local release QA must not create or mutate remote infrastructure             |

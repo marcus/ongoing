@@ -74,8 +74,8 @@ Before the first deployment, create a new private GitHub repository for this pro
 - Application checkout: `~/code/<repo-name>`.
 - Project scan root: `~/code` unless production configuration overrides it.
 - Persistent application data: the checkout's ignored `.data/` directory or a configured path beneath Marcus's home directory.
-- LAN URL: `http://aerie.local:4173` by default.
-- Process manager: a user-level macOS LaunchAgent so the app starts after login and restarts after a crash.
+- LAN URL: `http://aerie.local:7766`.
+- Process manager: one user-level macOS LaunchAgent for the persistent web app and a distinct calendar LaunchAgent for the daily 04:00 refresh.
 
 The application repository will itself appear beneath the scan root. It can remain visible as a project or be hidden through the normal UI.
 
@@ -102,8 +102,8 @@ Once the application is ready to launch:
 5. Install the exact Bun version declared by the project if it is not already available. Install dependencies from the lockfile without updating them.
 6. Create production configuration outside Git, including the scan root, database path, host, port, GitHub authentication mode, and any LAN access secret.
 7. Build the production application, run database migrations, and perform a one-shot scan.
-8. Install and load a user-level LaunchAgent that runs the built server with Bun, uses `HOST=0.0.0.0` and the configured port, writes logs to a known user-owned directory, and restarts on failure.
-9. Verify the health endpoint locally on `aerie.local`, then open the app from a second LAN machine through `http://aerie.local:4173`.
+8. Install both user-level LaunchAgents with the app-scoped pinned Bun: a persistent web service on port 7766 and a calendar-only scanner at 04:00.
+9. Verify the health endpoint locally on `aerie.local`, then open the app from a second LAN machine through `http://aerie.local:7766`.
 10. Confirm that the catalog scans `~/code`, notes and ordering survive a restart, hidden projects remain hidden, TD enrichment works, and GitHub failures degrade cleanly.
 
 If any verification fails, stop the new service, preserve its logs and database, and fix the issue through a new commit. Do not patch the production checkout by hand.
@@ -115,8 +115,8 @@ Add a documented deployment command or script that performs this sequence over S
 1. Confirm the remote checkout is clean.
 2. Record the currently deployed commit.
 3. Fetch and fast-forward to the selected commit on `main`.
-4. Install from the lockfile, build, back up the SQLite file, and apply migrations.
-5. Restart the LaunchAgent.
+4. Quiesce both agents, back up the SQLite file, install from the lockfile, build, and apply migrations.
+5. Restore both LaunchAgent definitions, schedule the scanner without running it immediately, and restart the web LaunchAgent.
 6. Wait for the health check and run a LAN smoke test.
 
 Rollback should check out the recorded prior commit, rebuild it, restore the pre-migration database backup when the migration is not backward-compatible, restart the service, and verify health. Keep a small fixed number of timestamped database backups rather than growing an unbounded archive.
@@ -406,14 +406,19 @@ The scanner should prune known expensive directories such as `node_modules`, `.c
 
 ### Refresh schedule
 
-- Start a scan shortly after server startup so the first page can render from the existing cache.
-- Refresh cheap Git and TD metrics every five minutes while the app is running.
-- Refresh GitHub counters every 30 minutes.
-- Refresh traffic once per day.
-- Refresh LOC only when its fingerprint changes.
-- Let the user request a full or per-project refresh.
+Development keeps the in-process scheduler enabled: it starts a deferred scan after the first private request and requests a cheap refresh every five minutes while the development server is running. This preserves fast feedback without delaying the first page, which renders from the durable cache.
 
-The canonical `bun run scan` command should run the same scanner outside the web request lifecycle. A later macOS `launchd` job can call it if updates are needed while the UI is stopped.
+Production uses a separate lifecycle. The web LaunchAgent sets `ONGOING_ENABLE_SCAN_SCHEDULER=false`, so the serving process creates no startup or five-minute scan timers. The distinct `com.marcusvorwaller.ongoing.scan` user LaunchAgent invokes the shared `scripts/scan.ts` scanner once daily at 04:00 local time against the same `SCAN_ROOTS` and `DATABASE_PATH`. It uses one `StartCalendarInterval` entry and has neither `RunAtLoad` nor `KeepAlive`, so registering or restarting it does not trigger an unscheduled scan.
+
+For both environments:
+
+- Refresh GitHub counters when their 30-minute freshness window has expired.
+- Refresh traffic when its daily freshness window has expired.
+- Refresh LOC only when its fingerprint changes.
+- Let the user request a full or per-project refresh at any time; these actions remain independent of the automatic production schedule.
+- Use the durable scan lease to prevent manual, per-project, development-timer, and calendar scans from overlapping.
+
+The canonical `bun run scan` command runs the same scanner outside the web request lifecycle and is the command used by the production calendar LaunchAgent.
 
 ### Concurrency and failure handling
 
@@ -558,7 +563,7 @@ Keep Playwright coverage focused on the important flows:
 - Verify the health endpoint without exposing repository data.
 - Restart the LaunchAgent and confirm the app returns with the same SQLite state.
 - Run the deployment script in a dry-run mode that performs no remote mutations.
-- After first launch, run a smoke test from a second LAN machine against `http://aerie.local:4173`.
+- After first launch, run a smoke test from a second LAN machine against `http://aerie.local:7766`.
 
 ## Implementation phases
 
@@ -623,7 +628,7 @@ Exit criteria: every derived view explains why a project appears and links back 
 - Push the tested `main` branch.
 - Add production configuration documentation and the SSH deployment/update script.
 - Use the authorized `ssh marcus@aerie.local` access to clone the repository under `~/code/`.
-- Install locked dependencies, build, migrate, scan, and configure the LaunchAgent.
+- Install locked dependencies, build, migrate, scan, and configure the web and daily-scan LaunchAgents.
 - Verify authentication, health, persistence, restart behavior, and LAN access from another machine.
 - Document the deployed commit, service controls, log location, data location, update command, and rollback command.
 

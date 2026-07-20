@@ -18,6 +18,7 @@ const child = Bun.spawn(['bun', 'build/index.js'], {
     ONGOING_ACCESS_SECRET: secret,
     DATABASE_PATH: join(directory, 'catalog.sqlite'),
     SCAN_ROOTS: join(directory, 'repositories'),
+    ONGOING_ENABLE_SCAN_SCHEDULER: 'false',
     BODY_SIZE_LIMIT: '16384'
   },
   stdout: 'inherit',

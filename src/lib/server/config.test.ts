@@ -13,11 +13,13 @@ describe('listener security configuration', () => {
   );
 
   it('keeps loopback auth-free by default', () => {
-    expect(loadConfig({ HOST: '127.0.0.1' }).security).toMatchObject({
+    const config = loadConfig({ HOST: '127.0.0.1' });
+    expect(config.security).toMatchObject({
       authenticationRequired: false,
       cookieSecure: false,
       maxRequestBytes: 16_384
     });
+    expect(config.automaticScanSchedulerEnabled).toBe(true);
   });
 
   it('can force authentication on loopback for production-adapter verification', () => {
@@ -50,5 +52,13 @@ describe('listener security configuration', () => {
     expect(() => loadConfig({ APP_ORIGIN: 'http://example.test/path' })).toThrow(/origin/);
     expect(() => loadConfig({ SESSION_COOKIE_SECURE: 'yes' })).toThrow(/true or false/);
     expect(() => loadConfig({ MAX_REQUEST_BYTES: '0' })).toThrow(/positive integer/);
+    expect(() => loadConfig({ ONGOING_ENABLE_SCAN_SCHEDULER: 'yes' })).toThrow(/true or false/);
+  });
+
+  it('can disable only the automatic in-process scan scheduler', () => {
+    expect(loadConfig({ ONGOING_ENABLE_SCAN_SCHEDULER: 'false' })).toMatchObject({
+      automaticScanSchedulerEnabled: false,
+      scanRoots: expect.any(Array)
+    });
   });
 });

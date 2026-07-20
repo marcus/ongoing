@@ -5,6 +5,8 @@ import type { AppConfig } from '$lib/server/config';
 import type { GitMetrics } from '$lib/server/collectors/git';
 import { ScanProgressBus } from '$lib/server/scanning/progress';
 import { ScanScheduler, type SchedulerTimers } from '$lib/server/scanning/scheduler';
+import { scheduleAutomaticScan } from '$lib/server/scanning/automatic';
+import { loadConfig } from '$lib/server/config';
 import { ScanInProgressError, Scanner, type ScanRequest } from '$lib/server/scanning/scanner';
 import { createScanEventResponse } from '$lib/server/scanning/sse';
 
@@ -18,6 +20,7 @@ const config: AppConfig = {
   ignoreGlobs: [],
   gitConcurrency: 6,
   clocConcurrency: 2,
+  automaticScanSchedulerEnabled: true,
   security: {
     authenticationRequired: false,
     sessionMaxAgeSeconds: 43_200,
@@ -535,6 +538,19 @@ describe('resilient scan orchestration', () => {
 });
 
 describe('scan scheduling', () => {
+  it('does not create scheduler timers when the production configuration disables them', () => {
+    const defer = vi.fn();
+    const loadScheduler = vi.fn(async () => ({ start: vi.fn() }));
+    scheduleAutomaticScan(
+      loadConfig({ ONGOING_ENABLE_SCAN_SCHEDULER: 'false' }),
+      { scheduled: false },
+      false,
+      { defer, loadScheduler }
+    );
+    expect(defer).not.toHaveBeenCalled();
+    expect(loadScheduler).not.toHaveBeenCalled();
+  });
+
   it('defers startup and schedules a five-minute cheap refresh without overlapping setup', async () => {
     let startup: (() => void) | undefined;
     let scheduled: (() => void) | undefined;

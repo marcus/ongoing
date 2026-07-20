@@ -15,22 +15,22 @@ Development and preview bind to loopback by default. Production may set `HOST` a
 
 ## Commands
 
-| Command                | Purpose                                                   |
-| ---------------------- | --------------------------------------------------------- |
-| `bun run dev`          | Start the loopback-only development server                |
-| `bun run build`        | Build the adapter-node production application             |
-| `bun run preview`      | Preview the build on loopback                             |
-| `bun run check`        | Generate SvelteKit types and run `svelte-check`           |
-| `bun run lint`         | Run ESLint and verify formatting                          |
-| `bun run format`       | Format source and documentation                           |
-| `bun run format:check` | Verify formatting only                                    |
-| `bun run test`         | Run the Vitest suite                                      |
-| `bun run test:e2e`     | Run Playwright browser tests                              |
-| `bun run scan`         | Run the scanner CLI (placeholder until the catalog story) |
+| Command                | Purpose                                         |
+| ---------------------- | ----------------------------------------------- |
+| `bun run dev`          | Start the loopback-only development server      |
+| `bun run build`        | Build the adapter-node production application   |
+| `bun run preview`      | Preview the build on loopback                   |
+| `bun run check`        | Generate SvelteKit types and run `svelte-check` |
+| `bun run lint`         | Run ESLint and verify formatting                |
+| `bun run format`       | Format source and documentation                 |
+| `bun run format:check` | Verify formatting only                          |
+| `bun run test`         | Run the Vitest suite                            |
+| `bun run test:e2e`     | Run Playwright browser tests                    |
+| `bun run scan`         | Run one scanner CLI refresh                     |
 
 LAN authentication and production operations are documented in [docs/deployment.md](docs/deployment.md). Non-loopback listeners fail closed unless `ONGOING_ACCESS_SECRET` is configured; do not expose this trusted-LAN application to the public internet.
 
-The production source of truth is the private repository `git@github.com:marcus/ongoing.git`. Its tested `main` branch deploys to `/Users/marcusvorwaller/code/ongoing` on `aerie.local` as the user LaunchAgent `com.marcusvorwaller.ongoing` at `http://aerie.local:4173`.
+The production source of truth is the private repository `git@github.com:marcus/ongoing.git`. Its tested `main` branch deploys to `/Users/marcusvorwaller/code/ongoing` on `aerie.local`. The web LaunchAgent `com.marcusvorwaller.ongoing` serves `http://aerie.local:7766`; the separate `com.marcusvorwaller.ongoing.scan` LaunchAgent refreshes the shared catalog once daily at 04:00 local time.
 
 ## Architecture
 

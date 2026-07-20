@@ -5,8 +5,9 @@ import {
   bufferRequestBodyWithinLimit,
   isSameOriginMutation
 } from '$lib/server/security';
+import { scheduleAutomaticScan, type AutomaticScanState } from '$lib/server/scanning/automatic';
 
-let scheduled = false;
+const automaticScanState: AutomaticScanState = { scheduled: false };
 const config = loadConfig();
 const publicPaths = new Set(['/login', '/api/health']);
 
@@ -44,14 +45,8 @@ export const handle: Handle = async ({ event, resolve }) => {
   if (!boundedRequest) return secure(json({ error: 'Request body is too large' }, { status: 413 }));
   if (boundedRequest !== event.request) (event as { request: Request }).request = boundedRequest;
 
-  // Do not await startup work: the first page renders immediately from the durable cache.
-  if (!scheduled && !isPublic) {
-    scheduled = true;
-    setTimeout(() => {
-      void import('$lib/server/scanning/runtime').then(({ catalogScanScheduler }) =>
-        catalogScanScheduler.start()
-      );
-    }, 0);
-  }
+  // Development starts the in-process scheduler after the first private request. Production
+  // disables this boundary and delegates its one daily refresh to a separate LaunchAgent.
+  scheduleAutomaticScan(config, automaticScanState, isPublic);
   return secure(await resolve(event));
 };

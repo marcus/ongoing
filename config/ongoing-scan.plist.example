@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.marcusvorwaller.ongoing.scan</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/marcusvorwaller/.local/share/ongoing/mise/installs/bun/1.3.1/bin/bun</string>
+    <string>run</string>
+    <string>/Users/marcusvorwaller/code/ongoing/scripts/scan.ts</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/marcusvorwaller/code/ongoing</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>SCAN_ROOTS</key><string>/Users/marcusvorwaller/code</string>
+    <key>DATABASE_PATH</key><string>/Users/marcusvorwaller/Library/Application Support/Ongoing/ongoing.sqlite</string>
+  </dict>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>4</integer>
+    <key>Minute</key><integer>0</integer>
+  </dict>
+  <key>StandardOutPath</key><string>/Users/marcusvorwaller/Library/Logs/Ongoing/scan-stdout.log</string>
+  <key>StandardErrorPath</key><string>/Users/marcusvorwaller/Library/Logs/Ongoing/scan-stderr.log</string>
+</dict>
+</plist>

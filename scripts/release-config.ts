@@ -4,13 +4,26 @@ export const PRODUCTION_HOST = 'marcus@aerie.local';
 export const PRODUCTION_CHECKOUT = '/Users/marcusvorwaller/code/ongoing';
 export const PRODUCTION_DATABASE =
   '/Users/marcusvorwaller/Library/Application Support/Ongoing/ongoing.sqlite';
-export const PRODUCTION_LABEL = 'com.marcusvorwaller.ongoing';
+export const PRODUCTION_WEB_LABEL = 'com.marcusvorwaller.ongoing';
+export const PRODUCTION_SCAN_LABEL = 'com.marcusvorwaller.ongoing.scan';
+export const PRODUCTION_WEB_PLIST =
+  '/Users/marcusvorwaller/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist';
+export const PRODUCTION_SCAN_PLIST =
+  '/Users/marcusvorwaller/Library/LaunchAgents/com.marcusvorwaller.ongoing.scan.plist';
+export const PRODUCTION_BUN_VERSION = '1.3.1';
+export const PRODUCTION_BUN =
+  '/Users/marcusvorwaller/.local/share/ongoing/mise/installs/bun/1.3.1/bin/bun';
 
 export interface ReleaseConfig {
   host: string;
   checkout: string;
   database: string;
-  label: string;
+  webLabel: string;
+  scanLabel: string;
+  webPlist: string;
+  scanPlist: string;
+  bunExecutable: string;
+  bunVersion: string;
   healthUrl: string;
   backupRetention: number;
 }
@@ -52,8 +65,13 @@ export function parseReleaseArgs(args: string[]): {
       host,
       checkout,
       database,
-      label: PRODUCTION_LABEL,
-      healthUrl: 'http://127.0.0.1:4173/api/health',
+      webLabel: PRODUCTION_WEB_LABEL,
+      scanLabel: PRODUCTION_SCAN_LABEL,
+      webPlist: PRODUCTION_WEB_PLIST,
+      scanPlist: PRODUCTION_SCAN_PLIST,
+      bunExecutable: PRODUCTION_BUN,
+      bunVersion: PRODUCTION_BUN_VERSION,
+      healthUrl: 'http://127.0.0.1:7766/api/health',
       backupRetention: 5
     },
     dryRun: args.includes('--dry-run'),
@@ -77,7 +95,12 @@ export function decodeReleaseConfig(encoded: string): ReleaseConfig {
     config.database
   ]).config;
   if (
-    config.label !== parsed.label ||
+    config.webLabel !== parsed.webLabel ||
+    config.scanLabel !== parsed.scanLabel ||
+    config.webPlist !== parsed.webPlist ||
+    config.scanPlist !== parsed.scanPlist ||
+    config.bunExecutable !== parsed.bunExecutable ||
+    config.bunVersion !== parsed.bunVersion ||
     config.healthUrl !== parsed.healthUrl ||
     config.backupRetention !== parsed.backupRetention
   )
@@ -90,27 +113,37 @@ export function releasePlan(
   config: ReleaseConfig,
   restoreDatabase = false
 ): string[] {
-  const common = [
-    `verify clean checkout ${config.checkout}`,
-    `record current SHA under ${config.checkout}/.deploy`,
-    `back up ${config.database} and retain ${config.backupRetention} backups`
-  ];
   return mode === 'deploy'
     ? [
-        ...common,
+        `provision and verify app-scoped ${config.bunExecutable} reports Bun ${config.bunVersion}`,
+        `verify clean checkout ${config.checkout}`,
+        `record current SHA for ${config.checkout}`,
         'fetch origin main and fast-forward only',
-        'install frozen lockfile and build',
+        `verify ${config.bunExecutable} still matches the fetched .bun-version`,
+        `quiesce ${config.webLabel} and ${config.scanLabel}`,
+        `back up ${config.database} and retain ${config.backupRetention} backups`,
+        `install frozen lockfile and build with ${config.bunExecutable}`,
         'apply migrations',
-        `restart user LaunchAgent ${config.label}`,
+        `install ${config.webPlist} and ${config.scanPlist} from committed definitions`,
+        `bootstrap calendar LaunchAgent ${config.scanLabel} without an immediate scan`,
+        `bootstrap web LaunchAgent ${config.webLabel}`,
         `wait for ${config.healthUrl}`,
         'record deployed SHA'
       ]
     : [
-        ...common,
+        `provision and verify app-scoped ${config.bunExecutable} reports Bun ${config.bunVersion}`,
+        `verify clean checkout ${config.checkout}`,
+        `read and validate ${config.checkout}/.deploy/release.json`,
+        `preflight the recorded SHA's .bun-version against ${config.bunVersion}`,
+        `quiesce ${config.webLabel} and ${config.scanLabel}`,
+        `back up ${config.database} and retain ${config.backupRetention} backups`,
         'switch to recorded prior SHA',
+        `verify ${config.bunExecutable} matches the selected .bun-version`,
+        `install frozen lockfile and build with ${config.bunExecutable}`,
         ...(restoreDatabase ? ['restore the recorded pre-deploy database backup'] : []),
-        'install frozen lockfile and build',
-        `restart user LaunchAgent ${config.label}`,
+        `restore ${config.webPlist} and ${config.scanPlist} from the selected commit`,
+        `bootstrap calendar LaunchAgent ${config.scanLabel} without an immediate scan`,
+        `bootstrap web LaunchAgent ${config.webLabel}`,
         `wait for ${config.healthUrl}`
       ];
 }

@@ -10,6 +10,7 @@ export interface AppConfig {
   ignoreGlobs: string[];
   gitConcurrency: number;
   clocConcurrency: number;
+  automaticScanSchedulerEnabled: boolean;
   security: SecurityConfig;
 }
 
@@ -42,6 +43,12 @@ function positiveInteger(value: string | undefined, fallback: number, name: stri
   if (!Number.isInteger(parsed) || parsed < 1)
     throw new Error(`${name} must be a positive integer`);
   return parsed;
+}
+
+function boolean(value: string | undefined, fallback: boolean, name: string): boolean {
+  if (value === undefined || value === '') return fallback;
+  if (!['true', 'false'].includes(value)) throw new Error(`${name} must be true or false`);
+  return value === 'true';
 }
 
 export function isLoopbackHost(host: string): boolean {
@@ -113,6 +120,11 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       : defaultIgnoreGlobs,
     gitConcurrency: positiveInteger(env.GIT_CONCURRENCY, 6, 'GIT_CONCURRENCY'),
     clocConcurrency: positiveInteger(env.CLOC_CONCURRENCY, 2, 'CLOC_CONCURRENCY'),
+    automaticScanSchedulerEnabled: boolean(
+      env.ONGOING_ENABLE_SCAN_SCHEDULER,
+      true,
+      'ONGOING_ENABLE_SCAN_SCHEDULER'
+    ),
     security: {
       authenticationRequired,
       accessSecret,

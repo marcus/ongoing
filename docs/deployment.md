@@ -9,38 +9,66 @@ Ongoing is designed for one trusted user on a private LAN. It is not hardened fo
 - checkout: `/Users/marcusvorwaller/code/ongoing`
 - scan root: `/Users/marcusvorwaller/code`
 - database: `/Users/marcusvorwaller/Library/Application Support/Ongoing/ongoing.sqlite`
-- URL: `http://aerie.local:4173`
-- user LaunchAgent: `com.marcusvorwaller.ongoing`
-- LaunchAgent configuration: `/Users/marcusvorwaller/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist`
-- stdout log: `/Users/marcusvorwaller/Library/Logs/Ongoing/stdout.log`
-- stderr log: `/Users/marcusvorwaller/Library/Logs/Ongoing/stderr.log`
+- URL and health: `http://aerie.local:7766` and `http://127.0.0.1:7766/api/health`
+- web agent: `com.marcusvorwaller.ongoing` at `~/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist`
+- daily scan agent: `com.marcusvorwaller.ongoing.scan` at `~/Library/LaunchAgents/com.marcusvorwaller.ongoing.scan.plist`
+- web logs: `~/Library/Logs/Ongoing/stdout.log` and `stderr.log`
+- scan logs: `~/Library/Logs/Ongoing/scan-stdout.log` and `scan-stderr.log`
+- app runtime: `/Users/marcusvorwaller/.local/share/ongoing/mise/installs/bun/1.3.1/bin/bun`
 - release record: `/Users/marcusvorwaller/code/ongoing/.deploy/release.json`
 - database backups: `/Users/marcusvorwaller/Library/Application Support/Ongoing/ongoing.sqlite.backups/` (newest five)
 
-The scripts reject different targets. They do not use `sudo`, modify the firewall/router, or touch unrelated services.
+Both agents use that one app-owned Bun executable, which must report the exact version in `.bun-version`. Provisioning scopes `/opt/homebrew/bin/mise` to Ongoing's own data directory; it does not install into, replace, or select Marcus's `~/.bun` runtime and does not change a global mise default. Release scripts reject different hosts, paths, labels, runtime versions, and health targets. They do not use `sudo`, modify the firewall/router, or touch unrelated services.
+
+The web process has `ONGOING_ENABLE_SCAN_SCHEDULER=false`, so it creates neither the development startup scan nor the five-minute interval. The scan agent invokes the shared `scripts/scan.ts` once at 04:00 local time against the same database and scan root. Its definition has no `RunAtLoad` or `KeepAlive`; registering or restarting it does not cause an immediate scan. A manual or per-project scan remains available, and the durable scan lease prevents overlap.
 
 ## One-time setup
 
-First verify that `https://github.com/marcus/ongoing` is private. Clone committed `main` only, then create the user-owned runtime directories:
+First verify that `https://github.com/marcus/ongoing` is private. Clone committed `main` only, then create the user-owned directories:
 
 ```sh
 mkdir -p /Users/marcusvorwaller/code
 git clone --branch main --single-branch git@github.com:marcus/ongoing.git /Users/marcusvorwaller/code/ongoing
 mkdir -p '/Users/marcusvorwaller/Library/Application Support/Ongoing' /Users/marcusvorwaller/Library/Logs/Ongoing /Users/marcusvorwaller/Library/LaunchAgents
+cd /Users/marcusvorwaller/code/ongoing
+/bin/zsh scripts/provision-runtime.sh
 ```
 
-Copy `config/ongoing.plist.example` to `/Users/marcusvorwaller/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist`, replace the placeholder with a long random secret, and restrict it with `chmod 600`. The plist is the production environment/configuration and contains the secret; it is machine-local and must never be printed, logged, or committed. Install the exact Bun version from `.bun-version`, then initialize the committed checkout:
+Copy both committed definitions. Replace the placeholder in the web copy with a long random secret and restrict both machine-local files. Never print, log, or commit the secret.
 
 ```sh
-cd /Users/marcusvorwaller/code/ongoing
-bun install --frozen-lockfile
-bun run build
-DATABASE_PATH='/Users/marcusvorwaller/Library/Application Support/Ongoing/ongoing.sqlite' bun run migrate
-SCAN_ROOTS=/Users/marcusvorwaller/code DATABASE_PATH='/Users/marcusvorwaller/Library/Application Support/Ongoing/ongoing.sqlite' bun run scan
+cp config/ongoing.plist.example /Users/marcusvorwaller/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist
+cp config/ongoing-scan.plist.example /Users/marcusvorwaller/Library/LaunchAgents/com.marcusvorwaller.ongoing.scan.plist
+chmod 600 /Users/marcusvorwaller/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist /Users/marcusvorwaller/Library/LaunchAgents/com.marcusvorwaller.ongoing.scan.plist
+```
+
+After replacing the web secret, initialize through the exact app runtime:
+
+```sh
+ongoing_bun=/Users/marcusvorwaller/.local/share/ongoing/mise/installs/bun/1.3.1/bin/bun
+"$ongoing_bun" --version
+"$ongoing_bun" install --frozen-lockfile
+"$ongoing_bun" run build
+DATABASE_PATH='/Users/marcusvorwaller/Library/Application Support/Ongoing/ongoing.sqlite' "$ongoing_bun" run migrate
+SCAN_ROOTS=/Users/marcusvorwaller/code DATABASE_PATH='/Users/marcusvorwaller/Library/Application Support/Ongoing/ongoing.sqlite' "$ongoing_bun" run scan
+launchctl bootstrap gui/$(id -u) /Users/marcusvorwaller/Library/LaunchAgents/com.marcusvorwaller.ongoing.scan.plist
 launchctl bootstrap gui/$(id -u) /Users/marcusvorwaller/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist
 ```
 
-Plain LAN HTTP intentionally uses `SESSION_COOKIE_SECURE=false`; otherwise browsers will discard the session cookie. The cookie remains HTTP-only and SameSite Strict. Adapter-node's `ORIGIN` and the application's `APP_ORIGIN` must both exactly match the browser origin. `BODY_SIZE_LIMIT=16384` matches the application request cap. A non-loopback `HOST` refuses to initialize without `ONGOING_ACCESS_SECRET`.
+Bootstrapping the scan agent merely registers its next calendar event. The initial command above is an explicit one-shot scan. Plain LAN HTTP intentionally uses `SESSION_COOKIE_SECURE=false`; otherwise browsers discard the session cookie. Adapter-node's `ORIGIN` and the application's `APP_ORIGIN` both exactly match `http://aerie.local:7766`. A non-loopback `HOST` refuses to initialize without `ONGOING_ACCESS_SECRET`.
+
+## Daily refresh behavior
+
+`StartCalendarInterval` uses aerie's local timezone and requests Hour 4, Minute 0. When aerie is awake with Marcus's GUI domain active, launchd starts one scanner at 04:00. If the Mac is asleep at 04:00, launchd coalesces the missed event and runs it after wake. If the machine is powered off or the user LaunchAgent domain is unavailable, do not rely on catch-up across shutdown/logout; the next regular opportunity is 04:00 after the user domain is active. Run the documented manual scan if an immediate refresh is wanted after an extended outage.
+
+Inspect definitions and live state without starting a scan:
+
+```sh
+plutil -lint config/ongoing.plist.example config/ongoing-scan.plist.example
+launchctl print gui/$(id -u)/com.marcusvorwaller.ongoing
+launchctl print gui/$(id -u)/com.marcusvorwaller.ongoing.scan
+tail -n 100 /Users/marcusvorwaller/Library/Logs/Ongoing/scan-stderr.log
+```
 
 ## Update
 
@@ -50,17 +78,15 @@ Preview every operation locally first:
 bun run deploy --host marcus@aerie.local --checkout /Users/marcusvorwaller/code/ongoing --database '/Users/marcusvorwaller/Library/Application Support/Ongoing/ongoing.sqlite' --dry-run
 ```
 
-Remove `--dry-run` to deploy. The remote worker requires a clean checkout, switches to `main`, fetches and fast-forwards only, takes a consistent SQLite backup, retains five, installs from `bun.lock`, builds, migrates, restarts only the user LaunchAgent, waits 30 seconds for minimal health, and records prior/deployed SHAs. Fix failed deployments in Git; never patch production files by hand.
+Remove `--dry-run` only after review. The client provisions and validates app-scoped Bun 1.3.1, then invokes the remote worker with that absolute executable. The worker requires a clean checkout, records the prior SHA, fetches and fast-forwards `main`, revalidates the pin, quiesces both agents so neither serving nor a calendar scan can overlap backup/migration, takes a consistent SQLite backup, installs the frozen lockfile, builds, migrates once, and preserves the machine-local web secret while installing both committed definitions. It registers the scan calendar without running it, starts the web agent, waits 30 seconds for exact health on port 7766, retains five backups, and records the deployed SHA. Fix failed deployments in Git; never patch the production checkout by hand.
 
 ## Smoke and rollback
 
 Keep the secret in the environment, not argv, URLs, logs, or the database:
 
 ```sh
-ONGOING_ACCESS_SECRET='...' bun run smoke http://aerie.local:4173
+ONGOING_ACCESS_SECRET='...' bun run smoke http://aerie.local:7766
 bun run rollback --host marcus@aerie.local --checkout /Users/marcusvorwaller/code/ongoing --database '/Users/marcusvorwaller/Library/Application Support/Ongoing/ongoing.sqlite' --dry-run
 ```
 
-Remove `--dry-run` to rebuild and restart the recorded prior SHA. Add `--restore-database` only when reverting a non-backward-compatible migration; it stops the user service before copying the recorded pre-deploy snapshot. Rollback first takes a new safety backup and records the resulting state.
-
-Inspect with `launchctl print gui/$(id -u)/com.marcusvorwaller.ongoing` and the two files under `~/Library/Logs/Ongoing/`. A healthy public response is exactly `{"ok":true}`; catalog and mutations require a valid session.
+Remove `--dry-run` to quiesce both agents, take a new safety backup, rebuild the recorded prior SHA with the pinned runtime, restore both definitions, register the daily job without an unscheduled scan, restart the web process, and verify port 7766 health. Add `--restore-database` only for a non-backward-compatible migration; the database copy and WAL/SHM cleanup happen while both jobs are stopped. A healthy public response is exactly `{"ok":true}`; catalog and mutation endpoints require a valid session. Finish with the LAN smoke from a second machine and confirm both `launchctl print` targets and all four log files.

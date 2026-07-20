@@ -12,9 +12,16 @@ export async function runReleaseClient(mode: 'deploy' | 'rollback', args: string
     );
     return;
   }
+  const provision = Bun.spawn(
+    ['ssh', config.host, '/bin/zsh', `${config.checkout}/scripts/provision-runtime.sh`],
+    { stdin: 'inherit', stdout: 'inherit', stderr: 'inherit' }
+  );
+  const provisionStatus = await provision.exited;
+  if (provisionStatus !== 0)
+    throw new Error(`app runtime provisioning failed with exit code ${provisionStatus}`);
   const remoteArgs = [
     config.host,
-    'bun',
+    config.bunExecutable,
     `${config.checkout}/scripts/remote-release.ts`,
     mode,
     encodeReleaseConfig(config)
