@@ -141,7 +141,7 @@ async function installAgentDefinitions(config: ReleaseConfig): Promise<void> {
     () => secret
   );
   await mkdir(dirname(config.webPlist), { recursive: true });
-  await mkdir('/Users/marcusvorwaller/Library/Logs/Ongoing', { recursive: true });
+  await mkdir('/Users/marcus/Library/Logs/Ongoing', { recursive: true });
   await installDefinition(webSource, config.webPlist, webDefinition);
   await installDefinition(scanSource, config.scanPlist);
 }

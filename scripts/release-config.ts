@@ -1,18 +1,17 @@
 import { isAbsolute } from 'node:path';
 
 export const PRODUCTION_HOST = 'marcus@aerie.local';
-export const PRODUCTION_CHECKOUT = '/Users/marcusvorwaller/code/ongoing';
+export const PRODUCTION_CHECKOUT = '/Users/marcus/code/ongoing';
 export const PRODUCTION_DATABASE =
-  '/Users/marcusvorwaller/Library/Application Support/Ongoing/ongoing.sqlite';
+  '/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite';
 export const PRODUCTION_WEB_LABEL = 'com.marcusvorwaller.ongoing';
 export const PRODUCTION_SCAN_LABEL = 'com.marcusvorwaller.ongoing.scan';
 export const PRODUCTION_WEB_PLIST =
-  '/Users/marcusvorwaller/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist';
+  '/Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist';
 export const PRODUCTION_SCAN_PLIST =
-  '/Users/marcusvorwaller/Library/LaunchAgents/com.marcusvorwaller.ongoing.scan.plist';
+  '/Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.scan.plist';
 export const PRODUCTION_BUN_VERSION = '1.3.1';
-export const PRODUCTION_BUN =
-  '/Users/marcusvorwaller/.local/share/ongoing/mise/installs/bun/1.3.1/bin/bun';
+export const PRODUCTION_BUN = '/Users/marcus/.local/share/ongoing/mise/installs/bun/1.3.1/bin/bun';
 
 export interface ReleaseConfig {
   host: string;

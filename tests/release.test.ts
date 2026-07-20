@@ -56,6 +56,17 @@ describe('release tooling', () => {
     ).toThrow(/unsupported targets/);
   });
 
+  it('pins every Aerie production target beneath the canonical marcus home', () => {
+    const { config } = parseReleaseArgs(required);
+    expect(config).toMatchObject({
+      checkout: '/Users/marcus/code/ongoing',
+      database: '/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite',
+      webPlist: '/Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist',
+      scanPlist: '/Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.scan.plist',
+      bunExecutable: '/Users/marcus/.local/share/ongoing/mise/installs/bun/1.3.1/bin/bun'
+    });
+  });
+
   it('makes destructive rollback restoration opt-in and documents bounded operations', () => {
     const { config } = parseReleaseArgs([...required, '--dry-run']);
     const deploy = releasePlan('deploy', config);
@@ -120,10 +131,10 @@ describe('production LaunchAgent definitions', () => {
     expect(scan).toMatch(/<key>Minute<\/key><integer>0<\/integer>/);
     expect(scan).not.toContain('<key>RunAtLoad</key>');
     expect(scan).not.toContain('<key>KeepAlive</key>');
-    expect(scan).toContain('/Users/marcusvorwaller/code/ongoing/scripts/scan.ts');
+    expect(scan).toContain('/Users/marcus/code/ongoing/scripts/scan.ts');
     for (const shared of [
-      '<key>SCAN_ROOTS</key><string>/Users/marcusvorwaller/code</string>',
-      '<key>DATABASE_PATH</key><string>/Users/marcusvorwaller/Library/Application Support/Ongoing/ongoing.sqlite</string>'
+      '<key>SCAN_ROOTS</key><string>/Users/marcus/code</string>',
+      '<key>DATABASE_PATH</key><string>/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite</string>'
     ]) {
       expect(web).toContain(shared);
       expect(scan).toContain(shared);

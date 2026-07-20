@@ -1,10 +1,10 @@
 #!/bin/zsh
 set -euo pipefail
 
-readonly checkout=/Users/marcusvorwaller/code/ongoing
+readonly checkout=/Users/marcus/code/ongoing
 readonly mise=/opt/homebrew/bin/mise
-readonly mise_data=/Users/marcusvorwaller/.local/share/ongoing/mise
-readonly bun=/Users/marcusvorwaller/.local/share/ongoing/mise/installs/bun/1.3.1/bin/bun
+readonly mise_data=/Users/marcus/.local/share/ongoing/mise
+readonly bun=/Users/marcus/.local/share/ongoing/mise/installs/bun/1.3.1/bin/bun
 readonly required_version="$(tr -d '[:space:]' < "$checkout/.bun-version")"
 
 if [[ "$required_version" != 1.3.1 ]]; then
