@@ -21,6 +21,8 @@
     <key>DATABASE_PATH</key><string>/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite</string>
     <key>ONGOING_ENABLE_SCAN_SCHEDULER</key><string>false</string>
     <key>ONGOING_ACCESS_SECRET</key><string>REPLACE_OUTSIDE_GIT_WITH_A_LONG_RANDOM_SECRET</string>
+    <!-- Local-network only: bypass the access-secret login. Remove this key (or set false) to re-enable auth. See docs/auth.md. -->
+    <key>ONGOING_DISABLE_AUTH</key><string>true</string>
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>

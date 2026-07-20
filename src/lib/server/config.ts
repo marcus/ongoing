@@ -88,7 +88,12 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   if (!host) throw new Error('HOST must not be empty');
   if (env.ONGOING_REQUIRE_AUTH && !['true', 'false'].includes(env.ONGOING_REQUIRE_AUTH))
     throw new Error('ONGOING_REQUIRE_AUTH must be true or false');
-  const authenticationRequired = !isLoopbackHost(host) || env.ONGOING_REQUIRE_AUTH === 'true';
+  // Escape hatch for local-network deployments where no login is wanted.
+  // Set ONGOING_DISABLE_AUTH=true to bypass the access-secret login entirely.
+  // Default (unset/false) preserves the original secret-based auth. See docs/auth.md.
+  const authDisabled = env.ONGOING_DISABLE_AUTH === 'true';
+  const authenticationRequired =
+    !authDisabled && (!isLoopbackHost(host) || env.ONGOING_REQUIRE_AUTH === 'true');
   const accessSecret = env.ONGOING_ACCESS_SECRET;
   if (authenticationRequired && !accessSecret)
     throw new Error('ONGOING_ACCESS_SECRET is required for a non-loopback HOST');
