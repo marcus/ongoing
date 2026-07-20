@@ -39,6 +39,8 @@ interface SearchCount {
 
 type BatchData = Record<string, GraphRepository | SearchCount | null | undefined>;
 
+const MAX_GRAPHQL_BATCH_SIZE = 2;
+
 interface Release {
   published_at: string | null;
   tag_name: string;
@@ -71,6 +73,16 @@ function rootErrorForAlias(
   alias: string
 ): boolean {
   return errors?.some((error) => error.path?.length === 1 && error.path[0] === alias) ?? false;
+}
+
+function isServerFailure(error: unknown): error is GitHubRequestError {
+  return (
+    error instanceof GitHubRequestError &&
+    error.failure === 'error' &&
+    error.status !== null &&
+    error.status >= 500 &&
+    error.status < 600
+  );
 }
 
 function workflowState(run: WorkflowRuns['workflow_runs'][number] | undefined): WorkflowState {
@@ -133,6 +145,47 @@ export class GitHubHostingMetricsProvider implements HostingMetricsProvider {
   }
 
   async collectMany(
+    refs: readonly GitHubRepositoryRef[],
+    signal?: AbortSignal
+  ): Promise<Map<string, GitHubHostingMetrics | Error>> {
+    const results = new Map<string, GitHubHostingMetrics | Error>();
+    for (let offset = 0; offset < refs.length; offset += MAX_GRAPHQL_BATCH_SIZE) {
+      if (signal?.aborted) throw signal.reason;
+      const batch = refs.slice(offset, offset + MAX_GRAPHQL_BATCH_SIZE);
+      const batchResults = await this.collectBatchWithIsolation(batch, signal);
+      for (const ref of batch) {
+        const key = `${ref.owner}/${ref.name}`;
+        const result = batchResults.get(key);
+        if (result) results.set(key, result);
+      }
+    }
+    return results;
+  }
+
+  private async collectBatchWithIsolation(
+    refs: readonly GitHubRepositoryRef[],
+    signal?: AbortSignal
+  ): Promise<Map<string, GitHubHostingMetrics | Error>> {
+    try {
+      return await this.collectBatch(refs, signal);
+    } catch (error) {
+      if (!isServerFailure(error)) throw error;
+      if (refs.length === 1) return new Map([[`${refs[0].owner}/${refs[0].name}`, error]]);
+
+      const isolated = new Map<string, GitHubHostingMetrics | Error>();
+      for (const ref of refs) {
+        if (signal?.aborted) throw signal.reason;
+        const singleton = await this.collectBatchWithIsolation([ref], signal);
+        isolated.set(
+          `${ref.owner}/${ref.name}`,
+          singleton.get(`${ref.owner}/${ref.name}`) ?? error
+        );
+      }
+      return isolated;
+    }
+  }
+
+  private async collectBatch(
     refs: readonly GitHubRepositoryRef[],
     signal?: AbortSignal
   ): Promise<Map<string, GitHubHostingMetrics | Error>> {

@@ -19,15 +19,15 @@ security, persistence, migration, and deployment boundaries keep dedicated cover
 
 ## Integration and failure coverage
 
-| Plan fixture or boundary                                                                                                                | Automated evidence                                                                   |
-| --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| Normal/tagged repository, empty repository, dirty tree, linked worktree, spaces and Unicode                                             | Real temporary Git repositories in `discover.test.ts` and `git.test.ts`              |
-| TD database absent, HTTP success, CLI fallback, >100 issues, timeout, malformed output, and missing CLI                                 | `src/lib/server/collectors/td.test.ts`                                               |
-| GitHub success, cache reuse, rename by node ID, rate limit, invalid credentials, partial GraphQL/REST/traffic permissions, and recovery | `src/lib/server/collectors/github.test.ts`, `client.test.ts`, and `provider.test.ts` |
-| Empty database and every prior schema fixture, idempotence, foreign keys, WAL, and constraints                                          | `tests/integration/catalog.test.ts` with `tests/fixtures/catalog/v0.sql`             |
-| Concurrent manual/scheduled scans, durable leases, expired-run recovery, heartbeat, fencing, cancellation, and SSE replay               | `tests/integration/scanner.test.ts`                                                  |
-| Collector failure isolation, cached LOC/TD preservation, hidden-project enrichment skip, and bounded 6/2 concurrency                    | `tests/integration/scanner.test.ts`                                                  |
-| New/missing discovery reconciliation without silent deletion                                                                            | `src/lib/server/collectors/discover.test.ts` and `tests/integration/catalog.test.ts` |
+| Plan fixture or boundary                                                                                                  | Automated evidence                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Normal/tagged repository, empty repository, dirty tree, linked worktree, spaces and Unicode                               | Real temporary Git repositories in `discover.test.ts` and `git.test.ts`              |
+| TD database absent, HTTP success, CLI fallback, >100 issues, timeout, malformed output, and missing CLI                   | `src/lib/server/collectors/td.test.ts`                                               |
+| GitHub success, max-two batching, 5xx isolation, cache reuse, rate/auth, partial GraphQL/REST/traffic, and recovery       | `src/lib/server/collectors/github.test.ts`, `client.test.ts`, and `provider.test.ts` |
+| Empty database and every prior schema fixture, idempotence, foreign keys, WAL, and constraints                            | `tests/integration/catalog.test.ts` with `tests/fixtures/catalog/v0.sql`             |
+| Concurrent manual/scheduled scans, durable leases, expired-run recovery, heartbeat, fencing, cancellation, and SSE replay | `tests/integration/scanner.test.ts`                                                  |
+| Collector failure isolation, cached LOC/TD preservation, hidden-project enrichment skip, and bounded 6/2 concurrency      | `tests/integration/scanner.test.ts`                                                  |
+| New/missing discovery reconciliation without silent deletion                                                              | `src/lib/server/collectors/discover.test.ts` and `tests/integration/catalog.test.ts` |
 
 ## Browser, accessibility, and visual coverage
 

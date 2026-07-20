@@ -66,7 +66,121 @@ function fakeClient(overrides: Partial<GitHubClient> = {}): GitHubClient {
   return client as GitHubClient;
 }
 
+function queryRepositories(query: string): { index: number; owner: string; name: string }[] {
+  return [...query.matchAll(/r(\d+): repository\(owner:"([^"]+)",name:"([^"]+)"\)/g)].map(
+    (match) => ({ index: Number(match[1]), owner: match[2], name: match[3] })
+  );
+}
+
+function successfulBatch(query: string) {
+  const data: Record<string, unknown> = {};
+  for (const { index, owner, name } of queryRepositories(query)) {
+    data[`r${index}`] = {
+      id: `R_${name}`,
+      name,
+      owner: { login: owner },
+      visibility: 'PRIVATE',
+      isArchived: false,
+      stargazerCount: index,
+      forkCount: 0,
+      watchers: { totalCount: 0 },
+      issues: { totalCount: 0 },
+      pullRequests: { totalCount: 0 },
+      defaultBranchRef: { name: 'main' }
+    };
+    for (const alias of ['d', 'y', 'o', 'm30', 'm90', 'e30', 'e90'])
+      data[`${alias}_${index}`] = { issueCount: 0 };
+    data[`x_${index}`] = { issueCount: 0, nodes: [] };
+  }
+  return { data };
+}
+
 describe('GitHubHostingMetricsProvider', () => {
+  it('partitions 88 references into deterministic batches of at most two', async () => {
+    const queries: string[] = [];
+    const client = fakeClient({
+      graphql: (async (query: string) => {
+        queries.push(query);
+        return successfulBatch(query);
+      }) as GitHubClient['graphql']
+    });
+    const refs = Array.from({ length: 88 }, (_, index) => ({
+      owner: 'owner',
+      name: `repo-${index}`
+    }));
+
+    const results = await new GitHubHostingMetricsProvider(client).collectMany(refs);
+
+    expect(queries).toHaveLength(44);
+    expect(queries.every((query) => queryRepositories(query).length <= 2)).toBe(true);
+    expect([...results.keys()]).toEqual(refs.map((ref) => `${ref.owner}/${ref.name}`));
+    expect(results).toHaveLength(88);
+  });
+
+  it('splits a 502 batch, isolates a persistent singleton, and continues later batches', async () => {
+    const calls: string[][] = [];
+    const client = fakeClient({
+      graphql: (async (query: string) => {
+        const names = queryRepositories(query).map(({ name }) => name);
+        calls.push(names);
+        if (calls.length === 1 || (names.length === 1 && names[0] === 'repo-1'))
+          throw new GitHubRequestError('GitHub request failed (502)', 'error', 502);
+        return successfulBatch(query);
+      }) as GitHubClient['graphql']
+    });
+    const refs = Array.from({ length: 5 }, (_, index) => ({
+      owner: 'owner',
+      name: `repo-${index}`
+    }));
+
+    const results = await new GitHubHostingMetricsProvider(client).collectMany(refs);
+
+    expect(calls).toEqual([
+      ['repo-0', 'repo-1'],
+      ['repo-0'],
+      ['repo-1'],
+      ['repo-2', 'repo-3'],
+      ['repo-4']
+    ]);
+    expect(results.get('owner/repo-0')).not.toBeInstanceOf(Error);
+    expect(results.get('owner/repo-1')).toMatchObject({ status: 502 });
+    expect(results.get('owner/repo-2')).not.toBeInstanceOf(Error);
+    expect(results.get('owner/repo-4')).not.toBeInstanceOf(Error);
+  });
+
+  it.each([
+    ['authentication', new GitHubRequestError('invalid', 'unauthenticated', 401)],
+    ['rate limit', new GitHubRequestError('limited', 'rate_limited', 429)]
+  ])('does not isolate a global %s failure', async (_label, failure) => {
+    const graphql = vi.fn(async () => {
+      throw failure;
+    });
+    const provider = new GitHubHostingMetricsProvider(fakeClient({ graphql }));
+    await expect(
+      provider.collectMany([
+        { owner: 'owner', name: 'one' },
+        { owner: 'owner', name: 'two' },
+        { owner: 'owner', name: 'three' }
+      ])
+    ).rejects.toBe(failure);
+    expect(graphql).toHaveBeenCalledOnce();
+  });
+
+  it('does not start a batch after cancellation', async () => {
+    const controller = new AbortController();
+    const reason = new Error('scan cancelled');
+    controller.abort(reason);
+    const client = fakeClient();
+    const graphql = vi.spyOn(client, 'graphql');
+    await expect(
+      new GitHubHostingMetricsProvider(client).collectMany(
+        [{ owner: 'owner', name: 'repo' }],
+        controller.signal
+      )
+    ).rejects.toBe(reason);
+    expect(graphql).not.toHaveBeenCalled();
+  });
+
   it('batches counters and enriches every planned hosting field with REST details', async () => {
     const client = fakeClient();
     const graphql = vi.spyOn(client, 'graphql');

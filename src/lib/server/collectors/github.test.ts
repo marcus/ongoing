@@ -229,6 +229,51 @@ describe('cached GitHub enrichment', () => {
     database.close();
   });
 
+  it('preserves cache for an isolated 502 and advances freshness after recovery', async () => {
+    const { database, repository, project } = await fixture();
+    await repository.updateMetrics(project.id, {
+      githubRepoId: 'R_cached',
+      githubOwner: 'owner',
+      githubName: 'repo',
+      githubStars: 9,
+      githubScannedAt: '2026-07-18T10:00:00Z'
+    });
+    const fake = provider({
+      collectMany: async () =>
+        new Map([
+          ['owner/repo', new GitHubRequestError('GitHub request failed (502)', 'error', 502)]
+        ])
+    });
+
+    await collectGitHubEnrichment(repository, [project], {
+      provider: fake,
+      runner: origin,
+      now: () => now,
+      force: true
+    });
+    expect(repository.getMetrics(project.id)).toMatchObject({
+      githubStars: 9,
+      githubScannedAt: '2026-07-18T10:00:00Z'
+    });
+    expect(repository.listCollectionErrors(project.id, true)).toEqual([
+      expect.objectContaining({ collector: 'hosting', message: 'GitHub request failed (502)' })
+    ]);
+
+    fake.collectMany = async () => new Map([['owner/repo', hosting]]);
+    await collectGitHubEnrichment(repository, [project], {
+      provider: fake,
+      runner: origin,
+      now: () => now,
+      force: true
+    });
+    expect(repository.getMetrics(project.id)).toMatchObject({
+      githubStars: 10,
+      githubScannedAt: now.toISOString()
+    });
+    expect(repository.listCollectionErrors(project.id, true)).toEqual([]);
+    database.close();
+  });
+
   it('stores partial traffic permission as unavailable without an active row error', async () => {
     const { database, repository, project } = await fixture();
     await repository.updateMetrics(project.id, {
