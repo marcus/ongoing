@@ -7,7 +7,7 @@ const directory = await mkdtemp(join(tmpdir(), 'ongoing-production-smoke-'));
 const port = 43_000 + Math.floor(Math.random() * 1_000);
 const origin = `http://127.0.0.1:${port}`;
 const secret = 'production-smoke-secret-only';
-const child = Bun.spawn([process.execPath, 'build/index.js'], {
+const child = Bun.spawn([process.execPath, 'run', 'scripts/production-server.ts'], {
   env: {
     ...process.env,
     HOST: '127.0.0.1',

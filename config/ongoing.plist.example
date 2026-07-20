@@ -6,7 +6,7 @@
   <key>ProgramArguments</key>
   <array>
     <string>/Users/marcus/.local/share/ongoing/mise/installs/bun/1.3.1/bin/bun</string>
-    <string>/Users/marcus/code/ongoing/build/index.js</string>
+    <string>/Users/marcus/code/ongoing/scripts/production-server.ts</string>
   </array>
   <key>WorkingDirectory</key><string>/Users/marcus/code/ongoing</string>
   <key>EnvironmentVariables</key>

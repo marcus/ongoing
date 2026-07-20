@@ -20,7 +20,7 @@ Ongoing is designed for one trusted user on a private LAN. It is not hardened fo
 
 Both agents use that one app-owned Bun executable, which must report the exact version in `.bun-version`. Provisioning scopes `/opt/homebrew/bin/mise` to Ongoing's own data directory; it does not install into, replace, or select Marcus's `~/.bun` runtime and does not change a global mise default. Release scripts reject different hosts, paths, labels, runtime versions, and health targets. They do not use `sudo`, modify the firewall/router, or touch unrelated services.
 
-The web process has `ONGOING_ENABLE_SCAN_SCHEDULER=false`, so it creates neither the development startup scan nor the five-minute interval. The scan agent invokes the shared `scripts/scan.ts` once at 04:00 local time against the same database and scan root. Its definition has no `RunAtLoad` or `KeepAlive`; registering or restarting it does not cause an immediate scan. A manual or per-project scan remains available, and the durable scan lease prevents overlap.
+The web process runs the committed `scripts/production-server.ts` boundary in front of adapter-node. It counts raw fixed-length and chunked mutation bytes before SvelteKit actions, then forwards bounded requests to a private ephemeral loopback adapter listener. It also has `ONGOING_ENABLE_SCAN_SCHEDULER=false`, so it creates neither the development startup scan nor the five-minute interval. The scan agent invokes the shared `scripts/scan.ts` once at 04:00 local time against the same database and scan root. Its definition has no `RunAtLoad` or `KeepAlive`; registering or restarting it does not cause an immediate scan. A manual or per-project scan remains available, and the durable scan lease prevents overlap.
 
 ## One-time setup
 
@@ -86,8 +86,11 @@ Keep the secret in the environment, not argv, URLs, logs, or the database:
 
 ```sh
 ongoing_bun=/Users/marcus/.local/share/ongoing/mise/installs/bun/1.3.1/bin/bun
-ONGOING_ACCESS_SECRET='...' "$ongoing_bun" run scripts/smoke.ts http://127.0.0.1:7766
+curl --fail --silent http://127.0.0.1:7766/api/health
+ONGOING_ACCESS_SECRET='...' "$ongoing_bun" run scripts/smoke.ts http://aerie.local:7766
 bun run rollback --host marcus@aerie.local --checkout /Users/marcus/code/ongoing --database '/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite' --dry-run
 ```
+
+The loopback request above is the host-local minimal health probe. The authenticated smoke must use the configured `APP_ORIGIN` (`http://aerie.local:7766`); substituting the loopback origin intentionally fails the same-origin mutation checks with 403.
 
 Remove `--dry-run` to quiesce both agents, take a new safety backup, rebuild the recorded prior SHA with the pinned runtime, restore both definitions, register the daily job without an unscheduled scan, restart the web process, and verify port 7766 health. Add `--restore-database` only for a non-backward-compatible migration; the database copy and WAL/SHM cleanup happen while both jobs are stopped. A healthy public response is exactly `{"ok":true}`; catalog and mutation endpoints require a valid session. Finish with the LAN smoke from a second machine and confirm both `launchctl print` targets and all four log files.

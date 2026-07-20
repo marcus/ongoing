@@ -114,6 +114,9 @@ describe('production LaunchAgent definitions', () => {
 
   it('uses one exact app-scoped Bun 1.3.1 executable for both agents', () => {
     expect(web).toContain(`<string>${PRODUCTION_BUN}</string>`);
+    expect(web).toContain(
+      '<string>/Users/marcus/code/ongoing/scripts/production-server.ts</string>'
+    );
     expect(scan).toContain(`<string>${PRODUCTION_BUN}</string>`);
     expect(provision).toContain(`readonly bun=${PRODUCTION_BUN}`);
     expect(provision).toContain('MISE_DATA_DIR="$mise_data" "$mise" install');
@@ -125,10 +128,15 @@ describe('production LaunchAgent definitions', () => {
       expect(packageJson.scripts[name]).toContain('$npm_execpath');
       expect(packageJson.scripts[name]).not.toMatch(/(^|&& )bun /);
     }
-    expect(productionSmoke).toContain("Bun.spawn([process.execPath, 'build/index.js']");
+    expect(productionSmoke).toContain(
+      "Bun.spawn([process.execPath, 'run', 'scripts/production-server.ts']"
+    );
     expect(deployment).toContain('"$ongoing_bun" run scripts/migrate.ts');
     expect(deployment).toContain('"$ongoing_bun" run scripts/scan.ts');
     expect(deployment).toContain('"$ongoing_bun" run scripts/smoke.ts');
+    expect(deployment).toContain('scripts/smoke.ts http://aerie.local:7766');
+    expect(deployment).toContain('http://127.0.0.1:7766/api/health');
+    expect(deployment).not.toContain('scripts/smoke.ts http://127.0.0.1:7766');
     expect(deployment).not.toContain('"$ongoing_bun" run migrate');
     expect(deployment).not.toContain('"$ongoing_bun" run scan');
   });
