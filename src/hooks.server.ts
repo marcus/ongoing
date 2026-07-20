@@ -37,7 +37,10 @@ export const handle: Handle = async ({ event, resolve }) => {
   if (!isPublic && !hasValidSession(event.cookies, config.security))
     return secure(unauthenticated(pathname));
 
-  if (!isSameOriginMutation(event.request, config.security.appOrigin))
+  if (
+    config.security.authenticationRequired &&
+    !isSameOriginMutation(event.request, config.security.appOrigin)
+  )
     return secure(json({ error: 'Request origin is not allowed' }, { status: 403 }));
   const routeLimit = pathname === '/login' ? 1_024 : config.security.maxRequestBytes;
   const boundedRequest = await bufferRequestBodyWithinLimit(event.request, routeLimit);

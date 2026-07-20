@@ -35,6 +35,15 @@ With `authDisabled` true, `authenticationRequired` is false regardless of `HOST`
 is skipped. The gate itself lives in `src/hooks.server.ts` (routes through
 `hasValidSession`).
 
+`hooks.server.ts` also skips the same-origin mutation check
+(`isSameOriginMutation`) when `authenticationRequired` is false. That check
+compares the request's `Origin` header against the configured `APP_ORIGIN`
+(e.g. `http://aerie.local:7766`), so it 403s any mutating request made from a
+different hostname on the LAN (e.g. `http://localhost:7766` or a raw IP). Since
+`ONGOING_DISABLE_AUTH` already opens every route to anyone on the network, this
+CSRF check adds no protection while it's set, and was blocking legitimate
+requests like the favorites toggle.
+
 ## Re-enabling auth later
 
 1. In `~/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist`, remove the
