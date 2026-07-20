@@ -122,7 +122,7 @@ export function releasePlan(
         `quiesce ${config.webLabel} and ${config.scanLabel}`,
         `back up ${config.database} and retain ${config.backupRetention} backups`,
         `install frozen lockfile and build with ${config.bunExecutable}`,
-        'apply migrations',
+        `apply migrations with ${config.bunExecutable} scripts/migrate.ts`,
         `install ${config.webPlist} and ${config.scanPlist} from committed definitions`,
         `bootstrap calendar LaunchAgent ${config.scanLabel} without an immediate scan`,
         `bootstrap web LaunchAgent ${config.webLabel}`,

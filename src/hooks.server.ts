@@ -39,8 +39,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
   if (!isSameOriginMutation(event.request, config.security.appOrigin))
     return secure(json({ error: 'Request origin is not allowed' }, { status: 403 }));
-  const routeLimit =
-    pathname === '/logout' ? 0 : pathname === '/login' ? 1_024 : config.security.maxRequestBytes;
+  const routeLimit = pathname === '/login' ? 1_024 : config.security.maxRequestBytes;
   const boundedRequest = await bufferRequestBodyWithinLimit(event.request, routeLimit);
   if (!boundedRequest) return secure(json({ error: 'Request body is too large' }, { status: 413 }));
   if (boundedRequest !== event.request) (event as { request: Request }).request = boundedRequest;

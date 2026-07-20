@@ -49,8 +49,8 @@ ongoing_bun=/Users/marcus/.local/share/ongoing/mise/installs/bun/1.3.1/bin/bun
 "$ongoing_bun" --version
 "$ongoing_bun" install --frozen-lockfile
 "$ongoing_bun" run build
-DATABASE_PATH='/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite' "$ongoing_bun" run migrate
-SCAN_ROOTS=/Users/marcus/code DATABASE_PATH='/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite' "$ongoing_bun" run scan
+DATABASE_PATH='/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite' "$ongoing_bun" run scripts/migrate.ts
+SCAN_ROOTS=/Users/marcus/code DATABASE_PATH='/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite' "$ongoing_bun" run scripts/scan.ts
 launchctl bootstrap gui/$(id -u) /Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.scan.plist
 launchctl bootstrap gui/$(id -u) /Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist
 ```
@@ -85,7 +85,8 @@ Remove `--dry-run` only after review. The client provisions and validates app-sc
 Keep the secret in the environment, not argv, URLs, logs, or the database:
 
 ```sh
-ONGOING_ACCESS_SECRET='...' bun run smoke http://aerie.local:7766
+ongoing_bun=/Users/marcus/.local/share/ongoing/mise/installs/bun/1.3.1/bin/bun
+ONGOING_ACCESS_SECRET='...' "$ongoing_bun" run scripts/smoke.ts http://127.0.0.1:7766
 bun run rollback --host marcus@aerie.local --checkout /Users/marcus/code/ongoing --database '/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite' --dry-run
 ```
 

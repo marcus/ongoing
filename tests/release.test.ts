@@ -92,7 +92,7 @@ describe('release tooling', () => {
     const deployText = deploy.join('\n');
     expect(deployText.indexOf('quiesce')).toBeLessThan(deployText.indexOf('back up'));
     expect(deployText.indexOf('back up')).toBeLessThan(deployText.indexOf('apply migrations'));
-    expect(deploy.filter((step) => step === 'apply migrations')).toHaveLength(1);
+    expect(deploy.filter((step) => step.includes('apply migrations'))).toHaveLength(1);
     const rollbackText = restoringRollback.join('\n');
     expect(rollbackText.indexOf('quiesce')).toBeLessThan(rollbackText.indexOf('back up'));
     expect(rollbackText.indexOf('back up')).toBeLessThan(rollbackText.indexOf('switch to'));
@@ -106,6 +106,11 @@ describe('production LaunchAgent definitions', () => {
   const web = readFileSync(resolve('config/ongoing.plist.example'), 'utf8');
   const scan = readFileSync(resolve('config/ongoing-scan.plist.example'), 'utf8');
   const provision = readFileSync(resolve('scripts/provision-runtime.sh'), 'utf8');
+  const deployment = readFileSync(resolve('docs/deployment.md'), 'utf8');
+  const packageJson = JSON.parse(readFileSync(resolve('package.json'), 'utf8')) as {
+    scripts: Record<string, string>;
+  };
+  const productionSmoke = readFileSync(resolve('scripts/production-smoke.ts'), 'utf8');
 
   it('uses one exact app-scoped Bun 1.3.1 executable for both agents', () => {
     expect(web).toContain(`<string>${PRODUCTION_BUN}</string>`);
@@ -113,6 +118,19 @@ describe('production LaunchAgent definitions', () => {
     expect(provision).toContain(`readonly bun=${PRODUCTION_BUN}`);
     expect(provision).toContain('MISE_DATA_DIR="$mise_data" "$mise" install');
     expect(provision).not.toContain('/.bun/bin/bun');
+  });
+
+  it('keeps production entrypoints on the invoking exact Bun without ambient PATH fallback', () => {
+    for (const name of ['test:production', 'deploy', 'rollback', 'smoke', 'migrate', 'scan']) {
+      expect(packageJson.scripts[name]).toContain('$npm_execpath');
+      expect(packageJson.scripts[name]).not.toMatch(/(^|&& )bun /);
+    }
+    expect(productionSmoke).toContain("Bun.spawn([process.execPath, 'build/index.js']");
+    expect(deployment).toContain('"$ongoing_bun" run scripts/migrate.ts');
+    expect(deployment).toContain('"$ongoing_bun" run scripts/scan.ts');
+    expect(deployment).toContain('"$ongoing_bun" run scripts/smoke.ts');
+    expect(deployment).not.toContain('"$ongoing_bun" run migrate');
+    expect(deployment).not.toContain('"$ongoing_bun" run scan');
   });
 
   it('configures the authenticated web process on 7766 with in-process scans disabled', () => {

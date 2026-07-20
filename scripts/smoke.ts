@@ -84,6 +84,18 @@ export async function smoke({ baseUrl, secret }: SmokeOptions): Promise<void> {
   if (anonymous.status !== 401) throw new Error(`anonymous catalog returned ${anonymous.status}`);
   console.log('Anonymous protection passed.');
 
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const oversizedLogin = await fetch(`${origin}/login`, {
+      method: 'POST',
+      redirect: 'manual',
+      headers: { origin, 'content-type': 'application/x-www-form-urlencoded' },
+      body: `secret=${'x'.repeat(20_000)}`
+    });
+    if (oversizedLogin.status !== 413)
+      throw new Error(`oversized fixed-length login returned ${oversizedLogin.status}`);
+  }
+  await expectChunkedStatus(origin, '/login', undefined, 'x'.repeat(20_000), 413);
+
   const body = new FormData();
   body.set('secret', secret);
   const login = await fetch(`${origin}/login`, {
@@ -137,6 +149,18 @@ export async function smoke({ baseUrl, secret }: SmokeOptions): Promise<void> {
   });
   if (oversized.status !== 413) throw new Error(`oversized mutation returned ${oversized.status}`);
 
+  const oversizedLogout = await fetch(`${origin}/logout`, {
+    method: 'POST',
+    redirect: 'manual',
+    headers: { cookie, origin, 'content-type': 'application/x-www-form-urlencoded' },
+    body: `padding=${'x'.repeat(20_000)}`
+  });
+  if (oversizedLogout.status !== 413)
+    throw new Error(`oversized fixed-length logout returned ${oversizedLogout.status}`);
+  if (oversizedLogout.headers.get('set-cookie')?.includes('Max-Age=0'))
+    throw new Error('oversized logout cleared the session before returning 413');
+  console.log('Fixed-length request limits passed.');
+
   const cookieDirectory = await mkdtemp(join(tmpdir(), 'ongoing-smoke-cookie-'));
   const cookieFile = join(cookieDirectory, 'cookies.txt');
   const cookieValue = cookie.split('=', 2)[1];
@@ -146,7 +170,7 @@ export async function smoke({ baseUrl, secret }: SmokeOptions): Promise<void> {
     { mode: 0o600 }
   );
   try {
-    for (const path of ['/login', '/logout', '/api/scan'])
+    for (const path of ['/logout', '/api/scan'])
       await expectChunkedStatus(
         origin,
         path,
@@ -193,7 +217,9 @@ if (import.meta.main) {
   const baseUrl = process.argv[2];
   const secret = process.env.ONGOING_ACCESS_SECRET;
   if (!baseUrl || !/^https?:\/\//.test(baseUrl))
-    throw new Error('Usage: ONGOING_ACCESS_SECRET=... bun run scripts/smoke.ts http://host:port');
+    throw new Error(
+      'Usage: ONGOING_ACCESS_SECRET=... <pinned-bun> run scripts/smoke.ts http://host:port'
+    );
   if (!secret) throw new Error('ONGOING_ACCESS_SECRET is required in the environment');
   await smoke({ baseUrl, secret });
   console.log(`Smoke checks passed for ${new URL(baseUrl).origin}.`);
