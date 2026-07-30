@@ -6,6 +6,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { CatalogDatabase } from '../../src/lib/server/catalog/database';
 import { latestSchemaVersion } from '../../src/lib/server/catalog/migrations';
 import { CatalogRepository, stableProjectId } from '../../src/lib/server/catalog/repository';
+import {
+  readDashboardCatalog,
+  readHiddenCatalog,
+  readHiddenProjects
+} from '../../src/lib/dashboard/catalog';
 
 const temporaryDirectories: string[] = [];
 
@@ -286,6 +291,23 @@ describe('catalog repository', () => {
       repository.updateNote(project.id, 'third')
     ]);
     expect(repository.getProject(project.id)?.note).toBe('third');
+    catalog.close();
+  });
+
+  it('reads the visible and hidden catalogs as complementary halves', async () => {
+    const { catalog, repository } = openRepository();
+    const visible = await addProject(repository, 'shown');
+    const shelved = await addProject(repository, 'shelved');
+    await repository.setHidden(shelved.id, true);
+
+    const dashboard = readDashboardCatalog(repository);
+    const hidden = readHiddenCatalog(repository);
+
+    expect(dashboard.projects.map((project) => project.id)).toEqual([visible.id]);
+    expect(hidden.projects.map((project) => project.id)).toEqual([shelved.id]);
+    expect(dashboard).toMatchObject({ totalCount: 2, hiddenCount: 1 });
+    expect(hidden).toMatchObject({ totalCount: 2, hiddenCount: 1 });
+    expect(readHiddenProjects(repository).map((project) => project.id)).toEqual([shelved.id]);
     catalog.close();
   });
 });

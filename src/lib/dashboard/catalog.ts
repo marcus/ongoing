@@ -135,31 +135,40 @@ export function classifyProject(
   return viewKeys.filter((key) => classifications[key].member);
 }
 
-export function readDashboardCatalog(
-  repository: CatalogRepository,
-  now = new Date()
-): DashboardCatalog {
+function readCatalog(repository: CatalogRepository, hidden: boolean, now: Date): DashboardCatalog {
   const allProjects = repository.listProjects({ includeHidden: true });
   const projects = allProjects
-    .filter((project) => !project.isHidden)
+    .filter((project) => project.isHidden === hidden)
     .map((project) => dashboardProject(repository, project, now));
   return {
     projects,
-    hiddenCount: allProjects.length - projects.length,
+    hiddenCount: hidden ? projects.length : allProjects.length - projects.length,
     totalCount: allProjects.length,
     scan: repository.getLatestScanRun(),
     generatedAt: now.toISOString()
   };
 }
 
+export function readDashboardCatalog(
+  repository: CatalogRepository,
+  now = new Date()
+): DashboardCatalog {
+  return readCatalog(repository, false, now);
+}
+
+/** The hidden shelf as a full catalog, so API clients get the same shape as the dashboard. */
+export function readHiddenCatalog(
+  repository: CatalogRepository,
+  now = new Date()
+): DashboardCatalog {
+  return readCatalog(repository, true, now);
+}
+
 export function readHiddenProjects(
   repository: CatalogRepository,
   now = new Date()
 ): DashboardProject[] {
-  return repository
-    .listProjects({ includeHidden: true })
-    .filter((project) => project.isHidden)
-    .map((project) => dashboardProject(repository, project, now));
+  return readHiddenCatalog(repository, now).projects;
 }
 
 export function applyDashboardQuery(

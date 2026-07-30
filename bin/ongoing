@@ -1,0 +1,23 @@
+#!/bin/sh
+# ongoing — terminal client for the Ongoing dashboard.
+#
+# This is normally reached through a symlink on PATH (~/.local/bin/ongoing), so $0 is the symlink
+# and dirname would point at ~/.local/bin. Walk the links to the real file first.
+target=$0
+while [ -L "$target" ]; do
+  link=$(readlink "$target")
+  case $link in
+    /*) target=$link ;;
+    *) target=$(dirname "$target")/$link ;;
+  esac
+done
+repo=$(CDPATH= cd -- "$(dirname "$target")/.." && pwd)
+
+# Prefer the app-scoped pinned runtime the service uses; read the version from .bun-version rather
+# than hardcoding it, so this stays correct across the version bumps documented in AGENTS.md.
+version=$(cat "$repo/.bun-version" 2>/dev/null)
+pinned=$HOME/.local/share/ongoing/mise/installs/bun/$version/bin/bun
+if [ -n "$version" ] && [ -x "$pinned" ]; then
+  exec "$pinned" "$repo/bin/ongoing.ts" "$@"
+fi
+exec bun "$repo/bin/ongoing.ts" "$@"

@@ -2,6 +2,14 @@
 
 Operational notes for agents working in this repo. See [README.md](README.md) for product/architecture context.
 
+## The `ongoing` CLI is the fastest way to inspect the running app
+
+`bin/ongoing` (symlinked to `~/.local/bin/ongoing`) drives the live dashboard from the shell:
+`ongoing status`, `ongoing list --view attention --json`, `ongoing show <project>`, `ongoing scan --wait`,
+`ongoing logs -f`, `ongoing restart --build`. It is a client of the HTTP API, so anything the UI can do it can
+do — keep that parity when adding features, and add the flag alongside the button. Reference:
+[docs/cli.md](docs/cli.md). It runs from source; there is nothing to rebuild after editing it.
+
 ## Auth is intentionally disabled
 
 `ONGOING_DISABLE_AUTH=true` is set in the production launchd plist. This is a **deliberate, standing choice** for

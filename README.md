@@ -28,6 +28,23 @@ Development and preview bind to loopback by default. Production may set `HOST` a
 | `bun run test:e2e`     | Run Playwright browser tests                    |
 | `bun run scan`         | Run one scanner CLI refresh                     |
 
+## The `ongoing` command
+
+`bin/ongoing` is a terminal client for the dashboard, installed on `PATH` with
+`ln -s "$PWD/bin/ongoing" ~/.local/bin/ongoing`. It reads and writes through the same HTTP API the
+browser uses, so listing, filtering, favorites, hiding, notes, decision fields, and scans are
+available to a shell or an agent exactly as they are to the UI:
+
+```sh
+ongoing                                   # every project, dashboard ordering
+ongoing list --view attention --json      # machine-readable attention view
+ongoing show .                            # the repo you are standing in, with attention reasons
+ongoing set td --intent invest            # the same fields the drawer edits
+ongoing scan --full --wait
+```
+
+Full reference: [docs/cli.md](docs/cli.md).
+
 LAN authentication and production operations are documented in [docs/deployment.md](docs/deployment.md). Non-loopback listeners fail closed unless `ONGOING_ACCESS_SECRET` is configured; do not expose this trusted-LAN application to the public internet.
 
 The production source of truth is the private repository `git@github.com:marcus/ongoing.git`. Its tested `main` branch deploys to `/Users/marcus/code/ongoing` on `aerie.local`. The web LaunchAgent `com.marcusvorwaller.ongoing` serves `http://aerie.local:7766`; the separate `com.marcusvorwaller.ongoing.scan` LaunchAgent refreshes the shared catalog once daily at 04:00 local time.
