@@ -22,6 +22,8 @@ export interface Project {
   nextAction: string | null;
   reviewAfter: string | null;
   isMissing: boolean;
+  /** When the project first went missing, and null whenever it is present. */
+  missingSince: string | null;
   firstSeenAt: string;
   lastSeenAt: string;
   updatedAt: string;

@@ -12,6 +12,7 @@ export interface AppConfig {
   clocConcurrency: number;
   automaticScanSchedulerEnabled: boolean;
   forgetMissingProjects: boolean;
+  forgetMissingAfterDays: number;
   releaseBaselineEnabled: boolean;
   releaseBaselineMaxAgeHours: number;
   releaseBaselineApiUrl: string;
@@ -48,6 +49,14 @@ function positiveInteger(value: string | undefined, fallback: number, name: stri
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 1)
     throw new Error(`${name} must be a positive integer`);
+  return parsed;
+}
+
+function nonNegativeInteger(value: string | undefined, fallback: number, name: string): number {
+  if (value === undefined || value === '') return fallback;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0)
+    throw new Error(`${name} must be a non-negative integer`);
   return parsed;
 }
 
@@ -139,6 +148,14 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     // The catalog tracks ongoing work, not history: a project whose directory is gone is dropped
     // rather than archived. Set false to keep missing rows and prune them by hand instead.
     forgetMissingProjects: boolean(env.ONGOING_FORGET_MISSING, true, 'ONGOING_FORGET_MISSING'),
+    // A directory can be absent without being deleted — a rename, a move, an unmounted volume all
+    // look identical to a stat. Wait this long before believing it, so one bad look cannot destroy
+    // a project's note and decisions. 0 forgets on the first scan that finds it gone.
+    forgetMissingAfterDays: nonNegativeInteger(
+      env.ONGOING_FORGET_MISSING_AFTER_DAYS,
+      7,
+      'ONGOING_FORGET_MISSING_AFTER_DAYS'
+    ),
     releaseBaselineEnabled: boolean(
       env.ONGOING_ENABLE_RELEASE_BASELINE,
       true,

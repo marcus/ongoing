@@ -22,6 +22,7 @@ const config: AppConfig = {
   clocConcurrency: 2,
   automaticScanSchedulerEnabled: true,
   forgetMissingProjects: true,
+  forgetMissingAfterDays: 7,
   releaseBaselineEnabled: true,
   releaseBaselineMaxAgeHours: 24,
   releaseBaselineApiUrl: 'https://endoflife.date/api/v1',

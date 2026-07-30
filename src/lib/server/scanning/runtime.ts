@@ -7,6 +7,7 @@ import { Scanner, ScanInProgressError } from './scanner';
 
 const config = loadConfig();
 const database = new CatalogDatabase(config.databasePath);
+export const appConfig = config;
 export const catalogRepository = new CatalogRepository(database);
 export const catalogScanner = new Scanner(
   catalogRepository,

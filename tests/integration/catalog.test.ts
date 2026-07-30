@@ -438,6 +438,74 @@ describe('catalog repository', () => {
     catalog.close();
   });
 
+  it('forgets a project and everything keyed to it', async () => {
+    const { catalog, repository } = openRepository();
+    const project = await addProject(repository, 'doomed');
+    const survivor = await addProject(repository, 'survivor');
+    await repository.updateMetrics(project.id, { headSha: 'abc', locCode: 10 });
+    await repository.saveSnapshot({
+      projectId: project.id,
+      metric: 'github_stars',
+      capturedOn: '2026-01-01',
+      value: 4
+    });
+    await repository.recordCollectionError({
+      projectId: project.id,
+      collector: 'hosting',
+      message: 'boom',
+      occurredAt: '2026-01-01T00:00:00Z'
+    });
+
+    await repository.forgetProject(project.id);
+
+    expect(repository.getProject(project.id)).toBeNull();
+    expect(repository.getMetrics(project.id)).toBeNull();
+    expect(repository.listSnapshots(project.id)).toEqual([]);
+    expect(repository.listCollectionErrors(project.id)).toEqual([]);
+    const orphans = catalog.sqlite
+      .query<{ count: number }, []>(
+        `SELECT (SELECT COUNT(*) FROM project_metrics WHERE project_id NOT IN (SELECT id FROM projects))
+              + (SELECT COUNT(*) FROM metric_snapshots WHERE project_id NOT IN (SELECT id FROM projects))
+              + (SELECT COUNT(*) FROM collection_errors WHERE project_id NOT IN (SELECT id FROM projects))
+              + (SELECT COUNT(*) FROM project_stacks WHERE project_id NOT IN (SELECT id FROM projects))
+           AS count`
+      )
+      .get();
+    expect(orphans?.count).toBe(0);
+    expect(repository.getProject(survivor.id)).not.toBeNull();
+
+    await expect(repository.forgetProject(project.id)).rejects.toThrow(/Unknown project ID/);
+    expect(await repository.forgetProjects([project.id, survivor.id])).toEqual([survivor.id]);
+    catalog.close();
+  });
+
+  it('drops late collector writes for a project forgotten mid-scan', async () => {
+    const { catalog, repository } = openRepository();
+    const project = await addProject(repository, 'racing');
+    await repository.forgetProject(project.id);
+
+    // A scan already in flight finishes its collectors and writes results for a row that is gone.
+    // These must no-op: a foreign-key violation here escapes the scanner's own error handler and
+    // fails the entire run.
+    await expect(
+      repository.recordCollectionError({
+        projectId: project.id,
+        collector: 'hosting',
+        message: 'late',
+        occurredAt: '2026-01-01T00:00:00Z'
+      })
+    ).resolves.toBeUndefined();
+    await expect(
+      repository.saveSnapshot({
+        projectId: project.id,
+        metric: 'github_stars',
+        capturedOn: '2026-01-01',
+        value: 4
+      })
+    ).resolves.toBeUndefined();
+    catalog.close();
+  });
+
   it('reads the visible and hidden catalogs as complementary halves', async () => {
     const { catalog, repository } = openRepository();
     const visible = await addProject(repository, 'shown');

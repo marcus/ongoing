@@ -35,6 +35,8 @@ export interface DiscoveryOptions {
    * Off unless explicitly enabled, so forgetting is always a caller's decision.
    */
   forgetMissing?: boolean;
+  /** How long a project must stay missing before {@link forgetMissing} removes it. */
+  forgetMissingAfterMs?: number;
 }
 
 export interface ReconciledDiscovery {
@@ -189,32 +191,66 @@ export async function pathIsGone(path: string): Promise<boolean> {
   }
 }
 
+export interface VanishedProjectOptions {
+  /** Only consider projects under these already-verified scan roots. */
+  roots?: readonly string[];
+  /** How long a project must have been missing before it may be forgotten. */
+  graceMs?: number;
+  now?: () => number;
+}
+
 /**
- * Removes catalog rows whose directory no longer exists.
+ * Projects that are eligible to be forgotten: gone from disk, and gone for long enough.
  *
- * Deliberately narrower than "was not discovered this scan": a project skipped because of an
- * ignore glob, a depth change, or an unreadable parent is still on disk and must survive. Each
- * candidate is stat'd directly, and only a confirmed ENOENT is forgotten.
+ * Deliberately narrower than "was not discovered this scan". A project skipped because of an
+ * ignore glob, a depth change, or an unreadable parent is still on disk, so each candidate is
+ * stat'd directly and only a confirmed ENOENT counts.
+ *
+ * The grace period covers the cases a single stat cannot distinguish. A rename, a directory moved
+ * aside for a day, or a detached volume all read as ENOENT — the volume case even for a project
+ * whose own scan root is still present, because ENOENT is what an absent *ancestor* returns. A
+ * project's note and decisions are worth more than the row, so absence has to persist before it
+ * is believed.
  */
-async function forgetVanishedProjects(
+export async function findVanishedProjects(
   repository: CatalogRepository,
-  roots: readonly string[],
-  lease?: ScanLeaseOwnership
+  options: VanishedProjectOptions = {}
 ): Promise<Project[]> {
-  const scanned = new Set(roots);
-  const candidates = repository
-    .listProjects({ includeHidden: true })
-    .filter((project) => project.isMissing && scanned.has(resolve(project.scanRoot)));
+  const now = (options.now ?? (() => Date.now()))();
+  const graceMs = options.graceMs ?? 0;
+  const scanned = options.roots ? new Set(options.roots) : null;
+  const candidates = repository.listProjects({ includeHidden: true }).filter((project) => {
+    if (!project.isMissing) return false;
+    if (scanned && !scanned.has(resolve(project.scanRoot))) return false;
+    if (graceMs <= 0) return true;
+    // A row missing before this column existed has no start time; migration 004 stamps those, so
+    // treat a null here as "only just noticed" rather than as instantly eligible.
+    const since = project.missingSince ? Date.parse(project.missingSince) : Number.NaN;
+    return Number.isFinite(since) && now - since >= graceMs;
+  });
   const vanished: Project[] = [];
   for (const project of candidates)
     if (await pathIsGone(project.canonicalPath)) vanished.push(project);
+  return vanished;
+}
+
+/** Removes catalog rows for projects that {@link findVanishedProjects} considers gone. */
+async function forgetVanishedProjects(
+  repository: CatalogRepository,
+  options: VanishedProjectOptions & { lease?: ScanLeaseOwnership }
+): Promise<Project[]> {
+  const vanished = await findVanishedProjects(repository, options);
   const forgottenIds = new Set(
     await repository.forgetProjects(
       vanished.map(({ id }) => id),
-      lease
+      options.lease
     )
   );
-  return vanished.filter(({ id }) => forgottenIds.has(id));
+  const forgotten = vanished.filter(({ id }) => forgottenIds.has(id));
+  // Deleting a project destroys its note and decisions, so say which ones went and where from.
+  for (const project of forgotten)
+    console.warn(`Forgot missing project ${project.name} (${project.canonicalPath})`);
+  return forgotten;
 }
 
 /** Marks missing rows only after the entire filesystem discovery has succeeded. */
@@ -239,7 +275,11 @@ export async function discoverAndReconcile(
   // Opt-in: a destructive default would make any future caller that forgets the flag delete rows.
   const forgotten =
     options.forgetMissing === true
-      ? await forgetVanishedProjects(repository, successfulRoots, lease)
+      ? await forgetVanishedProjects(repository, {
+          roots: successfulRoots,
+          graceMs: options.forgetMissingAfterMs,
+          lease
+        })
       : [];
   return {
     projects,

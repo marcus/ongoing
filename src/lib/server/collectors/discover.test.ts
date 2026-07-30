@@ -1,10 +1,15 @@
-import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CatalogDatabase } from '$lib/server/catalog/database';
 import { CatalogRepository } from '$lib/server/catalog/repository';
-import { discoverAndReconcile, discoverRepositories, isPathWithinRoots } from './discover';
+import {
+  discoverAndReconcile,
+  discoverRepositories,
+  findVanishedProjects,
+  isPathWithinRoots
+} from './discover';
 import { runSuccessfulCommand } from './process';
 
 const temporaryDirectories: string[] = [];
@@ -209,6 +214,82 @@ describe('repository discovery', () => {
     });
     expect(pruned.forgotten.map(({ id }) => id)).toEqual([discovered.id]);
     expect(repository.getProject(discovered.id)).toBeNull();
+    catalog.close();
+  });
+
+  it('waits out the grace period before forgetting, so a rename does not destroy a note', async () => {
+    const root = await temporaryDirectory('ongoing-grace-');
+    const databasePath = join(await temporaryDirectory('ongoing-db-'), 'catalog.sqlite');
+    const catalog = new CatalogDatabase(databasePath);
+    const repository = new CatalogRepository(catalog);
+    const originalPath = join(root, 'foo');
+    await initRepository(originalPath);
+
+    const [discovered] = (await discoverAndReconcile(repository, { scanRoots: [root] })).projects;
+    await repository.updateNote(discovered.id, 'six months of context');
+    await repository.setFavorite(discovered.id, true);
+
+    // The most common real trigger: the directory is renamed, not deleted.
+    await rename(originalPath, join(root, 'foo-renamed'));
+
+    const day = 86_400_000;
+    const graceMs = 7 * day;
+    const forgetting = { scanRoots: [root], forgetMissing: true, forgetMissingAfterMs: graceMs };
+
+    const sameDay = await discoverAndReconcile(repository, forgetting);
+    expect(sameDay.forgotten).toEqual([]);
+    expect(repository.getProject(discovered.id)).toMatchObject({
+      isMissing: true,
+      note: 'six months of context',
+      isFavorite: true
+    });
+    const missingSince = repository.getProject(discovered.id)?.missingSince;
+    expect(missingSince).toBeTypeOf('string');
+
+    // Renaming it back inside the window restores the row intact — the recovery path the grace
+    // period exists to protect.
+    await rename(join(root, 'foo-renamed'), originalPath);
+    await discoverAndReconcile(repository, forgetting);
+    expect(repository.getProject(discovered.id)).toMatchObject({
+      isMissing: false,
+      missingSince: null,
+      note: 'six months of context',
+      isFavorite: true
+    });
+    catalog.close();
+  });
+
+  it('forgets only once the grace period has elapsed', async () => {
+    const root = await temporaryDirectory('ongoing-grace-elapsed-');
+    const databasePath = join(await temporaryDirectory('ongoing-db-'), 'catalog.sqlite');
+    const catalog = new CatalogDatabase(databasePath);
+    const repository = new CatalogRepository(catalog);
+    const projectPath = join(root, 'doomed');
+    await initRepository(projectPath);
+
+    const [discovered] = (await discoverAndReconcile(repository, { scanRoots: [root] })).projects;
+    await rm(projectPath, { recursive: true, force: true });
+
+    const day = 86_400_000;
+    await discoverAndReconcile(repository, {
+      scanRoots: [root],
+      forgetMissing: true,
+      forgetMissingAfterMs: 7 * day
+    });
+    expect(repository.getProject(discovered.id)).toMatchObject({ isMissing: true });
+
+    const missingSince = Date.parse(repository.getProject(discovered.id)!.missingSince!);
+    const vanished = await findVanishedProjects(repository, {
+      graceMs: 7 * day,
+      now: () => missingSince + 7 * day
+    });
+    expect(vanished.map(({ id }) => id)).toEqual([discovered.id]);
+
+    const tooSoon = await findVanishedProjects(repository, {
+      graceMs: 7 * day,
+      now: () => missingSince + 6 * day
+    });
+    expect(tooSoon).toEqual([]);
     catalog.close();
   });
 

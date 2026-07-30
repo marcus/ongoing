@@ -77,6 +77,13 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 export const DELETE: RequestHandler = async ({ params }) => {
   try {
     const { catalogRepository } = await import('$lib/server/scanning/runtime');
+    // A running scan is midway through writing metrics for this project; pulling the row out from
+    // under it fails the whole run on a foreign-key violation.
+    if (catalogRepository.getActiveScanRun())
+      return json(
+        { error: 'A catalog scan is running — try again once it finishes' },
+        { status: 409 }
+      );
     await catalogRepository.forgetProject(params.id);
     return json({ id: params.id, forgotten: true });
   } catch (error) {

@@ -207,7 +207,8 @@ function parseArgs(argv: string[]): Args {
     'next-action',
     'review-after',
     'lines',
-    'stack'
+    'stack',
+    'grace-days'
   ]);
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -822,6 +823,13 @@ async function commandHide(client: Client, args: Args, hidden: boolean): Promise
 
 async function commandForget(client: Client, args: Args): Promise<void> {
   const project = await requireProject(client, args, 'forget');
+  // A project name may be matched by a unique substring, and forgetting cannot be undone: the
+  // note, favourite, intent, and manual rank go with the row. Make the caller name the victim.
+  if (!flag(args, 'yes', 'y'))
+    throw new CliError(
+      `This permanently drops ${project.name} (${project.canonicalPath}) and its note, ` +
+        `favourite, intent, and rank.\nRe-run with --yes to confirm.`
+    );
   await client.request(`/api/projects/${project.id}`, { method: 'DELETE' });
   report(
     args,
@@ -832,26 +840,35 @@ async function commandForget(client: Client, args: Args): Promise<void> {
 
 interface PruneResponse {
   dryRun: boolean;
-  forgotten: { id: string; name: string; canonicalPath: string }[];
+  graceDays: number;
+  forgotten: { id: string; name: string; canonicalPath: string; missingSince: string | null }[];
 }
 
 async function commandPrune(client: Client, args: Args): Promise<void> {
-  const dryRun = flag(args, 'dry-run', 'n');
+  // Dry run unless confirmed, so a bare `ongoing prune` reports rather than deletes.
+  const dryRun = !flag(args, 'yes', 'y');
+  const graceDays = option(args, 'grace-days');
+  if (graceDays !== undefined && !/^\d+$/.test(graceDays))
+    throw new CliError('--grace-days must be a non-negative integer');
   const response = await client.request<PruneResponse>('/api/projects/prune', {
     method: 'POST',
-    body: { dryRun }
+    body: { dryRun, ...(graceDays === undefined ? {} : { graceDays: Number(graceDays) }) }
   });
   if (flag(args, 'json')) return printJson(response);
   if (!response.forgotten.length) {
-    out(dim('Nothing to prune — every catalog entry still exists on disk.'));
+    out(dim(`Nothing to prune — no project has been missing for ${response.graceDays} day(s).`));
     return;
   }
-  for (const project of response.forgotten) out(`  ${project.name} ${dim(project.canonicalPath)}`);
+  for (const project of response.forgotten)
+    out(
+      `  ${project.name} ${dim(project.canonicalPath)}` +
+        (project.missingSince ? dim(` · missing since ${project.missingSince.slice(0, 10)}`) : '')
+    );
   const count = `${response.forgotten.length} project${response.forgotten.length === 1 ? '' : 's'}`;
   out();
   out(
     dryRun
-      ? dim(`Would forget ${count}. Re-run without --dry-run.`)
+      ? dim(`Would forget ${count} — and its note, favourite, intent, and rank. Re-run with --yes.`)
       : `${green('✓')} forgot ${count}`
   );
 }
@@ -1137,8 +1154,9 @@ ${bold('Changing')}
   hide <project> [--off]                hide; --off unhides
   unhide <project>                      unhide (alias for hide --off)
   note <project> [text] [--clear]       read or write the note
-  forget <project>                      drop a project from the catalog for good
-  prune [-n, --dry-run]                 forget every catalog entry whose directory is gone
+  forget <project> --yes                drop a project from the catalog for good
+  prune [--yes] [--grace-days <n>]      forget entries whose directory has been gone a while
+                                        (reports without --yes; --grace-days overrides the wait)
   set <project> [--intent <${INTENTS.join('|')}>]
                 [--excitement 1-5] [--importance 1-5]
                 [--next-action <text>] [--review-after YYYY-MM-DD]

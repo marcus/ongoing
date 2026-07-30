@@ -59,7 +59,14 @@ export interface ScannerDependencies {
   progress?: ScanProgressBus;
   discover?: (
     repository: CatalogRepository,
-    config: Pick<AppConfig, 'scanRoots' | 'maxScanDepth' | 'ignoreGlobs' | 'forgetMissingProjects'>,
+    config: Pick<
+      AppConfig,
+      | 'scanRoots'
+      | 'maxScanDepth'
+      | 'ignoreGlobs'
+      | 'forgetMissingProjects'
+      | 'forgetMissingAfterDays'
+    >,
     lease: ScanLeaseOwnership
   ) => Promise<ReconciledDiscovery>;
   collectGit?: (repositoryPath: string, options: { signal: AbortSignal }) => Promise<GitMetrics>;
@@ -147,7 +154,8 @@ export class Scanner {
             scanRoots: config.scanRoots,
             maxDepth: config.maxScanDepth,
             ignoreGlobs: config.ignoreGlobs,
-            forgetMissing: config.forgetMissingProjects
+            forgetMissing: config.forgetMissingProjects,
+            forgetMissingAfterMs: config.forgetMissingAfterDays * 86_400_000
           },
           lease
         ));

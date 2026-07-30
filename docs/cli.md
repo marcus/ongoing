@@ -98,11 +98,20 @@ for path in $(ongoing list --filter favorites --paths); do git -C "$path" fetch 
   `cloc`, `td`, `gh`, and `git` all resolve; that PATH is `PRODUCTION_SCAN_PATH` in
   `scripts/release-config.ts` and is asserted by `tests/release.test.ts`. Keep the two plists in
   sync when it changes.
-- `forget` removes one project; `prune` removes every entry whose directory is confirmed gone.
-  Both are permanent — the note, favourite, intent, and manual rank go with the row. A daily scan
-  already prunes automatically, so `prune` is mostly for clearing entries between scans. Set
-  `ONGOING_FORGET_MISSING=false` to keep vanished projects flagged instead of dropping them.
-  Only a definitive `ENOENT` counts as gone: a project that is merely undiscoverable — hidden by an
-  ignore glob, below the depth limit, or under an unreadable parent — is flagged missing and kept.
+- `forget` removes one project; `prune` removes every entry whose directory has been gone long
+  enough. Both are permanent — the note, favourite, intent, and manual rank go with the row — so
+  both require `--yes`; a bare `ongoing prune` reports what would go without touching anything.
+- Two guards keep a live project from being deleted. Only a definitive `ENOENT` counts as gone, so
+  a project that is merely undiscoverable — hidden by an ignore glob, below the depth limit, or
+  under an unreadable parent — stays flagged missing. And absence must persist for
+  `ONGOING_FORGET_MISSING_AFTER_DAYS` (default 7), because a rename, a directory moved aside, and
+  an unmounted volume are indistinguishable from a deletion at a single moment. Put the directory
+  back inside that window and the row is restored intact. `--grace-days 0` skips the wait;
+  `ONGOING_FORGET_MISSING=false` disables automatic forgetting entirely.
+- Forgetting is not a tombstone. A project that still exists on disk reappears on the next scan
+  with an empty note, so `forget` is for entries you want gone, not projects you want ignored —
+  use `hide` for those.
+- `forget` and `prune --yes` return 409 while a scan is running, since removing a row underneath a
+  scan would fail the run. Each forgotten project is logged to the service log by name and path.
 - `ongoing list --hidden` relies on `GET /api/projects?hidden=true`, added so the hidden shelf is
   not a UI-only capability.

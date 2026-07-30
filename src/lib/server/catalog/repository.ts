@@ -142,6 +142,7 @@ function projectFromRow(row: Row): Project {
     nextAction: row.next_action === null ? null : String(row.next_action),
     reviewAfter: row.review_after === null ? null : String(row.review_after),
     isMissing: bool(row.is_missing),
+    missingSince: row.missing_since === null ? null : String(row.missing_since),
     firstSeenAt: String(row.first_seen_at),
     lastSeenAt: String(row.last_seen_at),
     updatedAt: String(row.updated_at)
@@ -229,6 +230,12 @@ function metricsFromRow(row: Row): ProjectMetrics {
   };
 }
 
+function projectExists(database: Database, projectId: string): boolean {
+  return Boolean(
+    database.query<{ id: string }, [string]>('SELECT id FROM projects WHERE id = ?').get(projectId)
+  );
+}
+
 function requireChanged(changes: number, projectId: string): void {
   if (changes === 0) throw new Error(`Unknown project ID: ${projectId}`);
 }
@@ -291,6 +298,7 @@ export class CatalogRepository {
             name = excluded.name,
             scan_root = excluded.scan_root,
             is_missing = 0,
+            missing_since = NULL,
             last_seen_at = excluded.last_seen_at,
             updated_at = excluded.updated_at
         `
@@ -421,10 +429,18 @@ export class CatalogRepository {
             .query<{ id: string }, [string]>('SELECT id FROM projects WHERE scan_root = ?')
             .all(resolve(scanRoot));
           for (const { id } of rows) {
-            if (!seen.has(id))
-              database
-                .query('UPDATE projects SET is_missing = 1, updated_at = ? WHERE id = ?')
-                .run(this.now(), id);
+            if (seen.has(id)) continue;
+            // COALESCE keeps the original timestamp: missing_since marks when a project first
+            // went missing, not when it was last observed missing, so the grace period elapses.
+            database
+              .query(
+                `UPDATE projects
+                   SET is_missing = 1,
+                       missing_since = COALESCE(missing_since, ?),
+                       updated_at = ?
+                 WHERE id = ?`
+              )
+              .run(this.now(), this.now(), id);
           }
         }
       };
@@ -488,6 +504,8 @@ export class CatalogRepository {
 
   async saveSnapshot(snapshot: MetricSnapshot, lease?: ScanLeaseOwnership): Promise<void> {
     await this.catalog.write((database) => {
+      // Same race as recordCollectionError: the project may have been forgotten mid-scan.
+      if (!projectExists(database, snapshot.projectId)) return;
       withLease(database, lease, () =>
         database
           .query(
@@ -665,6 +683,10 @@ export class CatalogRepository {
     lease?: ScanLeaseOwnership
   ): Promise<void> {
     await this.catalog.write((database) => {
+      // A project can be forgotten while a scan is still collecting for it. Recording an error
+      // against the deleted row would raise a foreign-key violation from inside the scanner's own
+      // error handler and fail the entire run, so drop the error with the project.
+      if (!projectExists(database, error.projectId)) return;
       withLease(database, lease, () =>
         database
           .query(

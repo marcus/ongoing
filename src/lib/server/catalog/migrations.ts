@@ -2,6 +2,7 @@ import type { Database } from 'bun:sqlite';
 import initialSchema from './migrations/001_initial.sql?raw';
 import scanLeases from './migrations/002_scan_leases.sql?raw';
 import stacks from './migrations/003_stacks.sql?raw';
+import missingSince from './migrations/004_missing_since.sql?raw';
 
 interface Migration {
   version: number;
@@ -11,7 +12,8 @@ interface Migration {
 const migrations: readonly Migration[] = [
   { version: 1, sql: initialSchema },
   { version: 2, sql: scanLeases },
-  { version: 3, sql: stacks }
+  { version: 3, sql: stacks },
+  { version: 4, sql: missingSince }
 ];
 
 /**

@@ -22,7 +22,7 @@ Both agents use that one app-owned Bun executable, which must report the exact v
 
 The daily agent sets `PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin`, so launchd resolves Homebrew's `gh`, `td`, `cloc`, and `git` without inheriting interactive shell startup files or user runtime shims. Its `ProgramArguments` still selects the absolute app-owned Bun 1.3.9 executable. Deployment verifies the committed PATH and all four tools before stopping either agent, then installs the definition atomically and bootstraps the calendar agent from that installed file.
 
-The web process runs the committed `scripts/production-server.ts` boundary in front of adapter-node. It counts raw fixed-length and chunked mutation bytes before SvelteKit actions, then forwards bounded requests to a private ephemeral loopback adapter listener. It also has `ONGOING_ENABLE_SCAN_SCHEDULER=false`, so it creates neither the development startup scan nor the five-minute interval. The scan agent invokes the shared `scripts/scan.ts` once at 04:00 local time against the same database and scan root. Its definition has no `RunAtLoad` or `KeepAlive`; registering or restarting it does not cause an immediate scan. A manual or per-project scan remains available, and the durable scan lease prevents overlap.
+The web process runs the committed `scripts/production-server.ts` boundary in front of adapter-node. It counts raw fixed-length and chunked mutation bytes before SvelteKit actions, then forwards bounded requests to a private ephemeral loopback adapter listener. It also has `ONGOING_ENABLE_SCAN_SCHEDULER=false`, so it creates neither the development startup scan nor the five-minute interval. The scan agent invokes the shared `scripts/scan.ts` once at 03:00 local time against the same database and scan root. Its definition has no `RunAtLoad` or `KeepAlive`; registering or restarting it does not cause an immediate scan. A manual or per-project scan remains available, and the durable scan lease prevents overlap.
 
 ## One-time setup
 
@@ -61,7 +61,7 @@ Bootstrapping the scan agent merely registers its next calendar event. The initi
 
 ## Daily refresh behavior
 
-`StartCalendarInterval` uses aerie's local timezone and requests Hour 4, Minute 0. When aerie is awake with Marcus's GUI domain active, launchd starts one scanner at 04:00. If the Mac is asleep at 04:00, launchd coalesces the missed event and runs it after wake. If the machine is powered off or the user LaunchAgent domain is unavailable, do not rely on catch-up across shutdown/logout; the next regular opportunity is 04:00 after the user domain is active. Run the documented manual scan if an immediate refresh is wanted after an extended outage.
+`StartCalendarInterval` uses aerie's local timezone and requests Hour 3, Minute 0. When aerie is awake with Marcus's GUI domain active, launchd starts one scanner at 03:00. If the Mac is asleep at 03:00, launchd coalesces the missed event and runs it after wake. If the machine is powered off or the user LaunchAgent domain is unavailable, do not rely on catch-up across shutdown/logout; the next regular opportunity is 03:00 after the user domain is active. Run the documented manual scan if an immediate refresh is wanted after an extended outage.
 
 Inspect definitions and live state without starting a scan:
 
