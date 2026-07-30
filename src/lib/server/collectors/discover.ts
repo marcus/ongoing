@@ -1,4 +1,4 @@
-import { opendir, realpath, stat } from 'node:fs/promises';
+import { lstat, opendir, realpath, stat } from 'node:fs/promises';
 import { basename, isAbsolute, relative, resolve, sep } from 'node:path';
 import type { DiscoveredProject, Project } from '$lib/domain/project';
 import type { CatalogRepository, ScanLeaseOwnership } from '$lib/server/catalog/repository';
@@ -30,11 +30,17 @@ export interface DiscoveryOptions {
   ignoreGlobs?: readonly string[];
   timeoutMs?: number;
   runner?: CommandRunner;
+  /**
+   * Drop projects whose directory is confirmed gone rather than leaving them flagged missing.
+   * Off unless explicitly enabled, so forgetting is always a caller's decision.
+   */
+  forgetMissing?: boolean;
 }
 
 export interface ReconciledDiscovery {
   projects: Project[];
   enrichmentProjects: Project[];
+  forgotten: Project[];
 }
 
 interface CanonicalRoot {
@@ -167,6 +173,50 @@ export async function discoverRepositories(
   );
 }
 
+/**
+ * Whether a path is definitively gone.
+ *
+ * Only ENOENT counts. A permission or I/O error means the directory's fate is unknown, and
+ * treating "cannot tell" as "deleted" would discard a project's notes and decisions over a
+ * transient fault.
+ */
+export async function pathIsGone(path: string): Promise<boolean> {
+  try {
+    await lstat(path);
+    return false;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ENOENT';
+  }
+}
+
+/**
+ * Removes catalog rows whose directory no longer exists.
+ *
+ * Deliberately narrower than "was not discovered this scan": a project skipped because of an
+ * ignore glob, a depth change, or an unreadable parent is still on disk and must survive. Each
+ * candidate is stat'd directly, and only a confirmed ENOENT is forgotten.
+ */
+async function forgetVanishedProjects(
+  repository: CatalogRepository,
+  roots: readonly string[],
+  lease?: ScanLeaseOwnership
+): Promise<Project[]> {
+  const scanned = new Set(roots);
+  const candidates = repository
+    .listProjects({ includeHidden: true })
+    .filter((project) => project.isMissing && scanned.has(resolve(project.scanRoot)));
+  const vanished: Project[] = [];
+  for (const project of candidates)
+    if (await pathIsGone(project.canonicalPath)) vanished.push(project);
+  const forgottenIds = new Set(
+    await repository.forgetProjects(
+      vanished.map(({ id }) => id),
+      lease
+    )
+  );
+  return vanished.filter(({ id }) => forgottenIds.has(id));
+}
+
 /** Marks missing rows only after the entire filesystem discovery has succeeded. */
 export async function discoverAndReconcile(
   repository: CatalogRepository,
@@ -174,6 +224,7 @@ export async function discoverAndReconcile(
   lease?: ScanLeaseOwnership
 ): Promise<ReconciledDiscovery> {
   const discovered = await discoverRepositories(options);
+  // realpath throws for a root that has gone away, aborting before anything is marked missing.
   const successfulRoots = await Promise.all(
     options.scanRoots.map((scanRoot) => realpath(resolve(scanRoot)))
   );
@@ -185,5 +236,14 @@ export async function discoverAndReconcile(
     projects.map(({ id }) => id),
     lease
   );
-  return { projects, enrichmentProjects: projects.filter(({ isHidden }) => !isHidden) };
+  // Opt-in: a destructive default would make any future caller that forgets the flag delete rows.
+  const forgotten =
+    options.forgetMissing === true
+      ? await forgetVanishedProjects(repository, successfulRoots, lease)
+      : [];
+  return {
+    projects,
+    enrichmentProjects: projects.filter(({ isHidden }) => !isHidden),
+    forgotten
+  };
 }

@@ -21,6 +21,7 @@ const config: AppConfig = {
   gitConcurrency: 6,
   clocConcurrency: 2,
   automaticScanSchedulerEnabled: true,
+  forgetMissingProjects: true,
   releaseBaselineEnabled: true,
   releaseBaselineMaxAgeHours: 24,
   releaseBaselineApiUrl: 'https://endoflife.date/api/v1',
@@ -78,7 +79,8 @@ async function fixture(projectCount = 1) {
 function discovery(projects: Awaited<ReturnType<typeof fixture>>['projects']) {
   return async () => ({
     projects,
-    enrichmentProjects: projects.filter(({ isHidden }) => !isHidden)
+    enrichmentProjects: projects.filter(({ isHidden }) => !isHidden),
+    forgotten: []
   });
 }
 
@@ -349,7 +351,7 @@ describe('resilient scan orchestration', () => {
           },
           lease
         );
-        return { projects: [late], enrichmentProjects: [late] };
+        return { projects: [late], enrichmentProjects: [late], forgotten: [] };
       },
       collectGit: async () => gitMetrics
     });

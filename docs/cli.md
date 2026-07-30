@@ -63,6 +63,8 @@ ongoing favorite <project> [--off]
 ongoing hide <project> [--off]
 ongoing unhide <project>
 ongoing note <project> [text] [--clear]
+ongoing forget <project>              drop it from the catalog for good
+ongoing prune [-n, --dry-run]         forget every entry whose directory is gone
 ongoing set <project> [--intent invest|maintain|experiment|hibernate|archive]
                       [--excitement 1-5] [--importance 1-5]
                       [--next-action <text>] [--review-after YYYY-MM-DD]
@@ -92,8 +94,15 @@ for path in $(ongoing list --filter favorites --paths); do git -C "$path" fetch 
   launchd to finish tearing the job down, and retries the bootstrap — see
   [AGENTS.md](../AGENTS.md). `restart --build` rebuilds first and refuses to restart a failed build.
 - `scan` starts a run through the API, which means the web LaunchAgent's environment runs the
-  collectors. That agent's plist does not set `PATH`, so `cloc` is not on it and the `loc` collector
-  records a warning; the daily scan agent sets `PATH` and does not have this problem. `bun run scan`
-  in a shell is unaffected. This is the same behaviour as the dashboard's rescan button.
+  collectors — the same as the dashboard's rescan button. Both plists now set the same `PATH`, so
+  `cloc`, `td`, `gh`, and `git` all resolve; that PATH is `PRODUCTION_SCAN_PATH` in
+  `scripts/release-config.ts` and is asserted by `tests/release.test.ts`. Keep the two plists in
+  sync when it changes.
+- `forget` removes one project; `prune` removes every entry whose directory is confirmed gone.
+  Both are permanent — the note, favourite, intent, and manual rank go with the row. A daily scan
+  already prunes automatically, so `prune` is mostly for clearing entries between scans. Set
+  `ONGOING_FORGET_MISSING=false` to keep vanished projects flagged instead of dropping them.
+  Only a definitive `ENOENT` counts as gone: a project that is merely undiscoverable — hidden by an
+  ignore glob, below the depth limit, or under an unreadable parent — is flagged missing and kept.
 - `ongoing list --hidden` relies on `GET /api/projects?hidden=true`, added so the hidden shelf is
   not a UI-only capability.

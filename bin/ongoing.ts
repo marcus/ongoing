@@ -820,6 +820,42 @@ async function commandHide(client: Client, args: Args, hidden: boolean): Promise
   );
 }
 
+async function commandForget(client: Client, args: Args): Promise<void> {
+  const project = await requireProject(client, args, 'forget');
+  await client.request(`/api/projects/${project.id}`, { method: 'DELETE' });
+  report(
+    args,
+    { id: project.id, name: project.name, forgotten: true },
+    `${project.name} forgotten ${dim(`(${project.canonicalPath})`)}`
+  );
+}
+
+interface PruneResponse {
+  dryRun: boolean;
+  forgotten: { id: string; name: string; canonicalPath: string }[];
+}
+
+async function commandPrune(client: Client, args: Args): Promise<void> {
+  const dryRun = flag(args, 'dry-run', 'n');
+  const response = await client.request<PruneResponse>('/api/projects/prune', {
+    method: 'POST',
+    body: { dryRun }
+  });
+  if (flag(args, 'json')) return printJson(response);
+  if (!response.forgotten.length) {
+    out(dim('Nothing to prune — every catalog entry still exists on disk.'));
+    return;
+  }
+  for (const project of response.forgotten) out(`  ${project.name} ${dim(project.canonicalPath)}`);
+  const count = `${response.forgotten.length} project${response.forgotten.length === 1 ? '' : 's'}`;
+  out();
+  out(
+    dryRun
+      ? dim(`Would forget ${count}. Re-run without --dry-run.`)
+      : `${green('✓')} forgot ${count}`
+  );
+}
+
 async function commandNote(client: Client, args: Args): Promise<void> {
   const project = await requireProject(client, args, 'note');
   const rest = args.positional.slice(1).join(' ');
@@ -1101,6 +1137,8 @@ ${bold('Changing')}
   hide <project> [--off]                hide; --off unhides
   unhide <project>                      unhide (alias for hide --off)
   note <project> [text] [--clear]       read or write the note
+  forget <project>                      drop a project from the catalog for good
+  prune [-n, --dry-run]                 forget every catalog entry whose directory is gone
   set <project> [--intent <${INTENTS.join('|')}>]
                 [--excitement 1-5] [--importance 1-5]
                 [--next-action <text>] [--review-after YYYY-MM-DD]
@@ -1173,6 +1211,10 @@ async function main(argv: string[]): Promise<void> {
       return commandHide(client, args, true);
     case 'unhide':
       return commandHide(client, args, false);
+    case 'forget':
+      return commandForget(client, args);
+    case 'prune':
+      return commandPrune(client, args);
     case 'note':
       return commandNote(client, args);
     case 'set':

@@ -383,6 +383,31 @@ export class CatalogRepository {
     });
   }
 
+  /**
+   * Drops a project from the catalog entirely. Metrics, snapshots, stacks, and collection errors
+   * follow via ON DELETE CASCADE, so nothing is left keyed to a project that no longer exists.
+   */
+  async forgetProject(id: string): Promise<void> {
+    await this.catalog.write((database) => {
+      const result = database.query('DELETE FROM projects WHERE id = ?').run(id);
+      requireChanged(result.changes, id);
+    });
+  }
+
+  /** Bulk form of {@link forgetProject}; returns the ids that were actually removed. */
+  async forgetProjects(ids: readonly string[], lease?: ScanLeaseOwnership): Promise<string[]> {
+    if (ids.length === 0) return [];
+    return this.catalog.write((database) => {
+      const forgotten: string[] = [];
+      const operation = () => {
+        const statement = database.query('DELETE FROM projects WHERE id = ?');
+        for (const id of ids) if (statement.run(id).changes > 0) forgotten.push(id);
+      };
+      withLease(database, lease, operation);
+      return forgotten;
+    });
+  }
+
   async markUnseenMissing(
     scanRoots: readonly string[],
     seenProjectIds: readonly string[],

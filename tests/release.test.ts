@@ -154,12 +154,14 @@ describe('production LaunchAgent definitions', () => {
     expect(web).toContain('<key>ONGOING_ENABLE_SCAN_SCHEDULER</key><string>false</string>');
     expect(web).toContain('<key>RunAtLoad</key><true/>');
     expect(web).toContain('<key>KeepAlive</key><true/>');
+    // Scans triggered through the API run in this process, so it needs the collectors' tools too.
+    expect(web).toContain(`<key>PATH</key><string>${PRODUCTION_SCAN_PATH}</string>`);
   });
 
-  it('runs only the shared scanner at 04:00 with shared storage and no load loop', () => {
+  it('runs only the shared scanner at 03:00 with shared storage and no load loop', () => {
     expect(scan).toContain(`<key>Label</key><string>${PRODUCTION_SCAN_LABEL}</string>`);
     expect(scan.match(/<key>StartCalendarInterval<\/key>/g)).toHaveLength(1);
-    expect(scan).toMatch(/<key>Hour<\/key><integer>4<\/integer>/);
+    expect(scan).toMatch(/<key>Hour<\/key><integer>3<\/integer>/);
     expect(scan).toMatch(/<key>Minute<\/key><integer>0<\/integer>/);
     expect(scan).not.toContain('<key>RunAtLoad</key>');
     expect(scan).not.toContain('<key>KeepAlive</key>');

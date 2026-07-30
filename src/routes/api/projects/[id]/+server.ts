@@ -74,6 +74,20 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
   }
 };
 
+export const DELETE: RequestHandler = async ({ params }) => {
+  try {
+    const { catalogRepository } = await import('$lib/server/scanning/runtime');
+    await catalogRepository.forgetProject(params.id);
+    return json({ id: params.id, forgotten: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to forget project';
+    return json(
+      { error: message },
+      { status: message.startsWith('Unknown project ID:') ? 404 : 400 }
+    );
+  }
+};
+
 export const POST: RequestHandler = async ({ params, request }) => {
   const body = await requestObject(request);
   if (body instanceof Response) return body;

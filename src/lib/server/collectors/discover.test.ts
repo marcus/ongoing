@@ -171,7 +171,67 @@ describe('repository discovery', () => {
     await rm(existingPath, { recursive: true, force: true });
     const second = await discoverAndReconcile(repository, { scanRoots: [root] });
     expect(second.projects).toEqual([]);
+    expect(second.forgotten).toEqual([]);
     expect(repository.getProject(existing.id)).toMatchObject({ isMissing: true, isHidden: true });
+    catalog.close();
+  });
+
+  it('forgets a project once its directory is gone, and only when asked', async () => {
+    const root = await temporaryDirectory('ongoing-forget-');
+    const databasePath = join(await temporaryDirectory('ongoing-db-'), 'catalog.sqlite');
+    const catalog = new CatalogDatabase(databasePath);
+    const repository = new CatalogRepository(catalog);
+    const projectPath = join(root, 'doomed');
+    await initRepository(projectPath);
+
+    const [discovered] = (await discoverAndReconcile(repository, { scanRoots: [root] })).projects;
+    expect(discovered).toBeDefined();
+    await repository.updateNote(discovered.id, 'worth keeping until the directory goes');
+
+    // Still on disk: enabling the flag must not touch a project discovery simply found.
+    const present = await discoverAndReconcile(repository, {
+      scanRoots: [root],
+      forgetMissing: true
+    });
+    expect(present.forgotten).toEqual([]);
+    expect(repository.getProject(discovered.id)).not.toBeNull();
+
+    await rm(projectPath, { recursive: true, force: true });
+
+    // Gone from disk, but forgetting is off: the row survives so it can be reviewed.
+    const kept = await discoverAndReconcile(repository, { scanRoots: [root] });
+    expect(kept.forgotten).toEqual([]);
+    expect(repository.getProject(discovered.id)).toMatchObject({ isMissing: true });
+
+    const pruned = await discoverAndReconcile(repository, {
+      scanRoots: [root],
+      forgetMissing: true
+    });
+    expect(pruned.forgotten.map(({ id }) => id)).toEqual([discovered.id]);
+    expect(repository.getProject(discovered.id)).toBeNull();
+    catalog.close();
+  });
+
+  it('keeps a project that is merely undiscoverable rather than deleted', async () => {
+    const root = await temporaryDirectory('ongoing-undiscoverable-');
+    const databasePath = join(await temporaryDirectory('ongoing-db-'), 'catalog.sqlite');
+    const catalog = new CatalogDatabase(databasePath);
+    const repository = new CatalogRepository(catalog);
+    const projectPath = join(root, 'ignored');
+    await initRepository(projectPath);
+
+    const [discovered] = (await discoverAndReconcile(repository, { scanRoots: [root] })).projects;
+    expect(discovered).toBeDefined();
+
+    // An ignore glob hides it from discovery, so it is flagged missing while still on disk.
+    const result = await discoverAndReconcile(repository, {
+      scanRoots: [root],
+      ignoreGlobs: ['**/ignored/**', 'ignored'],
+      forgetMissing: true
+    });
+    expect(result.projects).toEqual([]);
+    expect(result.forgotten).toEqual([]);
+    expect(repository.getProject(discovered.id)).toMatchObject({ isMissing: true });
     catalog.close();
   });
 });

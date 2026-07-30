@@ -11,6 +11,7 @@ export interface AppConfig {
   gitConcurrency: number;
   clocConcurrency: number;
   automaticScanSchedulerEnabled: boolean;
+  forgetMissingProjects: boolean;
   releaseBaselineEnabled: boolean;
   releaseBaselineMaxAgeHours: number;
   releaseBaselineApiUrl: string;
@@ -135,6 +136,9 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       true,
       'ONGOING_ENABLE_SCAN_SCHEDULER'
     ),
+    // The catalog tracks ongoing work, not history: a project whose directory is gone is dropped
+    // rather than archived. Set false to keep missing rows and prune them by hand instead.
+    forgetMissingProjects: boolean(env.ONGOING_FORGET_MISSING, true, 'ONGOING_FORGET_MISSING'),
     releaseBaselineEnabled: boolean(
       env.ONGOING_ENABLE_RELEASE_BASELINE,
       true,

@@ -13,7 +13,7 @@
   <key>EnvironmentVariables</key>
   <dict>
     <!-- Collectors shell out to cloc and td; launchd's default PATH has neither. Keep in sync with ongoing.plist.example. -->
-    <key>PATH</key><string>/opt/homebrew/bin:/Users/marcus/go/bin:/Users/marcus/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     <key>SCAN_ROOTS</key><string>/Users/marcus/code</string>
     <key>DATABASE_PATH</key><string>/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite</string>
   </dict>

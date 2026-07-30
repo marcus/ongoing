@@ -39,6 +39,8 @@ export interface ScanResult {
   discoveredCount: number;
   updatedCount: number;
   errorCount: number;
+  /** Projects dropped because their directory is gone. Not persisted on the scan run. */
+  forgottenCount: number;
 }
 
 export interface ScanHandle {
@@ -57,7 +59,7 @@ export interface ScannerDependencies {
   progress?: ScanProgressBus;
   discover?: (
     repository: CatalogRepository,
-    config: Pick<AppConfig, 'scanRoots' | 'maxScanDepth' | 'ignoreGlobs'>,
+    config: Pick<AppConfig, 'scanRoots' | 'maxScanDepth' | 'ignoreGlobs' | 'forgetMissingProjects'>,
     lease: ScanLeaseOwnership
   ) => Promise<ReconciledDiscovery>;
   collectGit?: (repositoryPath: string, options: { signal: AbortSignal }) => Promise<GitMetrics>;
@@ -144,7 +146,8 @@ export class Scanner {
           {
             scanRoots: config.scanRoots,
             maxDepth: config.maxScanDepth,
-            ignoreGlobs: config.ignoreGlobs
+            ignoreGlobs: config.ignoreGlobs,
+            forgetMissing: config.forgetMissingProjects
           },
           lease
         ));
@@ -244,7 +247,7 @@ export class Scanner {
         message: errorMessage(error),
         ...counts
       });
-      return { runId, status: 'failed', ...counts };
+      return { runId, status: 'failed', ...counts, forgottenCount: 0 };
     } finally {
       this.clearInterval(heartbeat);
     }
@@ -257,9 +260,10 @@ export class Scanner {
     signal: AbortSignal
   ): Promise<ScanResult> {
     const counts = { discoveredCount: 0, updatedCount: 0, errorCount: 0 };
+    let forgottenCount = 0;
     const cancelled = (): ScanResult => {
       this.progress.publish({ runId, type: 'cancelled', at: this.now(), ...counts });
-      return { runId, status: 'cancelled', ...counts };
+      return { runId, status: 'cancelled', ...counts, forgottenCount };
     };
     try {
       let projects: Project[];
@@ -270,6 +274,7 @@ export class Scanner {
       } else {
         const discovery = await this.discover(this.repository, this.config, lease);
         counts.discoveredCount = discovery.projects.length;
+        forgottenCount = discovery.forgotten.length;
         projects = discovery.enrichmentProjects;
         await this.repository.updateScanRunProgress(runId, counts, lease);
         this.progress.publish({
@@ -537,7 +542,7 @@ export class Scanner {
 
       await this.repository.finishScanRun(runId, 'completed', counts, this.now(), lease);
       this.progress.publish({ runId, type: 'completed', at: this.now(), ...counts });
-      return { runId, status: 'completed', ...counts };
+      return { runId, status: 'completed', ...counts, forgottenCount };
     } catch (error) {
       if (error instanceof ScanLeaseLostError || signal.aborted) return cancelled();
       counts.errorCount += 1;
@@ -549,7 +554,7 @@ export class Scanner {
         throw finishError;
       }
       this.progress.publish({ runId, type: 'failed', at: this.now(), message, ...counts });
-      return { runId, status: 'failed', ...counts };
+      return { runId, status: 'failed', ...counts, forgottenCount };
     }
   }
 }
