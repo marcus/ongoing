@@ -66,6 +66,30 @@ describe('LOC collection', () => {
     );
   });
 
+  it('counts a repository that cannot be fingerprinted instead of failing', async () => {
+    const runner = vi.fn<CommandRunner>().mockResolvedValue({
+      command: ['cloc'],
+      cwd: '/repo',
+      exitCode: 0,
+      stdout: clocOutput,
+      stderr: '',
+      timedOut: false
+    });
+
+    const result = await collectLocMetrics('/repo', {
+      runner,
+      fingerprint: async () => null,
+      previousFingerprint: null,
+      now: () => '2026-07-19T10:00:00.000Z'
+    });
+
+    expect(result).toMatchObject({
+      status: 'collected',
+      metrics: { locCode: 38, locFingerprint: null }
+    });
+    expect(runner).toHaveBeenCalledTimes(1);
+  });
+
   it('reports cloc errors without manufacturing fresh metrics', async () => {
     const runner: CommandRunner = async (command, options) => ({
       command,

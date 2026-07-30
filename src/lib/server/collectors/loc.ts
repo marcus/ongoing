@@ -8,7 +8,7 @@ export interface LocMetrics {
   locFiles: number;
   locTest: number;
   dominantLanguage: string | null;
-  locFingerprint: string;
+  locFingerprint: string | null;
   locScannedAt: string;
 }
 
@@ -112,8 +112,9 @@ export async function collectLocMetrics(
         timeoutMs: options.timeoutMs,
         signal: options.signal
       }));
-  if (!fingerprint) throw new Error('Unable to fingerprint Git-tracked files');
-  if (!options.force && fingerprint === options.previousFingerprint)
+  // The fingerprint is only a cache key. A repository that cannot produce one still gets counted;
+  // it just re-runs cloc every scan instead of failing the collector.
+  if (fingerprint !== null && !options.force && fingerprint === options.previousFingerprint)
     return { status: 'unchanged', fingerprint };
 
   const result = await runner(['cloc', '--json', '--by-file', '--vcs', 'git'], {

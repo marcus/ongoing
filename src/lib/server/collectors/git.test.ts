@@ -172,4 +172,20 @@ describe('scan fingerprints', () => {
     await writeFile(join(repository, 'tracked.txt'), 'two\n');
     expect(await collectTrackedWorktreeFingerprint(repository)).not.toBe(clean);
   });
+
+  it('fingerprints a repository whose first commit does not exist yet', async () => {
+    const repository = await makeRepository('unborn');
+    const empty = await collectTrackedWorktreeFingerprint(repository);
+    expect(empty).toBeTypeOf('string');
+    await writeFile(join(repository, 'untracked.txt'), 'ignored\n');
+    expect(await collectTrackedWorktreeFingerprint(repository)).toBe(empty);
+    await commit(repository, 'tracked.txt', 'one\n', 'first');
+    expect(await collectTrackedWorktreeFingerprint(repository)).not.toBe(empty);
+  });
+
+  it('reports no fingerprint outside a repository', async () => {
+    const parent = await mkdtemp(join(tmpdir(), 'ongoing-git-'));
+    temporaryDirectories.push(parent);
+    expect(await collectTrackedWorktreeFingerprint(parent)).toBeNull();
+  });
 });

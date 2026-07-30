@@ -11,6 +11,8 @@
   <key>WorkingDirectory</key><string>/Users/marcus/code/ongoing</string>
   <key>EnvironmentVariables</key>
   <dict>
+    <!-- Collectors shell out to cloc and td; launchd's default PATH has neither. Keep in sync with ongoing-scan.plist.example. -->
+    <key>PATH</key><string>/opt/homebrew/bin:/Users/marcus/go/bin:/Users/marcus/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     <key>HOST</key><string>0.0.0.0</string>
     <key>PORT</key><string>7766</string>
     <key>ORIGIN</key><string>http://aerie.local:7766</string>

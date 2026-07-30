@@ -90,9 +90,10 @@ async function git(
   repositoryPath: string,
   timeoutMs: number,
   args: readonly string[],
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  maxBufferBytes?: number
 ): Promise<CommandResult> {
-  return runner(['git', ...args], { cwd: repositoryPath, timeoutMs, signal });
+  return runner(['git', ...args], { cwd: repositoryPath, timeoutMs, signal, maxBufferBytes });
 }
 
 export async function collectGitMetrics(
@@ -262,6 +263,12 @@ export function createScanFingerprint(parts: readonly (string | null | undefined
   return hash.digest('hex');
 }
 
+/** Git's canonical empty tree, used as the diff base before the first commit exists. */
+const EMPTY_TREE_OID = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+
+/** The diff is hashed rather than read, so a dirty worktree may far exceed the default buffer. */
+const FINGERPRINT_MAX_BUFFER_BYTES = 256 * 1024 * 1024;
+
 /** Fingerprint HEAD plus staged and unstaged changes to tracked files. */
 export async function collectTrackedWorktreeFingerprint(
   repositoryPath: string,
@@ -269,18 +276,26 @@ export async function collectTrackedWorktreeFingerprint(
 ): Promise<string | null> {
   const runner = options.runner ?? runCommand;
   const timeoutMs = options.timeoutMs ?? 10_000;
-  const [head, diff] = await Promise.all([
-    git(runner, repositoryPath, timeoutMs, ['rev-parse', '--verify', 'HEAD'], options.signal),
+  const diffAgainst = (base: string) =>
     git(
       runner,
       repositoryPath,
       timeoutMs,
-      ['diff', '--binary', '--no-ext-diff', 'HEAD', '--'],
-      options.signal
-    )
+      ['diff', '--binary', '--no-ext-diff', base, '--'],
+      options.signal,
+      FINGERPRINT_MAX_BUFFER_BYTES
+    );
+  const [head, diff] = await Promise.all([
+    git(runner, repositoryPath, timeoutMs, ['rev-parse', '--verify', 'HEAD'], options.signal),
+    diffAgainst('HEAD')
   ]);
   const headOutput = successful(head);
-  const diffOutput = successful(diff);
-  if (headOutput === null || diffOutput === null) return null;
-  return createScanFingerprint([headOutput.trim(), diffOutput]);
+  if (headOutput !== null) {
+    const diffOutput = successful(diff);
+    return diffOutput === null ? null : createScanFingerprint([headOutput.trim(), diffOutput]);
+  }
+  // A branch whose first commit does not exist yet is still a valid repository, so fall back to
+  // the empty tree rather than reporting an unfingerprintable repo.
+  const initial = successful(await diffAgainst(EMPTY_TREE_OID));
+  return initial === null ? null : createScanFingerprint([EMPTY_TREE_OID, initial]);
 }

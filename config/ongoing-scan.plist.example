@@ -12,13 +12,14 @@
   <key>WorkingDirectory</key><string>/Users/marcus/code/ongoing</string>
   <key>EnvironmentVariables</key>
   <dict>
-    <key>PATH</key><string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <!-- Collectors shell out to cloc and td; launchd's default PATH has neither. Keep in sync with ongoing.plist.example. -->
+    <key>PATH</key><string>/opt/homebrew/bin:/Users/marcus/go/bin:/Users/marcus/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     <key>SCAN_ROOTS</key><string>/Users/marcus/code</string>
     <key>DATABASE_PATH</key><string>/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite</string>
   </dict>
   <key>StartCalendarInterval</key>
   <dict>
-    <key>Hour</key><integer>4</integer>
+    <key>Hour</key><integer>3</integer>
     <key>Minute</key><integer>0</integer>
   </dict>
   <key>StandardOutPath</key><string>/Users/marcus/Library/Logs/Ongoing/scan-stdout.log</string>
