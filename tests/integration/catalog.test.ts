@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CatalogDatabase } from '../../src/lib/server/catalog/database';
-import { latestSchemaVersion } from '../../src/lib/server/catalog/migrations';
+import { latestSchemaVersion, splitStatements } from '../../src/lib/server/catalog/migrations';
 import { CatalogRepository, stableProjectId } from '../../src/lib/server/catalog/repository';
 import {
   readDashboardCatalog,
@@ -42,16 +42,18 @@ afterEach(() => {
   }
 });
 
+function seedFixture(path: string, fixture: string): void {
+  const database = new Database(path, { create: true });
+  database.exec(readFileSync(`tests/fixtures/catalog/${fixture}.sql`, 'utf8'));
+  database.close();
+}
+
 describe('catalog migrations', () => {
-  it.each(['empty', 'v0'])(
+  it.each(['empty', 'v0', 'v2'])(
     'migrates an %s database idempotently and transactionally',
     (fixture) => {
       const path = databasePath();
-      if (fixture === 'v0') {
-        const database = new Database(path, { create: true });
-        database.exec(readFileSync('tests/fixtures/catalog/v0.sql', 'utf8'));
-        database.close();
-      }
+      if (fixture !== 'empty') seedFixture(path, fixture);
 
       const first = new CatalogDatabase(path);
       const applied = first.sqlite
@@ -66,7 +68,10 @@ describe('catalog migrations', () => {
           { name: 'project_metrics' },
           { name: 'metric_snapshots' },
           { name: 'collection_errors' },
-          { name: 'scan_runs' }
+          { name: 'scan_runs' },
+          { name: 'project_stacks' },
+          { name: 'toolchain_releases' },
+          { name: 'toolchain_baseline_status' }
         ])
       );
       expect(first.sqlite.query('PRAGMA foreign_keys').get()).toEqual({ foreign_keys: 1 });
@@ -87,6 +92,77 @@ describe('catalog migrations', () => {
       reopened.close();
     }
   );
+
+  it('rolls a migration back when any one of its statements fails', () => {
+    // `Database.exec()` silently swallows a failing statement mid-script and keeps going, which
+    // would let a rebuild drop a table after its copy failed. Statements run individually instead.
+    const path = databasePath();
+    const database = new Database(path, { create: true });
+    database.exec('CREATE TABLE keep (x INTEGER PRIMARY KEY)');
+    database.exec('INSERT INTO keep VALUES (1)');
+    database.close();
+
+    const reopened = new Database(path);
+    expect(() =>
+      reopened
+        .transaction(() => {
+          for (const statement of splitStatements(
+            'INSERT INTO keep VALUES (2);\nINSERT INTO keep VALUES (1);\nDROP TABLE keep;'
+          ))
+            reopened.run(statement);
+        })
+        .immediate()
+    ).toThrow(/UNIQUE/);
+    expect(reopened.query('SELECT x FROM keep').all()).toEqual([{ x: 1 }]);
+    reopened.close();
+  });
+
+  it('splits statements without breaking on comments or quoted literals', () => {
+    expect(
+      splitStatements(
+        "-- leading comment; not a boundary\nCREATE TABLE t (\n  c TEXT CHECK (c IN ('a;b', 'c'))\n); -- trailing\nCREATE INDEX i ON t(c);\n"
+      )
+    ).toEqual([
+      "CREATE TABLE t (\n  c TEXT CHECK (c IN ('a;b', 'c'))\n)",
+      'CREATE INDEX i ON t(c)'
+    ]);
+  });
+
+  it('preserves recorded collection errors while widening the collector constraint', () => {
+    const path = databasePath();
+    seedFixture(path, 'v2');
+    const catalog = new CatalogDatabase(path);
+
+    expect(catalog.sqlite.query('SELECT * FROM collection_errors').all()).toEqual([
+      {
+        project_id: 'project_legacy',
+        collector: 'git',
+        message: 'git failed',
+        occurred_at: '2026-01-02T00:00:00.000Z',
+        resolved_at: null
+      }
+    ]);
+    expect(() =>
+      catalog.sqlite
+        .query(
+          "INSERT INTO collection_errors (project_id, collector, message, occurred_at) VALUES ('project_legacy', 'stack', 'go.mod unreadable', '2026-01-03T00:00:00.000Z')"
+        )
+        .run()
+    ).not.toThrow();
+    expect(() =>
+      catalog.sqlite
+        .query(
+          "INSERT INTO collection_errors (project_id, collector, message, occurred_at) VALUES ('project_legacy', 'invented', 'nope', '2026-01-03T00:00:00.000Z')"
+        )
+        .run()
+    ).toThrow();
+    expect(
+      catalog.sqlite
+        .query("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?")
+        .all('collection_errors_active')
+    ).toEqual([{ name: 'collection_errors_active' }]);
+    catalog.close();
+  });
 });
 
 describe('catalog repository', () => {
@@ -291,6 +367,74 @@ describe('catalog repository', () => {
       repository.updateNote(project.id, 'third')
     ]);
     expect(repository.getProject(project.id)?.note).toBe('third');
+    catalog.close();
+  });
+
+  it('replaces stack declarations wholesale so removed manifests stop reporting', async () => {
+    const { catalog, repository } = openRepository();
+    const project = await addProject(repository, 'stacked');
+
+    await repository.replaceProjectStacks(project.id, [
+      { toolchain: 'go', declared: '1.22', raw: '1.22', sourceFile: 'go.mod' },
+      { toolchain: 'node', declared: '20', raw: '>=20', sourceFile: 'package.json' }
+    ]);
+    expect(repository.listProjectStacks(project.id)).toEqual([
+      { toolchain: 'go', declared: '1.22', raw: '1.22', sourceFile: 'go.mod' },
+      { toolchain: 'node', declared: '20', raw: '>=20', sourceFile: 'package.json' }
+    ]);
+
+    await repository.replaceProjectStacks(project.id, [
+      { toolchain: 'go', declared: '1.24', raw: '1.24', sourceFile: 'go.mod' }
+    ]);
+    expect(repository.listProjectStacks(project.id)).toEqual([
+      { toolchain: 'go', declared: '1.24', raw: '1.24', sourceFile: 'go.mod' }
+    ]);
+    expect([...repository.listAllProjectStacks().keys()]).toEqual([project.id]);
+    catalog.close();
+  });
+
+  it('keeps cached release cycles when a baseline refresh fails', async () => {
+    const { catalog, repository } = openRepository();
+    const cycle = {
+      toolchain: 'go' as const,
+      cycle: '1.25',
+      latest: '1.25.12',
+      releaseDate: '2025-08-12',
+      eolFrom: null,
+      isEol: false,
+      isMaintained: true,
+      isLts: false,
+      fetchedAt: '2026-07-29T00:00:00.000Z'
+    };
+    await repository.replaceToolchainReleases(
+      {
+        toolchain: 'go',
+        availability: 'available',
+        fetchedAt: '2026-07-29T00:00:00.000Z',
+        message: null
+      },
+      [cycle]
+    );
+    expect(repository.listToolchainReleases().get('go')).toEqual([cycle]);
+
+    await repository.replaceToolchainReleases(
+      {
+        toolchain: 'go',
+        availability: 'unavailable',
+        fetchedAt: '2026-07-30T00:00:00.000Z',
+        message: 'network unreachable'
+      },
+      []
+    );
+    expect(repository.listToolchainReleases().get('go')).toEqual([cycle]);
+    expect(repository.listBaselineStatus()).toEqual([
+      {
+        toolchain: 'go',
+        availability: 'unavailable',
+        fetchedAt: '2026-07-30T00:00:00.000Z',
+        message: 'network unreachable'
+      }
+    ]);
     catalog.close();
   });
 

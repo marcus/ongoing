@@ -4,6 +4,7 @@
   import ActivityBars from './ActivityBars.svelte';
   import ProjectDrawer from './ProjectDrawer.svelte';
   import type { ProjectDecisionUpdate } from '$lib/domain/project';
+  import type { AttentionClassification } from '$lib/domain/attention';
 
   let {
     project,
@@ -34,6 +35,11 @@
   }>();
   let menuOpen = $state(false);
   let metrics = $derived(project.metrics);
+  // Reuses the existing flag strip rather than claiming a tenth grid column.
+  let upgrade: AttentionClassification = $derived(project.attention.upgrade);
+  let outdatedStack = $derived(
+    upgrade.member ? upgrade.reasons.map(({ message }) => message).join(' · ') : null
+  );
   let oldExternalPr = $derived(
     metrics?.githubOldestExternalPrAt
       ? (Date.now() - Date.parse(metrics.githubOldestExternalPrAt)) / 86_400_000 >= 30
@@ -190,6 +196,7 @@
           class="warn"
           title={`${metrics.tdStaleCount} stale TD issues`}>~</span
         >{/if}
+      {#if outdatedStack}<span class="warn" title={outdatedStack}>⇧</span>{/if}
       {#if staleGit}<span class="warn" title="Local Git metrics are stale">◷</span>{/if}
       {#if staleTd}<span class="warn" title="TD metrics are stale">◷</span>{/if}
       {#if staleGithub}<span class="warn" title="GitHub metrics are stale">◷</span>{/if}

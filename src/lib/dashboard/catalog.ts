@@ -11,6 +11,13 @@ import {
   type SortDirection,
   type SortKey
 } from '$lib/domain/sorting';
+import {
+  resolveStack,
+  toolchainKeys,
+  type Toolchain,
+  type ToolchainBaselineStatus,
+  type ToolchainRelease
+} from '$lib/domain/stack';
 import type { CatalogRepository } from '$lib/server/catalog/repository';
 
 export const viewKeys = attentionViewKeys;
@@ -36,6 +43,7 @@ export interface DashboardQuery {
   search: string;
   filter: FilterKey;
   view: ViewKey | null;
+  stack: Toolchain | null;
   group: GroupKey;
 }
 
@@ -44,6 +52,7 @@ export interface DashboardCatalog {
   hiddenCount: number;
   totalCount: number;
   scan: ScanRun | null;
+  baselines: ToolchainBaselineStatus[];
   generatedAt: string;
 }
 
@@ -57,7 +66,9 @@ export interface DashboardPageModel extends DashboardCatalog {
 function dashboardProject(
   repository: CatalogRepository,
   project: ReturnType<CatalogRepository['listProjects']>[number],
-  now: Date
+  now: Date,
+  releases: ReadonlyMap<Toolchain, ToolchainRelease[]>,
+  declarations: ReadonlyMap<string, ReturnType<CatalogRepository['listProjectStacks']>>
 ): DashboardProject {
   const metrics = repository.getMetrics(project.id);
   const snapshots = repository.listSnapshots(project.id);
@@ -65,6 +76,11 @@ function dashboardProject(
     ...project,
     metrics,
     snapshots,
+    // Resolved here rather than persisted so the classifier stays a pure function of the project
+    // and can be re-run in the browser after an optimistic edit.
+    stacks: (declarations.get(project.id) ?? []).map((stack) =>
+      resolveStack(stack, releases.get(stack.toolchain) ?? [], now.getTime())
+    ),
     errors: repository.listCollectionErrors(project.id, true),
     githubStarsGained30d: metricDelta30d(
       snapshots,
@@ -102,6 +118,7 @@ export function parseDashboardQuery(params: URLSearchParams): DashboardQuery {
   const rawDirection = params.get('dir');
   const rawFilter = params.get('filter');
   const rawView = params.get('view');
+  const rawStack = params.get('stack');
   const rawGroup = params.get('group');
   return {
     sort: member(sortKeys, rawSort) ? rawSort : 'latestCommit',
@@ -109,8 +126,22 @@ export function parseDashboardQuery(params: URLSearchParams): DashboardQuery {
     search: (params.get('q') ?? '').slice(0, 200),
     filter: member(filterKeys, rawFilter) ? rawFilter : 'all',
     view: member(viewKeys, rawView) ? rawView : null,
+    stack: member(toolchainKeys, rawStack) ? rawStack : null,
     group: member(groupKeys, rawGroup) ? rawGroup : 'favorites'
   };
+}
+
+/** Toolchains present in a catalog, with how many projects declare each, for filter controls. */
+export function stackCounts(
+  projects: readonly DashboardProject[]
+): { key: Toolchain; count: number }[] {
+  const counts = new Map<Toolchain, number>();
+  for (const project of projects)
+    for (const toolchain of new Set(project.stacks.map((stack) => stack.toolchain)))
+      counts.set(toolchain, (counts.get(toolchain) ?? 0) + 1);
+  return [...counts]
+    .map(([key, count]) => ({ key, count }))
+    .sort((left, right) => right.count - left.count || left.key.localeCompare(right.key, 'en'));
 }
 
 export function metricDelta30d(
@@ -137,14 +168,18 @@ export function classifyProject(
 
 function readCatalog(repository: CatalogRepository, hidden: boolean, now: Date): DashboardCatalog {
   const allProjects = repository.listProjects({ includeHidden: true });
+  // Release cycles and declarations are read once for the whole catalog rather than per project.
+  const releases = repository.listToolchainReleases();
+  const declarations = repository.listAllProjectStacks();
   const projects = allProjects
     .filter((project) => project.isHidden === hidden)
-    .map((project) => dashboardProject(repository, project, now));
+    .map((project) => dashboardProject(repository, project, now, releases, declarations));
   return {
     projects,
     hiddenCount: hidden ? projects.length : allProjects.length - projects.length,
     totalCount: allProjects.length,
     scan: repository.getLatestScanRun(),
+    baselines: repository.listBaselineStatus(),
     generatedAt: now.toISOString()
   };
 }
@@ -194,6 +229,8 @@ export function applyDashboardQuery(
     )
       return false;
     if (query.filter === 'local' && project.metrics?.githubRepoId) return false;
+    if (query.stack && !project.stacks.some(({ toolchain }) => toolchain === query.stack))
+      return false;
     return true;
   });
   visible = sortProjects(visible, query.sort, query.direction) as DashboardProject[];
@@ -231,6 +268,7 @@ export function emptyDashboardCatalog(now = new Date()): DashboardCatalog {
     hiddenCount: 0,
     totalCount: 0,
     scan: null,
+    baselines: [],
     generatedAt: now.toISOString()
   };
 }

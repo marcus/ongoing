@@ -40,6 +40,8 @@ ongoing                                   # every project, dashboard ordering
 ongoing list --view attention --json      # machine-readable attention view
 ongoing show .                            # the repo you are standing in, with attention reasons
 ongoing set td --intent invest            # the same fields the drawer edits
+ongoing stacks                            # declared toolchains, versions in use, upgrade pressure
+ongoing list --stack go --view upgrade    # Go projects whose toolchain is behind or end-of-life
 ongoing scan --full --wait
 ```
 
@@ -51,11 +53,11 @@ The production source of truth is the private repository `git@github.com:marcus/
 
 ## Architecture
 
-The full product plan lives in `docs/plans/ongoing-projects-dashboard.md`. The initial architectural constraints are recorded in `docs/adr/`: app-owned storage, provider boundaries, and cache-first bounded scanning.
+The full product plan lives in `docs/plans/ongoing-projects-dashboard.md`. The initial architectural constraints are recorded in `docs/adr/`: app-owned storage, provider boundaries, cache-first bounded scanning, and toolchain release baselines.
 
 ## Attention views
 
-Attention views are separate, transparent classifications implemented in `src/lib/domain/attention.ts`; Ongoing does not calculate a grand priority score. The drawer shows every matching reason with its input, value, comparison, and threshold. Git, LOC, TD, GitHub, and traffic measurements must have been collected successfully within 72 hours. Null, invalid, stale, rate-limited, unauthenticated, or unavailable inputs do not satisfy metric rules.
+Attention views are separate, transparent classifications implemented in `src/lib/domain/attention.ts`; Ongoing does not calculate a grand priority score. The drawer shows every matching reason with its input, value, comparison, and threshold. Git, LOC, TD, stack, GitHub, and traffic measurements must have been collected successfully within 72 hours. Null, invalid, stale, rate-limited, unauthenticated, or unavailable inputs do not satisfy metric rules.
 
 Current thresholds:
 
@@ -65,5 +67,6 @@ Current thresholds:
 - Momentum: at least 10 commits or 5 active days in 30 days, a merged PR, or a release in the last 30 days.
 - Quick wins: at most 5,000 lines of code plus a known actionable TD or GitHub backlog of 1–5 items.
 - Dormant: no commits in 30 days, latest commit at least 90 days old, fresh evidence of no external PRs/recent issues/star growth, and intent is not `invest`.
+- Upgrade: a declared toolchain whose release cycle is past end of life, or that is at least 2 supported release cycles behind the newest one. Requires both fresh stack data and release-baseline data collected within 14 days.
 
 These values are product policy rather than score weights. Tune the exported `ATTENTION_THRESHOLDS` constants and their boundary tests together.

@@ -28,6 +28,7 @@
   --green-dim: #64834e;
   --red: #f06b62;
   --cyan: #68c9dc;
+  --amber: #e8b13f;
   --shadow: rgb(0 0 0 / 45%);
 }
 
@@ -46,6 +47,7 @@
   --green-dim: #4e7d55;
   --red: #ff756b;
   --cyan: #73cee4;
+  --amber: #e0b25c;
   --shadow: rgb(0 0 0 / 45%);
 }
 
@@ -64,6 +66,7 @@
   --green-dim: #607d4c;
   --red: #a62921;
   --cyan: #155f70;
+  --amber: #8a5a12;
   --shadow: rgb(60 45 20 / 22%);
 }
 
@@ -82,6 +85,7 @@
   --green-dim: #587746;
   --red: #ed675e;
   --cyan: #68cbb0;
+  --amber: #d8b83c;
   --shadow: rgb(0 0 0 / 45%);
 }
 
@@ -100,6 +104,7 @@
   --green-dim: #4e7d59;
   --red: #f45b61;
   --cyan: #6bcee4;
+  --amber: #f0b45e;
   --shadow: rgb(0 0 0 / 45%);
 }
 
@@ -457,6 +462,9 @@ textarea:focus-visible,
 .chip.dim b {
   color: var(--ink-faint);
 }
+.chip.amber b {
+  color: var(--amber);
+}
 
 .chip.active {
   color: var(--bg);
@@ -747,6 +755,22 @@ svg rect.empty {
 .kv .up {
   color: var(--green);
   font-weight: 600;
+}
+
+.kv .lag {
+  color: var(--amber);
+  font-weight: 600;
+}
+
+.kv .eol {
+  color: var(--red);
+  font-weight: 600;
+}
+
+.empty-note {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 12px;
 }
 
 .none {

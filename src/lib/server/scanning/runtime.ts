@@ -1,24 +1,18 @@
 import { CatalogDatabase } from '$lib/server/catalog/database';
 import { CatalogRepository } from '$lib/server/catalog/repository';
 import { loadConfig } from '$lib/server/config';
-import { collectGitHubEnrichment } from '$lib/server/collectors/github';
-import { GitHubHttpClient } from '$lib/server/github/client';
-import { GitHubHostingMetricsProvider } from '$lib/server/github/provider';
+import { createScannerDependencies } from './dependencies';
 import { ScanScheduler } from './scheduler';
 import { Scanner, ScanInProgressError } from './scanner';
 
 const config = loadConfig();
 const database = new CatalogDatabase(config.databasePath);
 export const catalogRepository = new CatalogRepository(database);
-const githubProvider = new GitHubHostingMetricsProvider(new GitHubHttpClient());
-export const catalogScanner = new Scanner(catalogRepository, config, {
-  collectHosting: (repository, projects, options) =>
-    collectGitHubEnrichment(repository, projects, {
-      ...options,
-      provider: githubProvider,
-      now: () => new Date()
-    })
-});
+export const catalogScanner = new Scanner(
+  catalogRepository,
+  config,
+  createScannerDependencies(config)
+);
 export const catalogScanScheduler = new ScanScheduler(catalogScanner);
 
 const enrichmentTimers = new Map<string, ReturnType<typeof setTimeout>>();

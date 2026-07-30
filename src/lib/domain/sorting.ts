@@ -1,5 +1,6 @@
 import type { Project } from './project';
 import type { ProjectMetrics } from './metrics';
+import { stackLag, type ResolvedStack } from './stack';
 
 export const sortKeys = [
   'manual',
@@ -14,6 +15,7 @@ export const sortKeys = [
   'githubOpenPrs',
   'githubOldestExternalPr',
   'githubTraffic',
+  'stackLag',
   'name'
 ] as const;
 
@@ -23,6 +25,7 @@ export type SortDirection = 'asc' | 'desc';
 export interface SortableProject extends Project {
   metrics: ProjectMetrics | null;
   githubStarsGained30d: number | null;
+  stacks: ResolvedStack[];
 }
 
 type SortValue = string | number | null;
@@ -40,6 +43,7 @@ const selectors: Record<SortKey, (project: SortableProject) => SortValue> = {
   githubOpenPrs: (project) => project.metrics?.githubOpenPrs ?? null,
   githubOldestExternalPr: (project) => project.metrics?.githubOldestExternalPrAt ?? null,
   githubTraffic: (project) => project.metrics?.githubTrafficViews ?? null,
+  stackLag: (project) => stackLag(project.stacks),
   name: (project) => project.name
 };
 

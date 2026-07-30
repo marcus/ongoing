@@ -1,12 +1,34 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectMetrics } from './metrics';
+import type { ResolvedStack } from './stack';
 import type { SortableProject, SortKey } from './sorting';
 import { sortKeys, sortProjects } from './sorting';
+
+function behind(cyclesBehind: number): ResolvedStack {
+  return {
+    toolchain: 'go',
+    declared: '1.22',
+    raw: '1.22',
+    sourceFile: 'go.mod',
+    status: 'behind',
+    matchedCycle: '1.22',
+    cycleLatestRelease: null,
+    latestCycle: '1.25',
+    latestRelease: null,
+    cyclesBehind,
+    eolFrom: null,
+    baselineFetchedAt: '2026-01-01T00:00:00Z'
+  };
+}
 
 function item(
   id: string,
   name: string,
-  values: Partial<ProjectMetrics> & { manualRank?: number; githubStarsGained30d?: number | null }
+  values: Partial<ProjectMetrics> & {
+    manualRank?: number;
+    githubStarsGained30d?: number | null;
+    stacks?: ResolvedStack[];
+  }
 ): SortableProject {
   return {
     id,
@@ -28,13 +50,15 @@ function item(
     lastSeenAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
     metrics: { projectId: id, ...values } as ProjectMetrics,
-    githubStarsGained30d: values.githubStarsGained30d ?? null
+    githubStarsGained30d: values.githubStarsGained30d ?? null,
+    stacks: values.stacks ?? []
   };
 }
 
 type SortTestValues = Partial<ProjectMetrics> & {
   manualRank?: number;
   githubStarsGained30d?: number | null;
+  stacks?: ResolvedStack[];
 };
 
 const valuesByKey: Record<SortKey, [SortTestValues, SortTestValues]> = {
@@ -53,6 +77,7 @@ const valuesByKey: Record<SortKey, [SortTestValues, SortTestValues]> = {
     { githubOldestExternalPrAt: '2026-02-01' }
   ],
   githubTraffic: [{ githubTrafficViews: 1 }, { githubTrafficViews: 2 }],
+  stackLag: [{ stacks: [behind(1)] }, { stacks: [behind(2)] }],
   name: [{}, {}]
 };
 

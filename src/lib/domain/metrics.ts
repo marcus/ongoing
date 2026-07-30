@@ -71,6 +71,7 @@ export interface ProjectMetrics {
   githubTrafficAvailability: ProviderAvailability | null;
   gitScannedAt: string | null;
   locScannedAt: string | null;
+  stackScannedAt: string | null;
   tdScannedAt: string | null;
   githubScannedAt: string | null;
   githubTrafficScannedAt: string | null;
@@ -96,7 +97,15 @@ export interface MetricSnapshot {
   value: number;
 }
 
-export const collectors = ['discovery', 'git', 'loc', 'issues', 'hosting', 'traffic'] as const;
+export const collectors = [
+  'discovery',
+  'git',
+  'loc',
+  'issues',
+  'hosting',
+  'traffic',
+  'stack'
+] as const;
 export type Collector = (typeof collectors)[number];
 
 export interface CollectionError {

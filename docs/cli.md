@@ -43,8 +43,9 @@ ongoing show snap        # unique substring
 
 ```
 ongoing [list]                        list projects (the default command)
-  --view <attention|rising|quickwin|opportunity|momentum|dormant>
+  --view <attention|rising|quickwin|opportunity|momentum|dormant|upgrade>
   --filter <all|favorites|missing|warnings|local>
+  --stack <go|node|bun|deno|python|ruby|rust|php|elixir|dotnet|java|swift|postgresql>
   --sort <key> [--asc|--desc]         any sort key the dashboard offers
   -q, --search <text>                 name, path, or note
   -n, --limit <count>
@@ -52,6 +53,9 @@ ongoing [list]                        list projects (the default command)
   --paths | --ids | --json            machine-readable output
 ongoing show <project>                everything, including why each attention view matched
 ongoing views                         attention view counts
+ongoing stacks [toolchain]            declared toolchains, versions in use, upgrade pressure
+  --outdated                          only declarations that are behind or end-of-life
+  plus every `list` narrowing flag (--view, --filter, --search, --hidden)
 ongoing status                        service, agent, scan, and catalog health
 ongoing path <project>                print the directory (`cd $(ongoing path td)`)
 
@@ -77,6 +81,8 @@ stdout is not a TTY or `NO_COLOR` is set, so the CLI composes:
 
 ```sh
 ongoing list --view attention --json | jq -r '.[] | select(.errors | length > 0) | .name'
+ongoing list --stack go --view upgrade --paths        # every Go project that needs a bump
+ongoing stacks --json | jq -r '.[] | "\(.toolchain) \(.outdated)/\(.projects) outdated"'
 for path in $(ongoing list --filter favorites --paths); do git -C "$path" fetch --quiet; done
 ```
 

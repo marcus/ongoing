@@ -1,13 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectMetrics } from '$lib/domain/metrics';
 import { classifyAttentionViews } from '$lib/domain/attention';
+import { resolveStack, type ResolvedStack, type Toolchain } from '$lib/domain/stack';
 import type { DashboardProject } from './catalog';
 import {
   applyDashboardQuery,
   classifyProject,
   metricDelta30d,
-  parseDashboardQuery
+  parseDashboardQuery,
+  stackCounts
 } from './catalog';
+
+function declares(toolchain: Toolchain, declared = '1.0'): ResolvedStack {
+  return resolveStack({ toolchain, declared, raw: declared, sourceFile: 'manifest' }, []);
+}
 
 function project(
   id: string,
@@ -17,6 +23,7 @@ function project(
     missing?: boolean;
     metrics?: Partial<ProjectMetrics>;
     starsDelta?: number | null;
+    stacks?: ResolvedStack[];
   } = {}
 ): DashboardProject {
   const base = {
@@ -42,6 +49,7 @@ function project(
     githubStarsGained30d: options.starsDelta ?? null,
     githubTrafficViewsDelta30d: null,
     githubTrafficClonesDelta30d: null,
+    stacks: options.stacks ?? [],
     errors: [],
     snapshots: []
   };
@@ -55,7 +63,7 @@ describe('dashboard catalog model', () => {
     expect(
       parseDashboardQuery(
         new URLSearchParams(
-          'sort=githubOldestExternalPr&dir=asc&q=release&filter=warnings&view=attention&group=none'
+          'sort=githubOldestExternalPr&dir=asc&q=release&filter=warnings&view=attention&stack=go&group=none'
         )
       )
     ).toEqual({
@@ -64,16 +72,42 @@ describe('dashboard catalog model', () => {
       search: 'release',
       filter: 'warnings',
       view: 'attention',
+      stack: 'go',
       group: 'none'
     });
 
-    expect(parseDashboardQuery(new URLSearchParams('sort=wat&filter=wat&view=wat'))).toMatchObject({
+    expect(
+      parseDashboardQuery(new URLSearchParams('sort=wat&filter=wat&view=wat&stack=cobol'))
+    ).toMatchObject({
       sort: 'latestCommit',
       direction: 'desc',
       filter: 'all',
       view: null,
+      stack: null,
       group: 'favorites'
     });
+  });
+
+  it('filters to a single declared toolchain and counts what is available', () => {
+    const api = project('api', 'Api', { stacks: [declares('go'), declares('node')] });
+    const site = project('site', 'Site', { stacks: [declares('node')] });
+    const shell = project('shell', 'Shell', {});
+    const projects = [api, site, shell];
+
+    const withStack = (stack: string) =>
+      applyDashboardQuery(projects, parseDashboardQuery(new URLSearchParams(`stack=${stack}`))).map(
+        ({ id }) => id
+      );
+    expect(withStack('go')).toEqual(['api']);
+    expect(withStack('node')).toEqual(['api', 'site']);
+    expect(withStack('rust')).toEqual([]);
+    // An unknown toolchain falls back to no filter rather than an empty dashboard.
+    expect(withStack('cobol')).toEqual(['api', 'shell', 'site']);
+
+    expect(stackCounts(projects)).toEqual([
+      { key: 'node', count: 2 },
+      { key: 'go', count: 1 }
+    ]);
   });
 
   it('classifies transparent attention views from cached metrics', () => {

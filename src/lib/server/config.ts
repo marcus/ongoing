@@ -11,6 +11,9 @@ export interface AppConfig {
   gitConcurrency: number;
   clocConcurrency: number;
   automaticScanSchedulerEnabled: boolean;
+  releaseBaselineEnabled: boolean;
+  releaseBaselineMaxAgeHours: number;
+  releaseBaselineApiUrl: string;
   security: SecurityConfig;
 }
 
@@ -22,6 +25,8 @@ export interface SecurityConfig {
   appOrigin?: string;
   maxRequestBytes: number;
 }
+
+export const DEFAULT_RELEASE_BASELINE_API_URL = 'https://endoflife.date/api/v1';
 
 const defaultIgnoreGlobs = [
   '**/node_modules/**',
@@ -130,6 +135,19 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       true,
       'ONGOING_ENABLE_SCAN_SCHEDULER'
     ),
+    releaseBaselineEnabled: boolean(
+      env.ONGOING_ENABLE_RELEASE_BASELINE,
+      true,
+      'ONGOING_ENABLE_RELEASE_BASELINE'
+    ),
+    releaseBaselineMaxAgeHours: positiveInteger(
+      env.RELEASE_BASELINE_MAX_AGE_HOURS,
+      24,
+      'RELEASE_BASELINE_MAX_AGE_HOURS'
+    ),
+    releaseBaselineApiUrl: (
+      env.RELEASE_BASELINE_API_URL || DEFAULT_RELEASE_BASELINE_API_URL
+    ).replace(/\/+$/, ''),
     security: {
       authenticationRequired,
       accessSecret,

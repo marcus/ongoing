@@ -14,7 +14,7 @@ export interface ScanProgressEvent {
   type: ScanProgressType;
   at: string;
   projectId?: string;
-  collector?: 'git' | 'loc' | 'issues';
+  collector?: 'git' | 'loc' | 'issues' | 'stack';
   discoveredCount?: number;
   updatedCount?: number;
   errorCount?: number;

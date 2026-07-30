@@ -1,5 +1,6 @@
 import type { CollectionError, ProjectMetrics } from './metrics';
 import type { ProjectIntent } from './project';
+import type { ResolvedStack } from './stack';
 
 export const attentionViewKeys = [
   'attention',
@@ -7,14 +8,17 @@ export const attentionViewKeys = [
   'quickwin',
   'opportunity',
   'momentum',
-  'dormant'
+  'dormant',
+  'upgrade'
 ] as const;
 
 export type AttentionViewKey = (typeof attentionViewKeys)[number];
 
 /** Explicit product thresholds. These are deliberately independent rules, not score weights. */
 export const ATTENTION_THRESHOLDS = {
-  freshnessHours: { git: 72, loc: 72, td: 72, github: 72, traffic: 72 },
+  freshnessHours: { git: 72, loc: 72, td: 72, github: 72, traffic: 72, stack: 72 },
+  releaseBaselineMaxAgeDays: 14,
+  upgradeCyclesBehind: 2,
   oldExternalPrDays: 30,
   risingStars30d: 5,
   risingExternalIssues30d: 2,
@@ -35,6 +39,7 @@ export interface AttentionInput {
   isMissing: boolean;
   intent: ProjectIntent | null;
   metrics: ProjectMetrics | null;
+  stacks: readonly ResolvedStack[];
   errors: readonly CollectionError[];
   githubStarsGained30d: number | null;
   githubTrafficViewsDelta30d: number | null;
@@ -42,7 +47,7 @@ export interface AttentionInput {
 }
 
 export interface AttentionReason {
-  source: 'catalog' | 'git' | 'td' | 'github' | 'traffic' | 'decision';
+  source: 'catalog' | 'git' | 'td' | 'github' | 'traffic' | 'decision' | 'stack';
   message: string;
   input: string;
   value: string | number | boolean | null;
@@ -92,7 +97,7 @@ function classification(
 }
 
 /**
- * Classify one project into six inspectable views. Missing, invalid, unavailable, or stale
+ * Classify one project into seven inspectable views. Missing, invalid, unavailable, or stale
  * measurements never satisfy a metric rule. Each view is independent; there is no priority score.
  */
 export function classifyAttentionViews(
@@ -108,6 +113,7 @@ export function classifyAttentionViews(
   const trafficFresh =
     metrics?.githubTrafficAvailability === 'available' &&
     fresh(metrics.githubTrafficScannedAt, ATTENTION_THRESHOLDS.freshnessHours.traffic, now);
+  const stackFresh = fresh(metrics?.stackScannedAt, ATTENTION_THRESHOLDS.freshnessHours.stack, now);
 
   const attention: AttentionReason[] = [];
   if (project.isMissing)
@@ -426,12 +432,68 @@ export function classifyAttentionViews(
     );
   }
 
+  const upgrade: AttentionReason[] = [];
+  const claimed = new Set<string>();
+  const today = new Date(now).toISOString().slice(0, 10);
+  if (stackFresh) {
+    for (const stack of project.stacks) {
+      // Release data this old cannot support a claim about what is current upstream.
+      const baselineAge = age(stack.baselineFetchedAt, now);
+      if (
+        baselineAge === null ||
+        baselineAge > ATTENTION_THRESHOLDS.releaseBaselineMaxAgeDays ||
+        claimed.has(stack.toolchain)
+      )
+        continue;
+
+      const declared = stack.declared || stack.raw;
+      if (stack.status === 'eol') {
+        claimed.add(stack.toolchain);
+        upgrade.push(
+          stack.eolFrom
+            ? reason(
+                'stack',
+                `${stack.toolchain} ${declared} reached end of life on ${stack.eolFrom}`,
+                `stack.${stack.toolchain}.eolFrom`,
+                stack.eolFrom,
+                '<=',
+                today
+              )
+            : reason(
+                'stack',
+                `${stack.toolchain} ${declared} predates every release upstream still supports`,
+                `stack.${stack.toolchain}.status`,
+                'eol',
+                '=',
+                'eol'
+              )
+        );
+      } else if (
+        stack.cyclesBehind !== null &&
+        stack.cyclesBehind >= ATTENTION_THRESHOLDS.upgradeCyclesBehind
+      ) {
+        claimed.add(stack.toolchain);
+        upgrade.push(
+          reason(
+            'stack',
+            `${stack.toolchain} ${declared} is ${stack.cyclesBehind} supported releases behind ${stack.latestCycle}`,
+            `stack.${stack.toolchain}.cyclesBehind`,
+            stack.cyclesBehind,
+            '>=',
+            ATTENTION_THRESHOLDS.upgradeCyclesBehind
+          )
+        );
+      }
+    }
+  }
+
   return {
     attention: classification('attention', attention),
     rising: classification('rising', rising),
     quickwin: classification('quickwin', quickwin),
     opportunity: classification('opportunity', opportunity),
     momentum: classification('momentum', momentum),
-    dormant: classification('dormant', dormant)
+    dormant: classification('dormant', dormant),
+    upgrade: classification('upgrade', upgrade)
   };
 }

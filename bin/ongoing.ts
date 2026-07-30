@@ -23,7 +23,15 @@ const DEFAULT_URL = 'http://127.0.0.1:7766';
 const REQUEST_TIMEOUT_MS = 20_000;
 const VERSION = '1.0.0';
 
-const VIEWS = ['attention', 'rising', 'quickwin', 'opportunity', 'momentum', 'dormant'] as const;
+const VIEWS = [
+  'attention',
+  'rising',
+  'quickwin',
+  'opportunity',
+  'momentum',
+  'dormant',
+  'upgrade'
+] as const;
 const FILTERS = ['all', 'favorites', 'missing', 'warnings', 'local'] as const;
 const INTENTS = ['invest', 'maintain', 'experiment', 'hibernate', 'archive'] as const;
 const SORTS = [
@@ -39,10 +47,44 @@ const SORTS = [
   'githubOpenPrs',
   'githubOldestExternalPr',
   'githubTraffic',
+  'stackLag',
   'name'
 ] as const;
 
+// Mirrors src/lib/domain/stack.ts; the CLI runs under bare Bun and cannot import $lib.
+const TOOLCHAINS = [
+  'go',
+  'node',
+  'bun',
+  'deno',
+  'python',
+  'ruby',
+  'rust',
+  'php',
+  'elixir',
+  'dotnet',
+  'java',
+  'swift',
+  'postgresql'
+] as const;
+
 type ViewKey = (typeof VIEWS)[number];
+type Toolchain = (typeof TOOLCHAINS)[number];
+
+interface Stack {
+  toolchain: Toolchain;
+  declared: string;
+  raw: string;
+  sourceFile: string;
+  status: 'current' | 'behind' | 'eol' | 'unknown';
+  matchedCycle: string | null;
+  cycleLatestRelease: string | null;
+  latestCycle: string | null;
+  latestRelease: string | null;
+  cyclesBehind: number | null;
+  eolFrom: string | null;
+  baselineFetchedAt: string | null;
+}
 
 interface Metrics {
   latestCommitAt: string | null;
@@ -73,6 +115,7 @@ interface Metrics {
   githubLatestReleaseTag: string | null;
   githubLatestReleaseAt: string | null;
   gitScannedAt: string | null;
+  stackScannedAt: string | null;
   githubScannedAt: string | null;
   [key: string]: unknown;
 }
@@ -102,6 +145,7 @@ interface Project {
   reviewAfter: string | null;
   lastSeenAt: string;
   metrics: Metrics | null;
+  stacks: Stack[];
   views: ViewKey[];
   attention: Record<ViewKey, { member: boolean; reasons: AttentionReason[] }>;
   errors: { collector: string; message: string; occurredAt: string }[];
@@ -127,6 +171,12 @@ interface PageModel {
   hiddenCount: number;
   totalCount: number;
   scan: ScanRun | null;
+  baselines: {
+    toolchain: Toolchain;
+    availability: string;
+    fetchedAt: string;
+    message: string | null;
+  }[];
   generatedAt: string;
 }
 
@@ -156,7 +206,8 @@ function parseArgs(argv: string[]): Args {
     'importance',
     'next-action',
     'review-after',
-    'lines'
+    'lines',
+    'stack'
   ]);
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -229,7 +280,8 @@ const VIEW_STYLE: Record<ViewKey, (text: string) => string> = {
   quickwin: yellow,
   opportunity: cyan,
   momentum: green,
-  dormant: dim
+  dormant: dim,
+  upgrade: yellow
 };
 
 const VIEW_LABEL: Record<ViewKey, string> = {
@@ -238,7 +290,8 @@ const VIEW_LABEL: Record<ViewKey, string> = {
   quickwin: 'quick win',
   opportunity: 'opportunity',
   momentum: 'momentum',
-  dormant: 'dormant'
+  dormant: 'dormant',
+  upgrade: 'upgrade'
 };
 
 /** Printable width: column alignment has to ignore the ANSI escapes this file emits on purpose. */
@@ -395,6 +448,7 @@ async function fetchPage(client: Client, args: Args, hidden = false): Promise<Pa
       view: choice(option(args, 'view'), VIEWS, '--view'),
       filter: choice(option(args, 'filter'), FILTERS, '--filter'),
       sort: choice(option(args, 'sort'), SORTS, '--sort'),
+      stack: choice(option(args, 'stack'), TOOLCHAINS, '--stack'),
       dir: flag(args, 'asc') ? 'asc' : flag(args, 'desc') ? 'desc' : undefined,
       q: option(args, 'search', 'q'),
       group: flag(args, 'no-group') ? 'none' : undefined
@@ -542,6 +596,7 @@ async function commandShow(client: Client, args: Args): Promise<void> {
         : `${metrics.dirtyFiles} dirty · ${count(metrics.aheadCount)} ahead · ${count(metrics.behindCount)} behind`
     ],
     ['code', `${count(metrics?.locCode)} lines ${dim(metrics?.dominantLanguage ?? '')}`],
+    ['stack', project.stacks.length ? project.stacks.map(describeStack).join(' · ') : '–'],
     [
       'td',
       metrics?.tdTotalNonClosedCount === null || metrics?.tdTotalNonClosedCount === undefined
@@ -602,6 +657,25 @@ function signed(value: number | null): string {
   return value > 0 ? `+${value}` : String(value);
 }
 
+const STACK_STYLE: Record<Stack['status'], (text: string) => string> = {
+  current: green,
+  behind: yellow,
+  eol: red,
+  unknown: dim
+};
+
+/** `go 1.22 →1.25` — the declared version plus what it should move to, coloured by status. */
+function describeStack(stack: Stack): string {
+  const version = stack.declared || '?';
+  const target =
+    stack.status === 'eol'
+      ? ` eol${stack.latestCycle ? `→${stack.latestCycle}` : ''}`
+      : stack.status === 'behind'
+        ? ` →${stack.latestCycle}`
+        : '';
+  return STACK_STYLE[stack.status](`${stack.toolchain} ${version}${target}`);
+}
+
 async function commandViews(client: Client, args: Args): Promise<void> {
   const page = await client.request<PageModel>('/api/projects');
   if (flag(args, 'json')) return printJson(page.viewCounts);
@@ -610,6 +684,112 @@ async function commandViews(client: Client, args: Args): Promise<void> {
       `${VIEW_STYLE[view](pad(VIEW_LABEL[view], 16))} ${padStart(String(page.viewCounts[view]), 4)}`
     );
   out(dim(`\n${page.totalCount} projects · ${page.hiddenCount} hidden`));
+}
+
+/**
+ * `ongoing stacks` — the catalog-wide toolchain roll-up, and `ongoing stacks <toolchain>` for the
+ * per-project breakdown. Computed from the same page payload the dashboard renders, so `--view`,
+ * `--filter`, and `--search` narrow it exactly as they narrow `ongoing list`.
+ */
+async function commandStacks(client: Client, args: Args): Promise<void> {
+  const toolchain = choice(args.positional[0], TOOLCHAINS, 'toolchain');
+  const page = await fetchPage(client, args, flag(args, 'hidden'));
+  const outdatedOnly = flag(args, 'outdated');
+  const isOutdated = (stack: Stack) => stack.status === 'behind' || stack.status === 'eol';
+
+  if (toolchain) {
+    const rows = page.visibleProjects
+      .flatMap((project) =>
+        project.stacks
+          .filter((stack) => stack.toolchain === toolchain && (!outdatedOnly || isOutdated(stack)))
+          .map((stack) => ({ project, stack }))
+      )
+      .sort(
+        (left, right) =>
+          (right.stack.cyclesBehind ?? -1) - (left.stack.cyclesBehind ?? -1) ||
+          left.project.name.localeCompare(right.project.name, 'en')
+      );
+    if (flag(args, 'json'))
+      return printJson(
+        rows.map(({ project, stack }) => ({ project: project.name, id: project.id, ...stack }))
+      );
+    if (!rows.length) return out(dim(`No project declares ${toolchain}.`));
+
+    const nameWidth = Math.min(32, Math.max(12, ...rows.map(({ project }) => project.name.length)));
+    out(
+      dim(
+        `${pad('project', nameWidth)}  ${pad('declared', 12)} ${pad('latest', 10)} ${pad('status', 8)} source`
+      )
+    );
+    for (const { project, stack } of rows)
+      out(
+        `${pad(project.name, nameWidth)}  ${pad(stack.declared || '–', 12)} ` +
+          `${pad(stack.latestRelease ?? stack.latestCycle ?? '–', 10)} ` +
+          `${pad(STACK_STYLE[stack.status](stack.status), 8)} ${dim(stack.sourceFile)}`
+      );
+    return;
+  }
+
+  const summary = new Map<
+    Toolchain,
+    { projects: Set<string>; outdated: Set<string>; versions: Map<string, Set<string>> }
+  >();
+  for (const project of page.visibleProjects)
+    for (const stack of project.stacks) {
+      if (outdatedOnly && !isOutdated(stack)) continue;
+      const entry = summary.get(stack.toolchain) ?? {
+        projects: new Set<string>(),
+        outdated: new Set<string>(),
+        versions: new Map<string, Set<string>>()
+      };
+      entry.projects.add(project.id);
+      if (isOutdated(stack)) entry.outdated.add(project.id);
+      // Counted per project, not per declaration, so the versions add up to the project column.
+      const version = stack.declared || 'unpinned';
+      entry.versions.set(version, (entry.versions.get(version) ?? new Set()).add(project.id));
+      summary.set(stack.toolchain, entry);
+    }
+
+  const rows = [...summary]
+    .map(([key, entry]) => ({
+      toolchain: key,
+      projects: entry.projects.size,
+      outdated: entry.outdated.size,
+      versions: [...entry.versions]
+        .map(([declared, ids]) => ({ declared, projects: ids.size }))
+        .sort(
+          (left, right) =>
+            right.projects - left.projects || left.declared.localeCompare(right.declared, 'en')
+        )
+    }))
+    .sort(
+      (left, right) =>
+        right.projects - left.projects || left.toolchain.localeCompare(right.toolchain, 'en')
+    );
+
+  if (flag(args, 'json')) return printJson(rows);
+  if (!rows.length) return out(dim('No toolchains detected — run `ongoing scan` first.'));
+
+  out(
+    dim(`${pad('toolchain', 12)} ${padStart('projects', 8)} ${padStart('outdated', 8)}  versions`)
+  );
+  for (const row of rows)
+    out(
+      `${pad(row.toolchain, 12)} ${padStart(String(row.projects), 8)} ` +
+        `${padStart(row.outdated ? yellow(String(row.outdated)) : dim('0'), 8)}  ` +
+        row.versions
+          .slice(0, 6)
+          .map(({ declared, projects }) => `${declared}${dim(`(${projects})`)}`)
+          .join(' · ')
+    );
+
+  const stale = page.baselines.filter(({ availability }) => availability !== 'available');
+  if (stale.length)
+    out(
+      dim(
+        `\nRelease data unavailable for ${stale.map(({ toolchain: key }) => key).join(', ')} — cached cycles are being reused.`
+      )
+    );
 }
 
 async function commandFavorite(client: Client, args: Args): Promise<void> {
@@ -904,6 +1084,7 @@ ${bold('Reading')}
   list, ls                              list projects
       --view <${VIEWS.join('|')}>
       --filter <${FILTERS.join('|')}>
+      --stack <${TOOLCHAINS.join('|')}>
       --sort <key> --asc|--desc         sort keys: ${SORTS.join(', ')}
       -q, --search <text>               match name, path, or note
       -n, --limit <count>               show only the first N
@@ -911,6 +1092,7 @@ ${bold('Reading')}
       --paths | --ids | --json          machine-readable output
   show <project>                        one project in full, with attention reasons
   views                                 attention view counts
+  stacks [toolchain] [--outdated]       declared toolchains, versions, and upgrade pressure
   status                                service, scan, and catalog health
   path <project>                        print the project directory
 
@@ -976,6 +1158,8 @@ async function main(argv: string[]): Promise<void> {
     case 'show':
     case 'info':
       return commandShow(client, args);
+    case 'stacks':
+      return commandStacks(client, args);
     case 'views':
       return commandViews(client, args);
     case 'status':

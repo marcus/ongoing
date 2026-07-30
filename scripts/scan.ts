@@ -1,9 +1,7 @@
 import { CatalogDatabase } from '../src/lib/server/catalog/database';
 import { CatalogRepository } from '../src/lib/server/catalog/repository';
 import { loadConfig } from '../src/lib/server/config';
-import { collectGitHubEnrichment } from '../src/lib/server/collectors/github';
-import { GitHubHttpClient } from '../src/lib/server/github/client';
-import { GitHubHostingMetricsProvider } from '../src/lib/server/github/provider';
+import { createScannerDependencies } from '../src/lib/server/scanning/dependencies';
 import {
   ScanInProgressError,
   Scanner,
@@ -37,15 +35,7 @@ const config = loadConfig();
 const database = new CatalogDatabase(config.databasePath);
 try {
   const repository = new CatalogRepository(database);
-  const githubProvider = new GitHubHostingMetricsProvider(new GitHubHttpClient());
-  const scanner = new Scanner(repository, config, {
-    collectHosting: (catalog, projects, options) =>
-      collectGitHubEnrichment(catalog, projects, {
-        ...options,
-        provider: githubProvider,
-        now: () => new Date()
-      })
-  });
+  const scanner = new Scanner(repository, config, createScannerDependencies(config));
   const result = await scanner.scan({
     reason: projectId ? 'project' : 'cli',
     projectId,

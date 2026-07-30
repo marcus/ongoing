@@ -11,6 +11,8 @@ import {
 import { collectGitMetrics, type GitMetrics } from '$lib/server/collectors/git';
 import { collectLocMetrics, type LocCollectionResult } from '$lib/server/collectors/loc';
 import { collectTdMetrics } from '$lib/server/collectors/td';
+import { collectStackDeclarations } from '$lib/server/collectors/stack';
+import type { DeclaredStack } from '$lib/domain/stack';
 import { discoverAndReconcile, type ReconciledDiscovery } from '$lib/server/collectors/discover';
 import { createConcurrencyLimit } from './limit';
 import { scanProgress, type ScanProgressBus } from './progress';
@@ -67,6 +69,14 @@ export interface ScannerDependencies {
     repositoryPath: string,
     options: { signal: AbortSignal }
   ) => Promise<IssueMetrics | null>;
+  collectStack?: (
+    repositoryPath: string,
+    options: { signal: AbortSignal }
+  ) => Promise<DeclaredStack[]>;
+  refreshReleaseBaselines?: (
+    repository: CatalogRepository,
+    options: { force: boolean; signal: AbortSignal; lease: ScanLeaseOwnership }
+  ) => Promise<void>;
   collectHosting?: (
     repository: CatalogRepository,
     projects: readonly Project[],
@@ -99,6 +109,8 @@ export class Scanner {
   private readonly collectGit: NonNullable<ScannerDependencies['collectGit']>;
   private readonly collectLoc: NonNullable<ScannerDependencies['collectLoc']>;
   private readonly collectIssues: NonNullable<ScannerDependencies['collectIssues']>;
+  private readonly collectStack: NonNullable<ScannerDependencies['collectStack']>;
+  private readonly refreshReleaseBaselines: ScannerDependencies['refreshReleaseBaselines'];
   private readonly collectHosting: ScannerDependencies['collectHosting'];
 
   constructor(
@@ -152,6 +164,10 @@ export class Scanner {
       dependencies.collectIssues ??
       ((path, options) =>
         collectTdMetrics(path, { now: () => new Date(this.now()), signal: options.signal }));
+    this.collectStack =
+      dependencies.collectStack ??
+      ((path, options) => collectStackDeclarations(path, { signal: options.signal }));
+    this.refreshReleaseBaselines = dependencies.refreshReleaseBaselines;
     this.collectHosting = dependencies.collectHosting;
   }
 
@@ -375,6 +391,51 @@ export class Scanner {
               });
             }
 
+            // Manifest reads are cheap enough to run on every policy, including the daily
+            // scheduled scan. Gating them like `loc` would leave stack data permanently stale,
+            // which in turn silently disables the Upgrade view's freshness gate.
+            try {
+              if (signal.aborted) throw new ScanLeaseLostError(runId);
+              const stacks = await this.collectStack(project.canonicalPath, { signal });
+              await this.repository.replaceProjectStacks(project.id, stacks, lease);
+              await this.repository.updateMetrics(
+                project.id,
+                { stackScannedAt: this.now() },
+                lease
+              );
+              await this.repository.resolveCollectionError(project.id, 'stack', this.now(), lease);
+              if (stacks.length > 0) updated = true;
+              this.progress.publish({
+                runId,
+                type: 'collector-completed',
+                at: this.now(),
+                projectId: project.id,
+                collector: 'stack'
+              });
+            } catch (error) {
+              if (error instanceof ScanLeaseLostError || signal.aborted)
+                throw new ScanLeaseLostError(runId);
+              counts.errorCount += 1;
+              const message = errorMessage(error);
+              await this.repository.recordCollectionError(
+                {
+                  projectId: project.id,
+                  collector: 'stack',
+                  message,
+                  occurredAt: this.now()
+                },
+                lease
+              );
+              this.progress.publish({
+                runId,
+                type: 'collector-failed',
+                at: this.now(),
+                projectId: project.id,
+                collector: 'stack',
+                message
+              });
+            }
+
             if (policy !== 'cheap') {
               try {
                 const previousFingerprint =
@@ -440,6 +501,24 @@ export class Scanner {
           })
         )
       );
+
+      // Runs after per-project collection so it only fetches toolchains projects actually declare.
+      // A baseline failure is catalog-wide rather than any one project's fault, so it neither
+      // records a collection error nor fails the run — cached cycles simply go stale.
+      if (this.refreshReleaseBaselines && projects.length > 0) {
+        if (signal.aborted) throw new ScanLeaseLostError(runId);
+        try {
+          await this.refreshReleaseBaselines(this.repository, {
+            force: policy === 'full',
+            signal,
+            lease
+          });
+        } catch (error) {
+          if (error instanceof ScanLeaseLostError || signal.aborted)
+            throw new ScanLeaseLostError(runId);
+          console.error('Unable to refresh toolchain release baselines', error);
+        }
+      }
 
       if (this.collectHosting && projects.length > 0) {
         if (signal.aborted) throw new ScanLeaseLostError(runId);

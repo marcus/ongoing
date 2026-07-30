@@ -13,6 +13,7 @@ export const sortOptions: { key: SortKey; label: string; defaultDirection: SortD
   { key: 'githubOpenPrs', label: 'open prs', defaultDirection: 'desc' },
   { key: 'githubOldestExternalPr', label: 'oldest external pr', defaultDirection: 'asc' },
   { key: 'githubTraffic', label: 'github traffic', defaultDirection: 'desc' },
+  { key: 'stackLag', label: 'toolchain lag', defaultDirection: 'desc' },
   { key: 'name', label: 'name', defaultDirection: 'asc' },
   { key: 'manual', label: 'manual', defaultDirection: 'asc' }
 ];
@@ -23,7 +24,8 @@ export const viewOptions: { key: ViewKey; label: string; className: string }[] =
   { key: 'quickwin', label: 'quick wins', className: 'accent' },
   { key: 'opportunity', label: 'opportunity', className: 'cyan' },
   { key: 'momentum', label: 'momentum', className: 'green' },
-  { key: 'dormant', label: 'dormant', className: 'dim' }
+  { key: 'dormant', label: 'dormant', className: 'dim' },
+  { key: 'upgrade', label: 'upgrade', className: 'amber' }
 ];
 
 export const filterOptions: { key: FilterKey; label: string }[] = [

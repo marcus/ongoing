@@ -2,11 +2,13 @@
   import type { DashboardQuery, ViewKey } from '$lib/dashboard/catalog';
   import { filterOptions, groupOptions, sortOptions, viewOptions } from '$lib/dashboard/options';
   import type { SortKey } from '$lib/domain/sorting';
+  import type { Toolchain } from '$lib/domain/stack';
   import { resolve } from '$app/paths';
 
-  let { query, viewCounts, hiddenCount, onchange } = $props<{
+  let { query, viewCounts, stacks, hiddenCount, onchange } = $props<{
     query: DashboardQuery;
     viewCounts: Record<ViewKey, number>;
+    stacks: { key: Toolchain; count: number }[];
     hiddenCount: number;
     onchange: (patch: Partial<DashboardQuery>) => void;
   }>();
@@ -60,6 +62,22 @@
       >
     {/each}
   </div>
+
+  {#if stacks.length > 0}
+    <h2>Stack</h2>
+    <div class="chips">
+      {#each stacks as option (option.key)}
+        <button
+          type="button"
+          class="chip cyan"
+          class:active={query.stack === option.key}
+          aria-pressed={query.stack === option.key}
+          onclick={() => onchange({ stack: query.stack === option.key ? null : option.key })}
+          >{option.key} <b>{option.count}</b></button
+        >
+      {/each}
+    </div>
+  {/if}
 
   <h2>Show</h2>
   <div class="option-grid">

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectMetrics } from './metrics';
+import type { ResolvedStack } from './stack';
 import { ATTENTION_THRESHOLDS, classifyAttentionViews, type AttentionInput } from './attention';
 
 const NOW = Date.parse('2026-07-19T12:00:00Z');
@@ -13,6 +14,7 @@ function input(
     id: 'project',
     isMissing: false,
     intent: null,
+    stacks: [],
     errors: [],
     githubStarsGained30d: null,
     githubTrafficViewsDelta30d: null,
@@ -22,6 +24,7 @@ function input(
       gitScannedAt: fresh,
       locScannedAt: fresh,
       tdScannedAt: fresh,
+      stackScannedAt: fresh,
       githubScannedAt: fresh,
       githubTrafficScannedAt: fresh,
       githubAvailability: 'available',
@@ -164,5 +167,88 @@ describe('transparent attention views', () => {
       classifyAttentionViews({ ...base, githubStarsGained30d: 0, intent: 'invest' }, NOW).dormant
         .member
     ).toBe(false);
+  });
+});
+
+describe('the upgrade view', () => {
+  const baselineFresh = '2026-07-18T00:00:00Z';
+
+  function stack(overrides: Partial<ResolvedStack> = {}): ResolvedStack {
+    return {
+      toolchain: 'go',
+      declared: '1.22',
+      raw: '1.22',
+      sourceFile: 'go.mod',
+      status: 'behind',
+      matchedCycle: '1.22',
+      cycleLatestRelease: '1.22.9',
+      latestCycle: '1.25',
+      latestRelease: '1.25.12',
+      cyclesBehind: ATTENTION_THRESHOLDS.upgradeCyclesBehind,
+      eolFrom: null,
+      baselineFetchedAt: baselineFresh,
+      ...overrides
+    };
+  }
+
+  const classify = (stacks: ResolvedStack[], metrics: Partial<ProjectMetrics> = {}) =>
+    classifyAttentionViews(input(metrics, { stacks }), NOW).upgrade;
+
+  it('flags a toolchain at or past the supported-releases-behind threshold', () => {
+    const flagged = classify([stack()]);
+    expect(flagged.member).toBe(true);
+    expect(flagged.reasons[0]).toMatchObject({
+      source: 'stack',
+      input: 'stack.go.cyclesBehind',
+      value: ATTENTION_THRESHOLDS.upgradeCyclesBehind,
+      comparison: '>=',
+      threshold: ATTENTION_THRESHOLDS.upgradeCyclesBehind
+    });
+    expect(flagged.reasons[0].message).toContain('2 supported releases behind 1.25');
+
+    expect(
+      classify([stack({ cyclesBehind: ATTENTION_THRESHOLDS.upgradeCyclesBehind - 1 })]).member
+    ).toBe(false);
+  });
+
+  it('flags an end-of-life toolchain regardless of how far behind it is', () => {
+    const flagged = classify([stack({ status: 'eol', cyclesBehind: 1, eolFrom: '2025-08-12' })]);
+    expect(flagged.reasons[0]).toMatchObject({
+      input: 'stack.go.eolFrom',
+      value: '2025-08-12',
+      comparison: '<=',
+      threshold: '2026-07-19'
+    });
+
+    // A version older than anything upstream lists has no eol date to cite, but is still retired.
+    expect(
+      classify([stack({ status: 'eol', matchedCycle: null, cyclesBehind: 3 })]).reasons[0]
+    ).toMatchObject({ input: 'stack.go.status', value: 'eol' });
+  });
+
+  it('never fires on unknown, current, stale, or unbacked declarations', () => {
+    expect(classify([stack({ status: 'unknown', cyclesBehind: null })]).member).toBe(false);
+    expect(classify([stack({ status: 'current', cyclesBehind: 0 })]).member).toBe(false);
+    // Stack data itself must be fresh.
+    expect(classify([stack()], { stackScannedAt: '2026-07-15T00:00:00Z' }).member).toBe(false);
+    expect(classify([stack()], { stackScannedAt: null }).member).toBe(false);
+    // So must the release baseline the claim rests on.
+    const staleBaseline = new Date(
+      NOW - (ATTENTION_THRESHOLDS.releaseBaselineMaxAgeDays + 1) * 86_400_000
+    ).toISOString();
+    expect(classify([stack({ baselineFetchedAt: staleBaseline })]).member).toBe(false);
+    expect(classify([stack({ baselineFetchedAt: null })]).member).toBe(false);
+  });
+
+  it('reports one reason per toolchain even when several manifests declare it', () => {
+    const flagged = classify([
+      stack(),
+      stack({ sourceFile: '.tool-versions' }),
+      stack({ toolchain: 'node', declared: '20', latestCycle: '24' })
+    ]);
+    expect(flagged.reasons.map(({ input: key }) => key)).toEqual([
+      'stack.go.cyclesBehind',
+      'stack.node.cyclesBehind'
+    ]);
   });
 });

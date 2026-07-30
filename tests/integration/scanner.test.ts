@@ -21,6 +21,9 @@ const config: AppConfig = {
   gitConcurrency: 6,
   clocConcurrency: 2,
   automaticScanSchedulerEnabled: true,
+  releaseBaselineEnabled: true,
+  releaseBaselineMaxAgeHours: 24,
+  releaseBaselineApiUrl: 'https://endoflife.date/api/v1',
   security: {
     authenticationRequired: false,
     sessionMaxAgeSeconds: 43_200,
@@ -426,7 +429,14 @@ describe('resilient scan orchestration', () => {
       'collector-completed',
       'collector-completed',
       'collector-completed',
+      'collector-completed',
       'completed'
+    ]);
+    expect(events.flatMap(({ collector }) => collector ?? [])).toEqual([
+      'git',
+      'issues',
+      'stack',
+      'loc'
     ]);
     expect(progress.eventsAfter('scan_progress', events[2].id)[0].id).toBe(events[3].id);
     expect(progress.isTerminal('scan_progress')).toBe(true);
@@ -532,6 +542,87 @@ describe('resilient scan orchestration', () => {
       tdBlockedCount: 0,
       tdStaleCount: 0,
       tdScannedAt: now
+    });
+    expect(repository.listCollectionErrors(projects[0].id, true)).toEqual([]);
+  });
+
+  it('preserves cached stack declarations across a failure and resolves on recovery', async () => {
+    const { repository, projects } = await fixture();
+    let run = 0;
+    const collectStack = vi
+      .fn()
+      .mockResolvedValueOnce([
+        { toolchain: 'go', declared: '1.22', raw: '1.22', sourceFile: 'go.mod' }
+      ])
+      .mockRejectedValueOnce(new Error('Stack collector could not read go.mod: permission denied'))
+      .mockResolvedValueOnce([
+        { toolchain: 'go', declared: '1.24', raw: '1.24', sourceFile: 'go.mod' }
+      ]);
+    const scanner = new Scanner(repository, config, {
+      now: () => now,
+      createRunId: () => `scan_stack_${++run}`,
+      discover: discovery(projects),
+      collectGit: async () => gitMetrics,
+      collectStack
+    });
+
+    await scanner.scan({ reason: 'scheduled', refresh: 'cheap' });
+    expect(repository.listProjectStacks(projects[0].id)).toEqual([
+      { toolchain: 'go', declared: '1.22', raw: '1.22', sourceFile: 'go.mod' }
+    ]);
+    expect(repository.getMetrics(projects[0].id)).toMatchObject({ stackScannedAt: now });
+
+    await scanner.scan({ reason: 'scheduled', refresh: 'cheap' });
+    expect(repository.listProjectStacks(projects[0].id)).toEqual([
+      { toolchain: 'go', declared: '1.22', raw: '1.22', sourceFile: 'go.mod' }
+    ]);
+    expect(repository.listCollectionErrors(projects[0].id, true)).toEqual([
+      expect.objectContaining({
+        collector: 'stack',
+        message: expect.stringContaining('permission denied')
+      })
+    ]);
+
+    await scanner.scan({ reason: 'scheduled', refresh: 'cheap' });
+    expect(repository.listProjectStacks(projects[0].id)).toEqual([
+      { toolchain: 'go', declared: '1.24', raw: '1.24', sourceFile: 'go.mod' }
+    ]);
+    expect(repository.listCollectionErrors(projects[0].id, true)).toEqual([]);
+  });
+
+  it('refreshes release baselines once per scan without failing the run', async () => {
+    const { repository, projects } = await fixture();
+    const refresh = vi
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('endoflife.date unreachable'));
+    let run = 0;
+    const scanner = new Scanner(repository, config, {
+      now: () => now,
+      createRunId: () => `scan_baseline_${++run}`,
+      discover: discovery(projects),
+      collectGit: async () => gitMetrics,
+      collectLoc: async () => ({ status: 'unchanged', fingerprint: 'same' }),
+      collectStack: async () => [],
+      refreshReleaseBaselines: refresh
+    });
+
+    expect(await scanner.scan({ reason: 'manual', refresh: 'full' })).toMatchObject({
+      status: 'completed',
+      errorCount: 0
+    });
+    expect(refresh).toHaveBeenCalledWith(
+      repository,
+      expect.objectContaining({
+        force: true,
+        lease: expect.objectContaining({ runId: expect.any(String) })
+      })
+    );
+
+    // A catalog-wide baseline failure is nobody's project error and must not fail the scan.
+    expect(await scanner.scan({ reason: 'scheduled', refresh: 'cheap' })).toMatchObject({
+      status: 'completed',
+      errorCount: 0
     });
     expect(repository.listCollectionErrors(projects[0].id, true)).toEqual([]);
   });

@@ -18,6 +18,13 @@ import {
   type Project,
   type ProjectDecisionUpdate
 } from '$lib/domain/project';
+import type {
+  DeclaredStack,
+  Toolchain,
+  ToolchainBaselineStatus,
+  ToolchainRelease,
+  ToolchainReleaseCycle
+} from '$lib/domain/stack';
 import type { CatalogDatabase } from './database';
 
 type Row = Record<string, string | number | null>;
@@ -103,6 +110,7 @@ const metricColumns: Record<keyof ProjectMetricsUpdate, string> = {
   githubTrafficAvailability: 'github_traffic_availability',
   gitScannedAt: 'git_scanned_at',
   locScannedAt: 'loc_scanned_at',
+  stackScannedAt: 'stack_scanned_at',
   tdScannedAt: 'td_scanned_at',
   githubScannedAt: 'github_scanned_at',
   githubTrafficScannedAt: 'github_traffic_scanned_at'
@@ -214,6 +222,7 @@ function metricsFromRow(row: Row): ProjectMetrics {
     ) as ProjectMetrics['githubTrafficAvailability'],
     gitScannedAt: string('git_scanned_at'),
     locScannedAt: string('loc_scanned_at'),
+    stackScannedAt: string('stack_scanned_at'),
     tdScannedAt: string('td_scanned_at'),
     githubScannedAt: string('github_scanned_at'),
     githubTrafficScannedAt: string('github_traffic_scanned_at')
@@ -486,6 +495,144 @@ export class CatalogRepository {
       capturedOn: String(row.captured_on),
       value: Number(row.value)
     }));
+  }
+
+  /**
+   * Replace a project's declarations wholesale, so a manifest that stopped declaring a toolchain
+   * stops reporting one. Delete and insert share a transaction to keep readers from seeing a gap.
+   */
+  async replaceProjectStacks(
+    projectId: string,
+    stacks: readonly DeclaredStack[],
+    lease?: ScanLeaseOwnership
+  ): Promise<void> {
+    await this.catalog.write((database) => {
+      withLease(database, lease, () => {
+        if (!this.getProject(projectId)) throw new Error(`Unknown project ID: ${projectId}`);
+        database.query('DELETE FROM project_stacks WHERE project_id = ?').run(projectId);
+        const insert = database.query(
+          `INSERT INTO project_stacks (project_id, toolchain, declared, raw, source_file)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(project_id, toolchain, source_file) DO UPDATE SET
+             declared = excluded.declared, raw = excluded.raw`
+        );
+        for (const stack of stacks)
+          insert.run(projectId, stack.toolchain, stack.declared, stack.raw, stack.sourceFile);
+      });
+    });
+  }
+
+  listProjectStacks(projectId: string): DeclaredStack[] {
+    return this.database
+      .query<Row, [string]>(
+        'SELECT * FROM project_stacks WHERE project_id = ? ORDER BY toolchain, source_file'
+      )
+      .all(projectId)
+      .map((row) => ({
+        toolchain: String(row.toolchain) as Toolchain,
+        declared: String(row.declared),
+        raw: String(row.raw),
+        sourceFile: String(row.source_file)
+      }));
+  }
+
+  /** Every declaration in the catalog, grouped by project, so a catalog read avoids N queries. */
+  listAllProjectStacks(): Map<string, DeclaredStack[]> {
+    const grouped = new Map<string, DeclaredStack[]>();
+    for (const row of this.database
+      .query<Row, []>('SELECT * FROM project_stacks ORDER BY toolchain, source_file')
+      .all()) {
+      const projectId = String(row.project_id);
+      const stacks = grouped.get(projectId) ?? [];
+      stacks.push({
+        toolchain: String(row.toolchain) as Toolchain,
+        declared: String(row.declared),
+        raw: String(row.raw),
+        sourceFile: String(row.source_file)
+      });
+      grouped.set(projectId, stacks);
+    }
+    return grouped;
+  }
+
+  /** Replace one toolchain's cached cycles and record the refresh outcome in the same transaction. */
+  async replaceToolchainReleases(
+    status: ToolchainBaselineStatus,
+    releases: readonly ToolchainReleaseCycle[],
+    lease?: ScanLeaseOwnership
+  ): Promise<void> {
+    await this.catalog.write((database) => {
+      withLease(database, lease, () => {
+        // A failed refresh keeps the cached cycles; only the status row changes.
+        if (status.availability === 'available') {
+          database
+            .query('DELETE FROM toolchain_releases WHERE toolchain = ?')
+            .run(status.toolchain);
+          const insert = database.query(
+            `INSERT INTO toolchain_releases (
+               toolchain, cycle, latest, release_date, eol_from, is_eol, is_maintained, is_lts, fetched_at
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          );
+          for (const release of releases)
+            insert.run(
+              status.toolchain,
+              release.cycle,
+              release.latest,
+              release.releaseDate,
+              release.eolFrom,
+              release.isEol ? 1 : 0,
+              release.isMaintained ? 1 : 0,
+              release.isLts ? 1 : 0,
+              status.fetchedAt
+            );
+        }
+        database
+          .query(
+            `INSERT INTO toolchain_baseline_status (toolchain, availability, fetched_at, message)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT(toolchain) DO UPDATE SET
+               availability = excluded.availability,
+               fetched_at = excluded.fetched_at,
+               message = excluded.message`
+          )
+          .run(status.toolchain, status.availability, status.fetchedAt, status.message);
+      });
+    });
+  }
+
+  listToolchainReleases(): Map<Toolchain, ToolchainRelease[]> {
+    const grouped = new Map<Toolchain, ToolchainRelease[]>();
+    for (const row of this.database
+      .query<Row, []>('SELECT * FROM toolchain_releases ORDER BY toolchain, cycle')
+      .all()) {
+      const toolchain = String(row.toolchain) as Toolchain;
+      const releases = grouped.get(toolchain) ?? [];
+      releases.push({
+        toolchain,
+        cycle: String(row.cycle),
+        latest: row.latest === null ? null : String(row.latest),
+        releaseDate: row.release_date === null ? null : String(row.release_date),
+        eolFrom: row.eol_from === null ? null : String(row.eol_from),
+        isEol: bool(row.is_eol),
+        isMaintained: bool(row.is_maintained),
+        isLts: bool(row.is_lts),
+        fetchedAt: String(row.fetched_at)
+      });
+      grouped.set(toolchain, releases);
+    }
+    return grouped;
+  }
+
+  listBaselineStatus(): ToolchainBaselineStatus[] {
+    return this.database
+      .query<Row, []>('SELECT * FROM toolchain_baseline_status ORDER BY toolchain')
+      .all()
+      .map((row) => ({
+        toolchain: String(row.toolchain) as Toolchain,
+        availability: String(row.availability) as ToolchainBaselineStatus['availability'],
+        fetchedAt: String(row.fetched_at),
+        message: row.message === null ? null : String(row.message)
+      }));
   }
 
   async recordCollectionError(

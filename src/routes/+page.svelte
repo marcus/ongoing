@@ -9,6 +9,7 @@
   import ThemePicker from '$lib/components/dashboard/ThemePicker.svelte';
   import {
     applyDashboardQuery,
+    stackCounts,
     viewKeys,
     type DashboardQuery,
     type DashboardProject
@@ -66,12 +67,15 @@
       ])
     ) as Record<(typeof viewKeys)[number], number>
   );
+  let availableStacks = $derived(stackCounts(catalogProjects));
+  // Dragging must never reorder a filtered subset, so every narrowing control disables it.
   let manualEnabled = $derived(
     data.query.sort === 'manual' &&
       data.query.direction === 'asc' &&
       !data.query.search &&
       data.query.filter === 'all' &&
       !data.query.view &&
+      !data.query.stack &&
       data.query.group === 'none'
   );
   let activeId = $derived(projects[activeIndex]?.id ?? null);
@@ -101,6 +105,8 @@
     url.searchParams.set('filter', next.filter);
     if (next.view) url.searchParams.set('view', next.view);
     else url.searchParams.delete('view');
+    if (next.stack) url.searchParams.set('stack', next.stack);
+    else url.searchParams.delete('stack');
     url.searchParams.set('group', next.group);
     return url;
   }
@@ -355,11 +361,13 @@
     >
       <span>sort</span> <b>{selectedSort.label} {data.query.direction === 'desc' ? '↓' : '↑'}</b>
       {#if selectedView}<span>·</span> <b>{selectedView.label}</b>{/if}
+      {#if data.query.stack}<span>·</span> <b>{data.query.stack}</b>{/if}
     </button>
     {#if flyoutOpen}
       <FilterFlyout
         query={data.query}
         {viewCounts}
+        stacks={availableStacks}
         hiddenCount={data.hiddenCount}
         onchange={(patch) => changeQuery(patch)}
       />

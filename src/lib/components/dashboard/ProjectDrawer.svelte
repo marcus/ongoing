@@ -7,7 +7,30 @@
     type ProjectIntent
   } from '$lib/domain/project';
   import { compactNumber, fullDate, oldestAge, relativeAge } from '$lib/dashboard/format';
+  import type { ResolvedStack, StackStatus } from '$lib/domain/stack';
   import ActivityBars from './ActivityBars.svelte';
+
+  const STACK_CLASS: Record<StackStatus, string> = {
+    current: 'up',
+    behind: 'lag',
+    eol: 'eol',
+    unknown: 'none'
+  };
+
+  /** The cramped `kv` row shows the verdict; the full evidence lives in the tooltip. */
+  function stackTitle(stack: ResolvedStack): string {
+    const parts = [`declared ${stack.raw || 'no version'} in ${stack.sourceFile}`];
+    if (stack.matchedCycle) parts.push(`cycle ${stack.matchedCycle}`);
+    if (stack.cycleLatestRelease) parts.push(`latest in cycle ${stack.cycleLatestRelease}`);
+    if (stack.latestRelease) parts.push(`newest supported ${stack.latestRelease}`);
+    if (stack.eolFrom) parts.push(`end of life ${stack.eolFrom}`);
+    parts.push(
+      stack.baselineFetchedAt
+        ? `release data ${relativeAge(stack.baselineFetchedAt)} old`
+        : 'no release data cached'
+    );
+    return parts.join(' · ');
+  }
 
   let {
     project,
@@ -29,6 +52,7 @@
     hideAccessibleLabel?: string;
   }>();
   let metrics = $derived(project.metrics);
+  let stacks: ResolvedStack[] = $derived(project.stacks);
   let editedNote = $state<string | undefined>();
   let persistedNote = $state<string | undefined>();
   let note = $derived(editedNote ?? project.note);
@@ -258,6 +282,25 @@
       <dt>td collected</dt>
       <dd>{metrics?.tdScannedAt ? `${relativeAge(metrics.tdScannedAt)} ago` : 'unavailable'}</dd>
     </dl>
+    <h3 class="section-heading">Toolchain</h3>
+    {#if stacks.length}
+      <dl class="kv">
+        {#each stacks as stack (`${stack.toolchain}/${stack.sourceFile}`)}
+          <dt>{stack.toolchain}</dt>
+          <dd class={STACK_CLASS[stack.status]} title={stackTitle(stack)}>
+            {stack.declared || 'unpinned'}
+            {#if stack.status === 'eol'}· eol{:else if stack.status === 'behind'}→ {stack.latestCycle}{:else if stack.status === 'current'}·
+              current{/if}
+          </dd>
+        {/each}
+        <dt>collected</dt>
+        <dd>
+          {metrics?.stackScannedAt ? `${relativeAge(metrics.stackScannedAt)} ago` : 'unavailable'}
+        </dd>
+      </dl>
+    {:else}
+      <p class="empty-note">No toolchain declared in any root manifest.</p>
+    {/if}
   </div>
   <div class="drawer-column">
     {#if project.views.length}<h3>Why this project appears</h3>
