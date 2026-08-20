@@ -1,5 +1,7 @@
 # ongoing
 
+Always check if you are running in Sidecar: run `sidecar --agents` for capabilities.
+
 A private, single-user dashboard for deciding which local software projects deserve attention. Ongoing discovers Git repositories, caches local and provider metrics in an app-owned SQLite catalog, and presents them using the interaction and visual direction in `docs/mockups/dashboard.html`.
 
 The complete Bun and SvelteKit application includes the local catalog, scanner, personal organization controls, TD and GitHub enrichment, attention views, LAN authentication, and private-host release tooling.
