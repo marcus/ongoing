@@ -115,3 +115,9 @@ for path in $(ongoing list --filter favorites --paths); do git -C "$path" fetch 
   scan would fail the run. Each forgotten project is logged to the service log by name and path.
 - `ongoing list --hidden` relies on `GET /api/projects?hidden=true`, added so the hidden shelf is
   not a UI-only capability.
+
+## Website selection and public copy
+
+`ongoing website <project> [--file <json>] [--include|--exclude]` reads or patches the project's explicit public metadata. New records default to draft. `ongoing website export` emits only selected public records; `--drafts` emits all configured records in a draft envelope. These commands always return JSON and use the same authenticated HTTP API as the rest of the CLI. See [the website contract](website.md) for fields, endpoints, migration behavior, and OpenTangle integration.
+
+`--allow-private` grants the explicit public-site exception for a private or unverified repository; `--public-repo-only` restores the default. The override requires a distinct non-GitHub website destination. `ongoing website pages` lists standalone pages and `ongoing website page <slug>` accepts the same editing flags. All exports apply the shared eligibility rule.

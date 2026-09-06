@@ -1,3 +1,5 @@
+import type { ProjectWebsite } from './website';
+
 export const PROJECT_NOTE_MAX_LENGTH = 500;
 export const PROJECT_NEXT_ACTION_MAX_LENGTH = 500;
 export const MANUAL_RANK_STEP = 1_000;
@@ -16,6 +18,7 @@ export interface Project {
   isHidden: boolean;
   manualRank: number;
   note: string;
+  website?: ProjectWebsite | null;
   intent: ProjectIntent | null;
   excitement: number | null;
   strategicImportance: number | null;

@@ -208,7 +208,8 @@ function parseArgs(argv: string[]): Args {
     'review-after',
     'lines',
     'stack',
-    'grace-days'
+    'grace-days',
+    'file'
   ]);
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -886,6 +887,44 @@ async function commandNote(client: Client, args: Args): Promise<void> {
   report(args, { id: project.id, note }, `${project.name} note ${note ? 'updated' : 'cleared'}`);
 }
 
+async function commandWebsite(client: Client, args: Args): Promise<void> {
+  if (args.positional[0] === 'export') {
+    return printJson(
+      await client.request('/api/website', {
+        query: flag(args, 'drafts') ? { drafts: 'true' } : {}
+      })
+    );
+  }
+  if (args.positional[0] === 'pages') return printJson(await client.request('/api/website/pages'));
+  const page = args.positional[0] === 'page' ? args.positional[1] : undefined;
+  if (args.positional[0] === 'page' && !page)
+    throw new CliError('Usage: ongoing website page <slug> [--file JSON]');
+  const project = page ? null : await requireProject(client, args, 'website');
+  const file = option(args, 'file');
+  if (flag(args, 'include') && flag(args, 'exclude'))
+    throw new CliError('Choose --include or --exclude');
+  let patch: Record<string, unknown> = {};
+  if (file) {
+    const parsed: unknown = JSON.parse(readFileSync(file, 'utf8'));
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+      throw new CliError('Website file must contain a JSON object');
+    patch = parsed as Record<string, unknown>;
+  }
+  if (flag(args, 'allow-private') && flag(args, 'public-repo-only'))
+    throw new CliError('Choose --allow-private or --public-repo-only');
+  if (flag(args, 'allow-private')) patch.allowPrivateRepository = true;
+  if (flag(args, 'public-repo-only')) patch.allowPrivateRepository = false;
+  if (flag(args, 'include')) patch.included = true;
+  if (flag(args, 'exclude')) patch.included = false;
+  const path = page
+    ? `/api/website/pages/${encodeURIComponent(page)}`
+    : `/api/projects/${project!.id}/website`;
+  const result = Object.keys(patch).length
+    ? await client.request(path, { method: 'PATCH', body: patch })
+    : await client.request(path);
+  printJson(result);
+}
+
 async function commandSet(client: Client, args: Args): Promise<void> {
   const project = await requireProject(client, args, 'set');
   const body: Record<string, unknown> = {};
@@ -1157,6 +1196,12 @@ ${bold('Changing')}
   forget <project> --yes                drop a project from the catalog for good
   prune [--yes] [--grace-days <n>]      forget entries whose directory has been gone a while
                                         (reports without --yes; --grace-days overrides the wait)
+  website <project> [--file <json>] [--include|--exclude]
+                                        read or patch explicit public copy; new records are drafts
+    [--allow-private|--public-repo-only]   private/unknown repo requires explicit public-site override
+  website pages                         list managed public pages without local repositories
+  website page <slug> [same flags]       create/read/patch a standalone page (draft by default)
+  website export [--drafts]              deterministic public JSON (selected projects by default)
   set <project> [--intent <${INTENTS.join('|')}>]
                 [--excitement 1-5] [--importance 1-5]
                 [--next-action <text>] [--review-after YYYY-MM-DD]
@@ -1237,6 +1282,8 @@ async function main(argv: string[]): Promise<void> {
       return commandNote(client, args);
     case 'set':
       return commandSet(client, args);
+    case 'website':
+      return commandWebsite(client, args);
     case 'scan':
       return commandScan(client, args);
     case 'open':

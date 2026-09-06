@@ -1,3 +1,4 @@
+import { updateWebsite, type ProjectWebsite } from '$lib/domain/website';
 import type { Database, SQLQueryBindings } from 'bun:sqlite';
 import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
@@ -135,6 +136,7 @@ function projectFromRow(row: Row): Project {
     isHidden: bool(row.is_hidden),
     manualRank: Number(row.manual_rank),
     note: String(row.note),
+    website: row.website_json ? (JSON.parse(String(row.website_json)) as ProjectWebsite) : null,
     intent: row.intent as Project['intent'],
     excitement: row.excitement === null ? null : Number(row.excitement),
     strategicImportance:
@@ -368,6 +370,54 @@ export class CatalogRepository {
         .query('UPDATE projects SET note = ?, updated_at = ? WHERE id = ?')
         .run(note, this.now(), id);
       requireChanged(result.changes, id);
+    });
+  }
+
+  async updateWebsite(id: string, patch: unknown): Promise<ProjectWebsite> {
+    return this.catalog.write((database) => {
+      const project = this.getProject(id);
+      if (!project) throw new Error(`Unknown project ID: ${id}`);
+      const website = updateWebsite(project.website ?? null, patch);
+      if (
+        this.listProjects({ includeHidden: true }).some(
+          (other) => other.id !== id && other.website?.slug === website.slug
+        )
+      )
+        throw new Error(`Website slug already used: ${website.slug}`);
+      if (this.listWebsitePages().some((page) => page.slug === website.slug))
+        throw new Error(`Website slug already used: ${website.slug}`);
+      database
+        .query('UPDATE projects SET website_json = ?, updated_at = ? WHERE id = ?')
+        .run(JSON.stringify(website), this.now(), id);
+      return website;
+    });
+  }
+
+  listWebsitePages(): ProjectWebsite[] {
+    return this.database
+      .query<{ website_json: string }, []>('SELECT website_json FROM website_pages ORDER BY slug')
+      .all()
+      .map((row) => JSON.parse(row.website_json) as ProjectWebsite);
+  }
+
+  getWebsitePage(slug: string): ProjectWebsite | null {
+    return this.listWebsitePages().find((page) => page.slug === slug) ?? null;
+  }
+
+  async updateWebsitePage(slug: string, patch: unknown): Promise<ProjectWebsite> {
+    return this.catalog.write((database) => {
+      const website = updateWebsite(this.getWebsitePage(slug), patch);
+      if (website.slug !== slug) throw new Error('Page slug must match its URL identifier');
+      if (
+        this.listProjects({ includeHidden: true }).some((project) => project.website?.slug === slug)
+      )
+        throw new Error(`Website slug already used: ${slug}`);
+      database
+        .query(
+          'INSERT INTO website_pages (slug, website_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(slug) DO UPDATE SET website_json = excluded.website_json, updated_at = excluded.updated_at'
+        )
+        .run(slug, JSON.stringify(website), this.now());
+      return website;
     });
   }
 

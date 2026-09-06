@@ -72,3 +72,7 @@ Current thresholds:
 - Upgrade: a declared toolchain whose release cycle is past end of life, or that is at least 2 supported release cycles behind the newest one. Requires both fresh stack data and release-baseline data collected within 14 days.
 
 These values are product policy rather than score weights. Tune the exported `ATTENTION_THRESHOLDS` constants and their boundary tests together.
+
+## Public website catalog
+
+Projects can carry explicit public website copy and an opt-in inclusion flag through `ongoing website` and the HTTP API. OpenTangle exports selected projects on its next deployment; dashboard notes and scanned metadata stay private. See [the website catalog contract](docs/website.md).
