@@ -1,0 +1,427 @@
+// Authored architecture for Ongoing. Evidence paths are relative to the repository root.
+specification {
+  element actor
+  element subsystem
+  element component
+  element adapter
+  element service
+  element store
+  element job
+  relationship calls
+  relationship reads
+  relationship writes
+  relationship streams
+  relationship runs
+  relationship supplies
+  relationship polls
+  relationship schedules
+  tag current
+  tag proposed
+}
+
+model {
+  user = actor 'Marcus or an agent' {
+    description 'Decides which local projects deserve attention, from a browser or a shell.'
+    metadata { uid 'user' fractalColor '#759EB5' evidence 'README.md' }
+  }
+
+  cli = subsystem 'ongoing CLI' {
+    description 'Terminal client with full parity: it speaks the same HTTP API as the browser and never opens SQLite directly.'
+    metadata { uid 'cli' fractalColor '#82A6B6' evidence ['bin/ongoing.ts', 'docs/cli.md'] }
+
+    client = component 'API client & session' {
+      description 'Resolves --url / ONGOING_URL, stores the session cookie in ~/.config/ongoing/session (login posts the secret to /login when auth is on), and resolves project tokens by id, name, or path.'
+      metadata { uid 'cli.client' fractalColor '#82A6B6' evidence ['bin/ongoing.ts'] }
+    }
+    read_cmds = component 'Read commands' {
+      description 'list, show, views, stacks, status, path: dashboard ordering, attention reasons, toolchain lag, and service state as tables or JSON.'
+      metadata { uid 'cli.read_cmds' fractalColor '#82A6B6' evidence ['bin/ongoing.ts', 'docs/cli.md'] }
+    }
+    edit_cmds = component 'Edit commands' {
+      description 'favorite, hide, unhide, forget, prune, note, set, website: the same fields the drawer edits, plus website copy and selection.'
+      metadata { uid 'cli.edit_cmds' fractalColor '#82A6B6' evidence ['bin/ongoing.ts', 'docs/website.md'] }
+    }
+    scan_cmd = component 'scan command' {
+      description 'Starts a manual or per-project scan with an optional refresh policy and polls the catalog until the run settles when --wait is given.'
+      metadata { uid 'cli.scan_cmd' fractalColor '#82A6B6' evidence ['bin/ongoing.ts'] }
+    }
+    service_cmds = component 'Service commands' {
+      description 'build, restart, stop, logs, dev: the only verbs that touch the machine (launchctl, log files) rather than the API.'
+      metadata { uid 'cli.service_cmds' fractalColor '#82A6B6' evidence ['bin/ongoing.ts', 'AGENTS.md'] }
+    }
+  }
+
+  web = subsystem 'Browser dashboard' {
+    description 'SvelteKit pages rendered from the cached catalog; every mutation goes through the same HTTP API the CLI uses.'
+    metadata { uid 'web' fractalColor '#759EB5' evidence ['src/routes/+page.svelte', 'src/routes/+page.server.ts'] }
+
+    list = component 'Project list & filters' {
+      description 'Sortable, searchable list with attention views, stack filters, favorites grouping, drag reordering, and keyboard navigation.'
+      metadata { uid 'web.list' fractalColor '#759EB5' evidence ['src/routes/+page.svelte', 'src/lib/components/dashboard/ProjectList.svelte', 'src/lib/components/dashboard/FilterFlyout.svelte'] }
+    }
+    drawer = component 'Project drawer' {
+      description 'Per-project detail: note, intent and decision fields, every matching attention reason with its input and threshold, and open-in-Finder/Terminal.'
+      metadata { uid 'web.drawer' fractalColor '#759EB5' evidence ['src/lib/components/dashboard/ProjectDrawer.svelte'] }
+    }
+    scan_client = component 'Scan progress client' {
+      description 'Posts to /api/scan, subscribes to the run over EventSource, and reloads the page model on the terminal event.'
+      metadata { uid 'web.scan_client' fractalColor '#759EB5' evidence ['src/routes/+page.svelte', 'src/lib/components/dashboard/CatalogTicker.svelte'] }
+    }
+    hidden = component 'Hidden shelf' {
+      description 'Lists hidden projects and restores them; the same shelf is reachable to non-browser clients through ?hidden=true.'
+      metadata { uid 'web.hidden' fractalColor '#759EB5' evidence ['src/routes/hidden/+page.svelte', 'src/routes/hidden/+page.server.ts'] }
+    }
+    login = component 'Login form' {
+      description 'Form action that checks the access secret in constant time, rate-limits attempts per address, and sets the session cookie.'
+      metadata { uid 'web.login' fractalColor '#759EB5' evidence ['src/routes/login/+page.server.ts', 'src/routes/login/+page.svelte', 'docs/auth.md'] }
+    }
+  }
+
+  service = subsystem 'HTTP service' {
+    description 'The single local process: request gate, JSON API, and the composition root that owns the catalog and scanner.'
+    metadata { uid 'service' fractalColor '#739886' evidence ['src/hooks.server.ts', 'src/lib/server/scanning/runtime.ts'] }
+
+    edge = component 'Production edge' {
+      description 'Committed node:http boundary in front of adapter-node: counts raw mutation bytes, rejects oversized bodies, and forwards to a private loopback listener.'
+      metadata { uid 'service.edge' fractalColor '#739886' evidence ['scripts/production-server.ts', 'docs/deployment.md'] }
+    }
+    gate = component 'Request gate' {
+      description 'SvelteKit handle: session check for private paths, same-origin check for mutations when auth is on, bounded bodies, security headers, and the development scan scheduler trigger.'
+      metadata { uid 'service.gate' fractalColor '#739886' evidence ['src/hooks.server.ts', 'src/lib/server/scanning/automatic.ts'] }
+    }
+    security = component 'Sessions & secret' {
+      description 'HMAC session tokens, cookie options, constant-time secret comparison, and body buffering. Auth is intentionally disabled in production.'
+      metadata { uid 'service.security' fractalColor '#739886' evidence ['src/lib/server/security.ts', 'docs/auth.md', 'AGENTS.md'] }
+    }
+    projects_api = component 'Projects API' {
+      description 'GET /api/projects builds the page model; PATCH/DELETE/POST on /api/projects/:id edit notes and decisions, forget, or open locally; favorite, hide, reorder, and prune (dry-run by default, via discovery) are sibling routes.'
+      metadata { uid 'service.projects_api' fractalColor '#739886' evidence ['src/routes/api/projects/+server.ts', 'src/routes/api/projects/[id]/+server.ts', 'src/routes/api/projects/prune/+server.ts', 'src/lib/server/projects/actions.ts'] }
+    }
+    scan_api = component 'Scan API & events' {
+      description 'POST /api/scan starts a run (409 while one is active); GET /api/scan/events replays and streams progress as Server-Sent Events with a resumable cursor.'
+      metadata { uid 'service.scan_api' fractalColor '#739886' evidence ['src/routes/api/scan/+server.ts', 'src/routes/api/scan/events/+server.ts', 'src/lib/server/scanning/sse.ts'] }
+    }
+    website_api = component 'Website API' {
+      description 'Public-copy endpoints: per-project website metadata, standalone pages, and the deterministic live or draft export that OpenTangle consumes.'
+      metadata { uid 'service.website_api' fractalColor '#739886' evidence ['src/routes/api/website/+server.ts', 'src/routes/api/projects/[id]/website/+server.ts', 'src/routes/api/website/pages/+server.ts'] }
+    }
+    runtime = component 'Composition root' {
+      description 'Loads config, opens the catalog, wires the scanner with the production collector set, and retries enrichment for a restored project until no scan is running.'
+      metadata { uid 'service.runtime' fractalColor '#739886' evidence ['src/lib/server/scanning/runtime.ts', 'src/lib/server/config.ts'] }
+    }
+  }
+
+  domain = subsystem 'Domain rules' {
+    description 'Pure functions over normalized project data. No I/O, no provider types, so the browser can re-run them after an optimistic edit.'
+    metadata { uid 'domain' fractalColor '#89A579' evidence ['src/lib/domain/attention.ts', 'src/lib/domain/project.ts'] }
+
+    readmodel = component 'Catalog read model' {
+      description 'Joins projects, metrics, snapshots, stacks, and errors into DashboardProject rows, resolves stacks against cached baselines, computes 30-day deltas, and applies the query.'
+      metadata { uid 'domain.readmodel' fractalColor '#89A579' evidence ['src/lib/dashboard/catalog.ts', 'src/lib/dashboard/options.ts'] }
+    }
+    attention = component 'Attention views' {
+      description 'Seven independent classifications with explicit thresholds and a 72-hour freshness gate; every membership carries its reasons. No grand score.'
+      metadata { uid 'domain.attention' fractalColor '#89A579' evidence ['src/lib/domain/attention.ts', 'src/lib/domain/attention.test.ts'] }
+    }
+    stack = component 'Stack resolution' {
+      description 'Compares a declared toolchain version to cached release cycles: current, behind by supported cycles, end-of-life, or unknown.'
+      metadata { uid 'domain.stack' fractalColor '#89A579' evidence ['src/lib/domain/stack.ts', 'docs/adr/0004-toolchain-baselines.md'] }
+    }
+    project = component 'Project & decision rules' {
+      description 'Intent vocabulary, note and next-action limits, decision validation, and sparse manual rank assignment for reordering.'
+      metadata { uid 'domain.project' fractalColor '#89A579' evidence ['src/lib/domain/project.ts', 'src/lib/domain/sorting.ts'] }
+    }
+    website = component 'Website copy rules' {
+      description 'Validates public copy patches, decides eligibility from repository visibility or an explicit override, and produces the deterministic export envelope.'
+      metadata { uid 'domain.website' fractalColor '#89A579' evidence ['src/lib/domain/website.ts', 'docs/website.md'] }
+    }
+    contracts = component 'Provider contracts' {
+      description 'IssueMetrics and HostingMetrics shapes and the provider interfaces the rest of the app consumes instead of TD records or GitHub responses.'
+      metadata { uid 'domain.contracts' fractalColor '#89A579' evidence ['src/lib/domain/scanning.ts', 'src/lib/domain/metrics.ts', 'docs/adr/0002-provider-adapters.md'] }
+    }
+  }
+
+  scanning = subsystem 'Scanner & collectors' {
+    description 'Cache-first, bounded refresh of the catalog under a durable lease: local collectors spawn tools, remote adapters degrade to availability states, and nothing fails a whole scan.'
+    metadata { uid 'scanning' fractalColor '#9A91C4' evidence ['src/lib/server/scanning/scanner.ts', 'docs/adr/0003-scan-strategy.md', 'docs/adr/0002-provider-adapters.md'] }
+
+    scanner = component 'Scan orchestrator' {
+      description 'Acquires the lease, heartbeats it, runs git, TD, and stack per project under concurrency limits, gates cloc by policy, then refreshes baselines and GitHub. A failed collector records a warning and keeps the last result.'
+      metadata { uid 'scanning.scanner' fractalColor '#9A91C4' evidence ['src/lib/server/scanning/scanner.ts', 'src/lib/server/scanning/limit.ts'] }
+    }
+    wiring = component 'Collector wiring' {
+      description 'The production dependency set (GitHub provider, endoflife baseline) used identically by the web process and the scan job.'
+      metadata { uid 'scanning.wiring' fractalColor '#9A91C4' evidence ['src/lib/server/scanning/dependencies.ts'] }
+    }
+    scheduler = component 'Development scheduler' {
+      description 'Deferred startup scan and five-minute cheap refresh, armed after the first private request. Disabled in production, where launchd owns the schedule.'
+      metadata { uid 'scanning.scheduler' fractalColor '#9A91C4' evidence ['src/lib/server/scanning/scheduler.ts', 'src/lib/server/scanning/automatic.ts'] }
+    }
+    progress = component 'Progress bus' {
+      description 'In-memory per-run event log with subscriptions; terminal events close the run and are re-sent on reconnect.'
+      metadata { uid 'scanning.progress' fractalColor '#9A91C4' evidence ['src/lib/server/scanning/progress.ts'] }
+    }
+
+    // Local collectors
+    discover = component 'Discovery & reconcile' {
+      description 'Walks scan roots to a bounded depth, canonicalizes each .git marker with git rev-parse, upserts rows, marks unseen projects missing, and forgets only confirmed-gone projects after a grace period.'
+      metadata { uid 'scanning.discover' fractalColor '#D4A373' evidence ['src/lib/server/collectors/discover.ts', 'src/lib/server/collectors/discover.test.ts'] }
+    }
+    git = component 'Git metrics' {
+      description 'Commit cadence over 7/30/90 days, churn, contributors, dirty files, ahead/behind, tags, and the tracked-worktree fingerprint that keys the cloc cache.'
+      metadata { uid 'scanning.git' fractalColor '#D4A373' evidence ['src/lib/server/collectors/git.ts'] }
+    }
+    loc = component 'Lines of code' {
+      description 'Runs cloc only when the fingerprint changed or a full refresh is forced; parses per-language totals and the dominant language.'
+      metadata { uid 'scanning.loc' fractalColor '#D4A373' evidence ['src/lib/server/collectors/loc.ts'] }
+    }
+    td = adapter 'TD issue adapter' {
+      description 'Prefers a running td serve on the port in .todos/serve-port, falls back to the td CLI, and reports open, in-progress, blocked, review, and stale counts.'
+      metadata { uid 'scanning.td' fractalColor '#D4A373' evidence ['src/lib/server/collectors/td.ts'] }
+    }
+    stack = component 'Stack declarations' {
+      description 'Reads declared toolchain versions from root manifests (go.mod, package.json, .tool-versions, mise.toml, Cargo.toml, Gemfile, Dockerfile, ...) on every policy.'
+      metadata { uid 'scanning.stack' fractalColor '#D4A373' evidence ['src/lib/server/collectors/stack.ts'] }
+    }
+    github = component 'GitHub enrichment' {
+      description 'Parses the origin remote, resolves origin errors, checks provider availability once per scan, then fetches hosting and traffic metrics when due and records star and traffic snapshots.'
+      metadata { uid 'scanning.github' fractalColor '#D4A373' evidence ['src/lib/server/collectors/github.ts'] }
+    }
+    process = component 'Subprocess runner' {
+      description 'Spawns commands with timeouts, output caps, abort signals, and process-group kill so one hung tool cannot stall a scan.'
+      metadata { uid 'scanning.process' fractalColor '#D4A373' evidence ['src/lib/server/collectors/process.ts'] }
+    }
+
+    // Remote provider adapters
+    github_client = adapter 'GitHub HTTP client' {
+      description 'Token from GH_TOKEN, GITHUB_TOKEN, or gh auth token; GraphQL and REST calls; remembers rate-limit resets and classifies failures as unauthenticated, rate-limited, or unavailable.'
+      metadata { uid 'scanning.github_client' fractalColor '#C48282' evidence ['src/lib/server/github/client.ts'] }
+    }
+    github_provider = adapter 'GitHub hosting provider' {
+      description 'Batched GraphQL for stars, PRs, issues, releases, and contributors; REST for workflow state and traffic. Implements HostingMetricsProvider.'
+      metadata { uid 'scanning.github_provider' fractalColor '#C48282' evidence ['src/lib/server/github/provider.ts'] }
+    }
+    endoflife = adapter 'endoflife.date provider' {
+      description 'Maps toolchains to endoflife.date products and parses release cycles. Java and Swift have no upstream product and resolve to unknown.'
+      metadata { uid 'scanning.endoflife' fractalColor '#C48282' evidence ['src/lib/server/releases/endoflife.ts'] }
+    }
+    baseline = component 'Release baseline refresh' {
+      description 'Refreshes cycles only for declared toolchains, at most daily on success and hourly after failure; a failure never discards cached cycles.'
+      metadata { uid 'scanning.baseline' fractalColor '#C48282' evidence ['src/lib/server/releases/baseline.ts', 'docs/adr/0004-toolchain-baselines.md'] }
+    }
+  }
+
+  catalog = subsystem 'App-owned catalog' {
+    description 'SQLite index and cache. Filesystem discovery stays authoritative; missing projects are kept so notes and decisions survive.'
+    metadata { uid 'catalog' fractalColor '#B59669' evidence ['src/lib/server/catalog/repository.ts', 'docs/adr/0001-app-owned-storage.md'] }
+
+    database = component 'Database & migrations' {
+      description 'Opens SQLite in WAL mode, serializes writes through one promise tail, and applies six versioned migrations statement by statement inside transactions.'
+      metadata { uid 'catalog.database' fractalColor '#B59669' evidence ['src/lib/server/catalog/database.ts', 'src/lib/server/catalog/migrations.ts'] }
+    }
+    repository = component 'Catalog repository' {
+      description 'The one persistence interface: projects and flags, decisions, website copy, metrics and snapshots, stacks and release baselines, collection errors, and scan runs with lease acquisition, renewal, and completion.'
+      metadata { uid 'catalog.repository' fractalColor '#B59669' evidence ['src/lib/server/catalog/repository.ts'] }
+    }
+    sqlite = store 'ongoing.sqlite' {
+      description 'projects, project_metrics, metric_snapshots, project_stacks, toolchain_releases, toolchain_baseline_status, collection_errors, scan_runs, website_pages. Default .data/ongoing.sqlite; Application Support in production.'
+      metadata { uid 'catalog.sqlite' fractalColor '#B59669' evidence ['src/lib/server/catalog/migrations/001_initial.sql', 'src/lib/server/catalog/migrations/003_stacks.sql', 'src/lib/server/catalog/migrations/006_website_pages.sql'] }
+    }
+  }
+
+  ops = subsystem 'Release & operations' {
+    description 'Private-host tooling for aerie.local: pinned Bun, launchd definitions, backups, and health-gated deploys.'
+    metadata { uid 'ops' fractalColor '#9FA8B3' evidence ['docs/deployment.md', 'scripts/release-config.ts'] }
+
+    scan_job = job 'Daily scan entry' {
+      description 'scripts/scan.ts opens the same database with the same collector wiring as the web process and runs one scan; exits nonzero when a run is already leased.'
+      metadata { uid 'ops.scan_job' fractalColor '#9FA8B3' evidence ['scripts/scan.ts', 'docs/deployment.md'] }
+    }
+    release = component 'Deploy & rollback' {
+      description 'Client validates the pinned runtime, then the remote worker fast-forwards main, quiesces both agents, backs up SQLite, builds, migrates once, reinstalls definitions, and waits for health on 7766.'
+      metadata { uid 'ops.release' fractalColor '#9FA8B3' evidence ['scripts/release-client.ts', 'scripts/remote-release.ts', 'scripts/rollback.ts'] }
+    }
+    smoke = component 'Smoke & migrate' {
+      description 'Authenticated LAN smoke against the configured origin, production-server tests, and the standalone migration runner.'
+      metadata { uid 'ops.smoke' fractalColor '#9FA8B3' evidence ['scripts/smoke.ts', 'scripts/production-smoke.ts', 'scripts/migrate.ts'] }
+    }
+    provision = component 'Runtime provisioning' {
+      description 'Installs the exact Bun version into an app-scoped mise data directory without touching the user runtime.'
+      metadata { uid 'ops.provision' fractalColor '#9FA8B3' evidence ['scripts/provision-runtime.sh', 'AGENTS.md'] }
+    }
+  }
+
+  external = subsystem 'Outside the process' {
+    description 'Tools, services, and hosts Ongoing depends on but does not own.'
+    metadata { uid 'external' fractalColor '#A69B8C' evidence ['docs/deployment.md'] }
+
+    repos = store 'Scan roots' {
+      description 'Git repositories under the configured roots (~/code in production), read to a bounded depth. Authoritative for what exists.'
+      metadata { uid 'external.repos' fractalColor '#A69B8C' evidence ['src/lib/server/config.ts', 'docs/adr/0003-scan-strategy.md'] }
+    }
+    tools = service 'git, cloc, td, gh' {
+      description 'Homebrew-resolved command-line tools the collectors spawn; deployment verifies all four before installing the scan agent.'
+      metadata { uid 'external.tools' fractalColor '#A69B8C' evidence ['docs/deployment.md', 'scripts/remote-release.ts'] }
+    }
+    td_serve = service 'td serve (HTTP)' {
+      description 'A project-local TD server, when running, answering /health, /v1/stats, and a stale-issue query.'
+      metadata { uid 'external.td_serve' fractalColor '#A69B8C' evidence ['src/lib/server/collectors/td.ts'] }
+    }
+    github = service 'GitHub API' {
+      description 'api.github.com GraphQL and REST, including repository traffic that needs push access.'
+      metadata { uid 'external.github' fractalColor '#A69B8C' evidence ['src/lib/server/github/client.ts'] }
+    }
+    endoflife = service 'endoflife.date' {
+      description 'Upstream release-cycle baseline for declared toolchains.'
+      metadata { uid 'external.endoflife' fractalColor '#A69B8C' evidence ['src/lib/server/releases/endoflife.ts'] }
+    }
+    launchd = service 'launchd agents' {
+      description 'com.marcusvorwaller.ongoing serves aerie.local:7766; com.marcusvorwaller.ongoing.scan fires once daily at 03:00 with no RunAtLoad.'
+      metadata { uid 'external.launchd' fractalColor '#A69B8C' evidence ['docs/deployment.md', 'scripts/release-config.ts'] }
+    }
+    opentangle = service 'OpenTangle site' {
+      description 'The public website build that reads the live website export on its next deployment; private notes and metrics never reach it.'
+      metadata { uid 'external.opentangle' fractalColor '#A69B8C' evidence ['docs/website.md'] }
+    }
+  }
+
+  radar = subsystem 'Tech radar' {
+    #proposed
+    description 'Sketched, not scheduled: technologies as a second catalog entry kind with rings, detected or declared project edges, and generated project-standards tables.'
+    metadata { uid 'radar' fractalColor '#C4A0B8' evidence ['docs/plans/tech-radar.md'] }
+
+    tables = store 'technologies & edges' {
+      description 'technologies (kind, ring, note, providedByProjectId, toolSurface, reviewAfter) and project_technologies (detected or declared evidence, version).'
+      metadata { uid 'radar.tables' fractalColor '#C4A0B8' evidence ['docs/plans/tech-radar.md'] }
+    }
+    signatures = component 'Signature detection' {
+      description 'Extends the stack collector to match manifest dependencies against a signature list; detected edges are rewritten every scan.'
+      metadata { uid 'radar.signatures' fractalColor '#C4A0B8' evidence ['docs/plans/tech-radar.md'] }
+    }
+    tech_cli = component 'ongoing tech verbs' {
+      description 'tech list, show, add, set, link, unlink, export: the CLI and JSON surface that feeds skill generators.'
+      metadata { uid 'radar.tech_cli' fractalColor '#C4A0B8' evidence ['docs/plans/tech-radar.md'] }
+    }
+    page = component 'Radar page' {
+      description 'Four rings as rows, each technology a chip with its project count, clicking through to the filtered project list.'
+      metadata { uid 'radar.page' fractalColor '#C4A0B8' evidence ['docs/plans/tech-radar.md'] }
+    }
+  }
+
+  // People and clients
+  user .calls web.list 'Browses and edits in the dashboard' { metadata { uid 'user-web' } }
+  user .calls cli.read_cmds 'Runs ongoing from a shell' { metadata { uid 'user-cli' } }
+
+  // CLI is a pure API client
+  cli.read_cmds .calls cli.client 'Requests page models' { metadata { uid 'cli-read-client' } }
+  cli.edit_cmds .calls cli.client 'Sends mutations' { metadata { uid 'cli-edit-client' } }
+  cli.scan_cmd .calls cli.client 'Starts and polls scans' { metadata { uid 'cli-scan-client' } }
+  cli.client .calls service.projects_api 'GET /api/projects, PATCH /api/projects/:id, ...' { metadata { uid 'cli-projects-api' } }
+  cli.client .calls service.scan_api 'POST /api/scan' { metadata { uid 'cli-scan-api' } }
+  cli.client .calls service.website_api 'website copy, pages, export' { metadata { uid 'cli-website-api' } }
+  cli.service_cmds .calls external.launchd 'bootout / bootstrap the web and scan agents' { metadata { uid 'cli-launchd' } }
+
+  // Browser is the same kind of client
+  web.list .calls service.projects_api 'favorite, hide, reorder, open' { metadata { uid 'web-list-api' } }
+  web.drawer .calls service.projects_api 'PATCH note and decision fields' { metadata { uid 'web-drawer-api' } }
+  web.drawer .calls domain.attention 'Re-classifies after an optimistic edit' { metadata { uid 'web-drawer-attention' } }
+  web.scan_client .calls service.scan_api 'POST /api/scan' { metadata { uid 'web-scan-post' } }
+  service.scan_api .streams web.scan_client 'Server-Sent Events per run' { metadata { uid 'scan-sse' } }
+  web.hidden .calls service.projects_api 'Unhide' { metadata { uid 'web-hidden-api' } }
+  web.login .calls service.security 'Verifies the secret and sets the cookie' { metadata { uid 'login-security' } }
+
+  // Request path
+  service.edge .calls service.gate 'Forwards bounded requests over loopback' { metadata { uid 'edge-gate' } }
+  service.gate .calls service.security 'Validates the session cookie' { metadata { uid 'gate-security' } }
+  service.gate .calls scanning.scheduler 'Arms the development scheduler once' { metadata { uid 'gate-scheduler' } }
+  service.gate .calls service.projects_api 'Routes private requests' { metadata { uid 'gate-projects' } }
+  service.gate .calls service.scan_api 'Routes scan requests' { metadata { uid 'gate-scan' } }
+  service.gate .calls service.website_api 'Routes website requests' { metadata { uid 'gate-website' } }
+
+  // API to core
+  service.projects_api .calls domain.readmodel 'Builds the page model' { metadata { uid 'projects-readmodel' } }
+  service.projects_api .calls domain.project 'Validates notes and decisions' { metadata { uid 'projects-domain' } }
+  service.projects_api .writes catalog.repository 'Flags, notes, decisions, order, forget' { metadata { uid 'projects-repo' } }
+  service.scan_api .calls scanning.scanner 'Starts a manual or project run' { metadata { uid 'scanapi-scanner' } }
+  service.scan_api .reads scanning.progress 'Replays and subscribes to run events' { metadata { uid 'scanapi-progress' } }
+  service.website_api .calls domain.website 'Validates copy and exports eligible entries' { metadata { uid 'website-domain' } }
+  service.website_api .writes catalog.repository 'Website copy and standalone pages' { metadata { uid 'website-repo' } }
+  service.runtime .calls catalog.database 'Opens and migrates the catalog' { metadata { uid 'runtime-database' } }
+  service.runtime .calls scanning.scanner 'Re-enriches a restored project' { metadata { uid 'runtime-enrich' } }
+
+  // Domain reads
+  domain.readmodel .reads catalog.repository 'Projects, metrics, snapshots, stacks, errors' { metadata { uid 'readmodel-repo' } }
+  domain.readmodel .calls domain.attention 'Classifies every project' { metadata { uid 'readmodel-attention' } }
+  domain.readmodel .calls domain.stack 'Resolves declared versions against baselines' { metadata { uid 'readmodel-stack' } }
+  domain.readmodel .calls domain.project 'Sorts and applies the query' { metadata { uid 'readmodel-project' } }
+  domain.website .reads domain.contracts 'Repository visibility from hosting metrics' { metadata { uid 'website-contracts' } }
+  domain.attention .reads domain.contracts 'Metric shapes and availability states' { metadata { uid 'attention-contracts' } }
+
+  // Scanner pipeline
+  scanning.scheduler .calls scanning.scanner 'startup and scheduled runs' { metadata { uid 'scheduler-scanner' } }
+  scanning.wiring .supplies scanning.scanner 'collectHosting and refreshReleaseBaselines' { metadata { uid 'wiring-scanner' } }
+  scanning.scanner .writes catalog.repository 'Lease, metrics, snapshots, errors, run progress' { metadata { uid 'scanner-repo' } }
+  scanning.scanner .writes scanning.progress 'Publishes run events' { metadata { uid 'scanner-progress' } }
+  scanning.scanner .calls scanning.discover 'Discover and reconcile roots' { metadata { uid 'scanner-discover' } }
+  scanning.scanner .calls scanning.git 'Per project, every policy' { metadata { uid 'scanner-git' } }
+  scanning.scanner .calls scanning.td 'Per project, every policy' { metadata { uid 'scanner-td' } }
+  scanning.scanner .calls scanning.stack 'Per project, every policy' { metadata { uid 'scanner-stack' } }
+  scanning.scanner .calls scanning.loc 'Only for changed and full policies' { metadata { uid 'scanner-loc' } }
+  scanning.scanner .calls scanning.baseline 'After per-project collection' { metadata { uid 'scanner-baseline' } }
+  scanning.scanner .calls scanning.github 'Hosting and traffic, once per run' { metadata { uid 'scanner-github' } }
+
+  // Collectors
+  scanning.discover .reads external.repos 'Walks roots and stats missing paths' { metadata { uid 'discover-repos' } }
+  scanning.discover .writes catalog.repository 'Upsert, mark missing, forget' { metadata { uid 'discover-repo' } }
+  scanning.discover .calls scanning.process 'git rev-parse --show-toplevel' { metadata { uid 'discover-process' } }
+  scanning.git .calls scanning.process 'git log, status, ls-files' { metadata { uid 'git-process' } }
+  scanning.loc .calls scanning.git 'Tracked worktree fingerprint' { metadata { uid 'loc-git' } }
+  scanning.loc .calls scanning.process 'cloc --json --vcs git' { metadata { uid 'loc-process' } }
+  scanning.td .calls external.td_serve 'HTTP when .todos/serve-port is live' { metadata { uid 'td-http' } }
+  scanning.td .calls scanning.process 'td --json list --all as fallback' { metadata { uid 'td-process' } }
+  scanning.stack .reads external.repos 'Root manifests' { metadata { uid 'stack-repos' } }
+  scanning.github .calls scanning.process 'git remote get-url origin' { metadata { uid 'github-process' } }
+  scanning.github .calls scanning.github_provider 'availability, collect, collectTraffic' { metadata { uid 'github-provider' } }
+  scanning.github .writes catalog.repository 'Hosting metrics, snapshots, availability' { metadata { uid 'github-repo' } }
+  scanning.process .runs external.tools 'Spawned with timeouts and output caps' { metadata { uid 'process-tools' } }
+
+  // Providers
+  scanning.github_provider .calls scanning.github_client 'GraphQL and REST requests' { metadata { uid 'provider-client' } }
+  scanning.github_client .calls external.github 'api.github.com' { metadata { uid 'client-github' } }
+  scanning.github_client .calls scanning.process 'gh auth token when no env token' { metadata { uid 'client-gh' } }
+  scanning.baseline .calls scanning.endoflife 'Fetch cycles per declared toolchain' { metadata { uid 'baseline-endoflife' } }
+  scanning.baseline .writes catalog.repository 'toolchain_releases and baseline status' { metadata { uid 'baseline-repo' } }
+  scanning.endoflife .calls external.endoflife 'GET /api/v1/products/:id' { metadata { uid 'endoflife-api' } }
+
+  // Catalog
+  catalog.repository .calls catalog.database 'Serialized writes and queries' { metadata { uid 'repo-database' } }
+  catalog.database .writes catalog.sqlite 'WAL journal, migrations' { metadata { uid 'database-sqlite' } }
+
+  // Operations
+  external.launchd .runs service.edge 'Web agent on 7766' { metadata { uid 'launchd-web' } }
+  external.launchd .schedules ops.scan_job 'Scan agent at 03:00 local' { metadata { uid 'launchd-scan' } }
+  ops.scan_job .calls scanning.scanner 'One cli-reason scan with the shared wiring' { metadata { uid 'scanjob-scanner' } }
+  ops.scan_job .calls catalog.database 'Opens the production database' { metadata { uid 'scanjob-database' } }
+  ops.release .calls external.launchd 'Quiesce, reinstall definitions, start' { metadata { uid 'release-launchd' } }
+  ops.release .writes catalog.sqlite 'Consistent backup, migrate once, restore on rollback' { metadata { uid 'release-sqlite' } }
+  ops.release .calls ops.provision 'Validates the pinned Bun before deploying' { metadata { uid 'release-provision' } }
+  ops.smoke .calls service.edge 'Health and authenticated LAN smoke' { metadata { uid 'smoke-edge' } }
+  ops.smoke .calls catalog.database 'Standalone migration' { metadata { uid 'smoke-migrate' } }
+
+  // Website consumer
+  external.opentangle .calls service.website_api 'GET /api/website on deployment' { metadata { uid 'opentangle-export' } }
+
+  // Proposed tech radar
+  radar.signatures .calls scanning.stack 'Reads manifest dependencies alongside toolchains' { metadata { uid 'radar-stack' } }
+  radar.signatures .writes radar.tables 'Rewrites detected edges every scan' { metadata { uid 'radar-detected' } }
+  radar.tech_cli .writes radar.tables 'Rings, notes, declared edges' { metadata { uid 'radar-cli-tables' } }
+  radar.tech_cli .calls cli.client 'Through the same HTTP API' { metadata { uid 'radar-cli-client' } }
+  radar.page .reads radar.tables 'Rings and project counts' { metadata { uid 'radar-page-tables' } }
+  radar.tables .reads catalog.repository 'Languages come from project_stacks' { metadata { uid 'radar-tables-stacks' } }
+}
+
+views {
+  view index {
+    include *
+  }
+}

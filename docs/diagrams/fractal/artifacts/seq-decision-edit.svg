@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" role="img" aria-labelledby="sequence-title sequence-description" data-theme="graphite" data-theme-appearance="light">
+  <title id="sequence-title">Setting intent from the drawer</title><desc id="sequence-description">An optimistic edit: the browser re-classifies the project locally with the same pure rules the server uses, then persists through the API.</desc><metadata>{&quot;journeyId&quot;:&quot;decision-edit&quot;,&quot;provenance&quot;:&quot;Authored 2026-09-11 from src/routes/+page.svelte, src/lib/components/dashboard/ProjectDrawer.svelte, src/routes/api/projects/[id]/+server.ts, and src/lib/domain/attention.ts.&quot;,&quot;hiddenLanes&quot;:[],&quot;rows&quot;:[{&quot;id&quot;:&quot;optimistic&quot;,&quot;type&quot;:&quot;phase&quot;,&quot;messageIds&quot;:[&quot;choose&quot;,&quot;reclassify&quot;,&quot;views&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;person&quot;,&quot;drawer&quot;,&quot;attention&quot;]},{&quot;id&quot;:&quot;choose&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;choose&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;person&quot;,&quot;drawer&quot;]},{&quot;id&quot;:&quot;reclassify&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;reclassify&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;drawer&quot;,&quot;attention&quot;]},{&quot;id&quot;:&quot;views&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;views&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;attention&quot;,&quot;drawer&quot;]},{&quot;id&quot;:&quot;persist&quot;,&quot;type&quot;:&quot;phase&quot;,&quot;messageIds&quot;:[&quot;patch&quot;,&quot;validate&quot;,&quot;write&quot;,&quot;ok&quot;,&quot;reload&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;drawer&quot;,&quot;api&quot;,&quot;rules&quot;,&quot;repo&quot;]},{&quot;id&quot;:&quot;patch&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;patch&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;drawer&quot;,&quot;api&quot;]},{&quot;id&quot;:&quot;validate&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;validate&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;api&quot;,&quot;rules&quot;]},{&quot;id&quot;:&quot;write&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;write&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;api&quot;,&quot;repo&quot;]},{&quot;id&quot;:&quot;ok&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;ok&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;api&quot;,&quot;drawer&quot;]},{&quot;id&quot;:&quot;reload&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;reload&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;drawer&quot;,&quot;api&quot;]}]}</metadata>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#85857f"/></marker>
+    <marker id="arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10" fill="none" stroke="#85857f" stroke-width="1.5"/></marker>
+  </defs>
+  <rect width="1920" height="1080" fill="#f8f8f6"/>
+  <g font-family="Arial, Helvetica, sans-serif" data-export-layer="title">
+    <text x="70" y="43" font-size="11" letter-spacing="2.5" fill="#626b6f">FRACTAL / SEQUENCE JOURNEY</text>
+    <text x="70" y="88" text-anchor="start" font-size="34" fill="#292927"><tspan x="70" dy="0">Setting intent from the drawer</tspan></text>
+    <text x="70" y="126" text-anchor="start" font-size="15" fill="#74746f"><tspan x="70" dy="0">An optimistic edit: the browser re-classifies the project locally with the same pure rules the server uses, then persists through the API.</tspan></text>
+  </g>
+  <g font-family="Arial, Helvetica, sans-serif" transform="translate(74.27160493827171 190) scale(0.9382716049382716)"><g data-column="person" data-members="person" data-elements="">
+    <rect x="102" y="32" width="244" height="44" rx="12" fill="#ffffff" stroke="#759EB5" stroke-width="2"/>
+    <text x="224" y="59" text-anchor="middle" font-size="15" fill="#292927"><tspan x="224" dy="0">Marcus</tspan></text>
+    <path d="M224 76V740" stroke="#ddddda" stroke-width="1.2" stroke-dasharray="5 7"/>
+  </g><g data-column="drawer" data-members="drawer" data-elements="web.drawer">
+    <rect x="390" y="32" width="244" height="44" rx="12" fill="#ffffff" stroke="#759EB5" stroke-width="2"/>
+    <text x="512" y="59" text-anchor="middle" font-size="15" fill="#292927"><tspan x="512" dy="0">Project drawer</tspan></text>
+    <path d="M512 76V740" stroke="#ddddda" stroke-width="1.2" stroke-dasharray="5 7"/>
+  </g><g data-column="attention" data-members="attention" data-elements="domain.attention">
+    <rect x="678" y="32" width="244" height="44" rx="12" fill="#ffffff" stroke="#89A579" stroke-width="2"/>
+    <text x="800" y="59" text-anchor="middle" font-size="15" fill="#292927"><tspan x="800" dy="0">Attention rules (browser)</tspan></text>
+    <path d="M800 76V740" stroke="#ddddda" stroke-width="1.2" stroke-dasharray="5 7"/>
+  </g><g data-column="api" data-members="api" data-elements="service.projects_api">
+    <rect x="966" y="32" width="244" height="44" rx="12" fill="#ffffff" stroke="#739886" stroke-width="2"/>
+    <text x="1088" y="59" text-anchor="middle" font-size="15" fill="#292927"><tspan x="1088" dy="0">Projects API</tspan></text>
+    <path d="M1088 76V740" stroke="#ddddda" stroke-width="1.2" stroke-dasharray="5 7"/>
+  </g><g data-column="rules" data-members="rules" data-elements="domain.project">
+    <rect x="1254" y="32" width="244" height="44" rx="12" fill="#ffffff" stroke="#89A579" stroke-width="2"/>
+    <text x="1376" y="59" text-anchor="middle" font-size="15" fill="#292927"><tspan x="1376" dy="0">Decision rules</tspan></text>
+    <path d="M1376 76V740" stroke="#ddddda" stroke-width="1.2" stroke-dasharray="5 7"/>
+  </g><g data-column="repo" data-members="repo" data-elements="catalog.repository">
+    <rect x="1542" y="32" width="244" height="44" rx="12" fill="#ffffff" stroke="#B59669" stroke-width="2"/>
+    <text x="1664" y="59" text-anchor="middle" font-size="15" fill="#292927"><tspan x="1664" dy="0">Repository</tspan></text>
+    <path d="M1664 76V740" stroke="#ddddda" stroke-width="1.2" stroke-dasharray="5 7"/>
+  </g><g data-row-id="optimistic" data-message-ids="choose,reclassify,views" data-participant-ids="person,drawer,attention" data-row-type="phase" data-phase-depth="0" data-collapsed="false">
+        <rect x="58" y="118" width="1772" height="35" rx="10" fill="#eeeeeb" stroke="#d5d5d0"/>
+        <text x="78" y="141" text-anchor="start" font-size="15" fill="#292927"><tspan x="78" dy="0">1. Reflect the change immediately</tspan></text>
+        
+        <text x="1788" y="139.5" text-anchor="end" font-size="11" fill="#7d7d77">3 interactions</text>
+      </g><g data-row-id="choose" data-message-ids="choose" data-participant-ids="person,drawer" data-row-type="message" data-kind="call">
+      <rect x="188" y="167" width="360" height="34" rx="7" fill="#f8f8f6"/>
+      <text x="368" y="190" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="368" dy="0">Set intent to invest</tspan></text>
+      
+      <path d="M224 206H504" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+    </g><g data-row-id="reclassify" data-message-ids="reclassify" data-participant-ids="drawer,attention" data-row-type="message" data-kind="call">
+      <rect x="476" y="231" width="360" height="66" rx="7" fill="#f8f8f6"/>
+      <text x="656" y="254" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="656" dy="0">classifyAttentionViews(project with new intent)</tspan></text>
+      <text x="656" y="276" text-anchor="middle" font-size="11" fill="#7d7d77"><tspan x="656" dy="0">Dormant requires intent other than invest, so the row can</tspan><tspan x="656" dy="15">leave that view before the server answers.</tspan></text>
+      <path d="M512 302H792" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+    </g><g data-row-id="views" data-message-ids="views" data-participant-ids="attention,drawer" data-row-type="message" data-kind="return">
+      <rect x="476" y="327" width="360" height="34" rx="7" fill="#f8f8f6"/>
+      <text x="656" y="350" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="656" dy="0">Updated memberships and reasons</tspan></text>
+      
+      <path d="M800 366H520" fill="none" stroke="#85857f" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow)"/>
+    </g><g data-row-id="persist" data-message-ids="patch,validate,write,ok,reload" data-participant-ids="drawer,api,rules,repo" data-row-type="phase" data-phase-depth="0" data-collapsed="false">
+        <rect x="58" y="391" width="1772" height="35" rx="10" fill="#eeeeeb" stroke="#d5d5d0"/>
+        <text x="78" y="414" text-anchor="start" font-size="15" fill="#292927"><tspan x="78" dy="0">2. Persist through the same API the CLI uses</tspan></text>
+        
+        <text x="1788" y="412.5" text-anchor="end" font-size="11" fill="#7d7d77">5 interactions</text>
+      </g><g data-row-id="patch" data-message-ids="patch" data-participant-ids="drawer,api" data-row-type="message" data-kind="call">
+      <rect x="620" y="440" width="360" height="34" rx="7" fill="#f8f8f6"/>
+      <text x="800" y="463" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="800" dy="0">PATCH /api/projects/:id { intent: invest }</tspan></text>
+      
+      <path d="M512 479H1080" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+    </g><g data-row-id="validate" data-message-ids="validate" data-participant-ids="api,rules" data-row-type="message" data-kind="call">
+      <rect x="1052" y="504" width="360" height="34" rx="7" fill="#f8f8f6"/>
+      <text x="1232" y="527" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="1232" dy="0">validateDecisionUpdate</tspan></text>
+      
+      <path d="M1088 543H1368" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+    </g><g data-row-id="write" data-message-ids="write" data-participant-ids="api,repo" data-row-type="message" data-kind="call">
+      <rect x="1196" y="568" width="360" height="34" rx="7" fill="#f8f8f6"/>
+      <text x="1376" y="591" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="1376" dy="0">updateDecision(id, { intent })</tspan></text>
+      
+      <path d="M1088 607H1656" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+    </g><g data-row-id="ok" data-message-ids="ok" data-participant-ids="api,drawer" data-row-type="message" data-kind="return">
+      <rect x="620" y="632" width="360" height="34" rx="7" fill="#f8f8f6"/>
+      <text x="800" y="655" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="800" dy="0">200 { id, intent }</tspan></text>
+      
+      <path d="M1088 671H520" fill="none" stroke="#85857f" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow)"/>
+    </g><g data-row-id="reload" data-message-ids="reload" data-participant-ids="drawer,api" data-row-type="message" data-kind="call">
+      <rect x="620" y="696" width="360" height="34" rx="7" fill="#f8f8f6"/>
+      <text x="800" y="719" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="800" dy="0">invalidateAll → GET page model</tspan></text>
+      
+      <path d="M512 735H1080" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+    </g></g>
+  <g font-family="Arial, Helvetica, sans-serif" data-export-layer="footer">
+    <path d="M70 992H1850" stroke="#ddddda"/>
+    <text x="70" y="1027" font-size="12" font-weight="600" letter-spacing="1" fill="#626b6f">CURRENT · 8 INTERACTIONS</text>
+    <text x="620" y="1027" font-size="11" fill="#7d7d77">SOURCE · Authored 2026-09-11 from src/routes/+page.svelte, src/lib/components/dashboard/ProjectDrawer.svelte, src/routes/api/projects/[id]/+server.ts, and src/lib/domain/attention.ts.</text>
+  </g>
+  </svg>

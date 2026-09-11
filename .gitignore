@@ -19,3 +19,13 @@ test-results/
 # Editors and operating systems
 .DS_Store
 *.swp
+.sidecar/
+.sidecar-agent
+.sidecar-task
+.sidecar-pr
+.sidecar-start.sh
+.sidecar-base
+.td-root
+
+# graphify knowledge graph cache (rebuilt by clara-home bin/graphify-refresh)
+graphify-out/

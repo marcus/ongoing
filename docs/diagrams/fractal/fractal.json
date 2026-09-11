@@ -1,0 +1,177 @@
+{
+  "version": 1,
+  "id": "ongoing",
+  "title": "Ongoing",
+  "description": "Which local projects deserve attention: one API, two clients, a cache-first scanner, and an app-owned catalog.",
+  "provenance": "Authored 2026-09-11 from the Ongoing source tree, ADRs, README, AGENTS.md, deployment and website docs. Every component cites the files inspected. The catalog repository is modeled as one component rather than per table; the Svelte component tree and the test suites are intentionally shallow. The tech radar subsystem is a proposal from docs/plans/tech-radar.md and is not built.",
+  "boundaries": [
+    {
+      "id": "api-parity",
+      "title": "Same HTTP contract",
+      "description": "Both clients go through the JSON API. A capability reachable only through the browser would be a design bug.",
+      "kind": "parity",
+      "members": [
+        "cli.client",
+        "cli.read_cmds",
+        "cli.edit_cmds",
+        "cli.scan_cmd",
+        "web.list",
+        "web.drawer",
+        "web.scan_client",
+        "web.hidden",
+        "service.projects_api",
+        "service.scan_api",
+        "service.website_api"
+      ],
+      "color": "#759EB5"
+    },
+    {
+      "id": "request-gate",
+      "title": "LAN request boundary",
+      "description": "Every request crosses the production edge and the SvelteKit gate: bounded bodies, security headers, and, when enabled, session and same-origin checks. Auth is intentionally off in production.",
+      "kind": "trust",
+      "members": ["service.edge", "service.gate", "service.security", "web.login"],
+      "color": "#739886"
+    },
+    {
+      "id": "pure-domain",
+      "title": "Pure rules, no I/O",
+      "description": "Functions of normalized data only. The browser re-runs attention classification after an optimistic edit without repository access.",
+      "kind": "ownership",
+      "members": [
+        "domain.attention",
+        "domain.stack",
+        "domain.project",
+        "domain.website",
+        "domain.contracts"
+      ],
+      "color": "#89A579"
+    },
+    {
+      "id": "lease-holders",
+      "title": "One scan at a time",
+      "description": "Two processes open the same SQLite file. The durable scan lease in scan_runs, heartbeated every 10 seconds, keeps a manual scan from overlapping the calendar job.",
+      "kind": "permission",
+      "members": [
+        "scanning.scanner",
+        "service.runtime",
+        "ops.scan_job",
+        "catalog.repository",
+        "catalog.sqlite"
+      ],
+      "color": "#9A91C4"
+    },
+    {
+      "id": "egress",
+      "title": "Subprocess and network egress",
+      "description": "Everything that spawns a tool or leaves the machine. Each path has a timeout and an availability state; none can fail a whole scan.",
+      "kind": "trust",
+      "members": [
+        "scanning.process",
+        "scanning.git",
+        "scanning.loc",
+        "scanning.td",
+        "scanning.github",
+        "scanning.github_client",
+        "scanning.github_provider",
+        "scanning.endoflife",
+        "scanning.baseline",
+        "external.tools",
+        "external.td_serve",
+        "external.github",
+        "external.endoflife"
+      ],
+      "color": "#C48282"
+    },
+    {
+      "id": "durable-state",
+      "title": "App-owned durable state",
+      "description": "Ongoing's SQLite file and the release tooling that backs it up, migrates it, and restores it. Never a repository's .todos database.",
+      "kind": "storage",
+      "members": [
+        "catalog.database",
+        "catalog.repository",
+        "catalog.sqlite",
+        "ops.release",
+        "ops.smoke"
+      ],
+      "color": "#B59669"
+    },
+    {
+      "id": "public-copy",
+      "title": "Public website copy",
+      "description": "The only data that leaves the private dashboard: explicitly included website records, exported deterministically, without notes, paths, or scanned metrics.",
+      "kind": "ownership",
+      "members": ["domain.website", "service.website_api", "cli.edit_cmds", "external.opentangle"],
+      "color": "#A69B8C"
+    }
+  ],
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Ongoing at a glance",
+      "description": "One local process serves a browser and a CLI from an app-owned catalog that a bounded scanner keeps fresh.",
+      "expanded": [],
+      "proposed": false,
+      "lens": "structure"
+    },
+    {
+      "id": "one-api-two-clients",
+      "title": "One API, two clients",
+      "description": "The CLI and the browser are peers: both read page models and send mutations through the same routes, behind the same gate.",
+      "expanded": ["cli", "web", "service"],
+      "proposed": false,
+      "lens": "structure"
+    },
+    {
+      "id": "scan-pipeline",
+      "title": "How a scan refreshes the catalog",
+      "description": "Discovery first, then git, TD, and stack per project, cloc only when the worktree changed, then release baselines and GitHub once per run.",
+      "expanded": ["scanning"],
+      "proposed": false,
+      "lens": "structure",
+      "scope": "scanning"
+    },
+    {
+      "id": "catalog-and-rules",
+      "title": "From cached rows to attention views",
+      "description": "The read model joins catalog tables, resolves stacks against baselines, and asks the pure domain rules which views each project belongs to and why.",
+      "expanded": ["catalog", "domain"],
+      "proposed": false,
+      "lens": "structure"
+    },
+    {
+      "id": "outside-the-process",
+      "title": "Tools, APIs, and hosts",
+      "description": "What Ongoing spawns, calls, or is scheduled by, and how each dependency is allowed to fail.",
+      "expanded": ["scanning", "external"],
+      "proposed": false,
+      "lens": "structure"
+    },
+    {
+      "id": "operations",
+      "title": "Running on aerie.local",
+      "description": "Two launchd agents, one pinned Bun, a health-gated deploy that quiesces both before touching the database.",
+      "expanded": ["ops", "external", "service"],
+      "proposed": false,
+      "lens": "structure"
+    },
+    {
+      "id": "trust-boundaries",
+      "title": "Boundaries and authority",
+      "description": "Where requests are gated, which code is pure, who may hold the scan lease, what leaves the machine, and what is allowed to go public.",
+      "expanded": ["cli", "web", "service", "domain", "scanning", "catalog", "ops", "external"],
+      "proposed": false,
+      "lens": "trust"
+    },
+    {
+      "id": "proposed-tech-radar",
+      "title": "Proposal: technologies as catalog entries",
+      "description": "A sketched second entry kind with rings and project edges, detected by the stack collector and exposed through ongoing tech.",
+      "expanded": ["scanning", "radar", "cli", "catalog"],
+      "proposed": true,
+      "lens": "structure",
+      "theme": "graphite"
+    }
+  ]
+}

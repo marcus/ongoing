@@ -20,6 +20,16 @@ Consequence: the same-origin/CSRF check in `src/hooks.server.ts` is also skipped
 was blocking legitimate LAN requests (e.g. the favorites toggle, when accessed via a hostname that doesn't match
 the configured `APP_ORIGIN`).
 
+## Keep the architecture model current
+
+`docs/diagrams/fractal/` holds the Fractal model of this system (`model.c4`, `fractal.json`,
+`sequences.json`) and its exported scenes under `artifacts/`. When a change alters the design — a new
+subsystem, route, collector, provider, store, boundary, or journey, or a proposal that lands — update the
+affected elements, scenes, and journeys in the same change, keep stable `uid` values, cite the source files
+you touched as evidence, and re-run `~/code/fractal/bin/fractal validate --directory docs/diagrams/fractal --json`
+before committing. Re-export scenes you changed with `bin/fractal export`. Do not model every file; model
+responsibilities. Authoring guidance: `~/code/fractal/skills/fractal/SKILL.md`.
+
 ## Pinned Bun version
 
 The exact Bun version is pinned in multiple places and must be kept in sync: `.bun-version`, `package.json`

@@ -1,0 +1,473 @@
+{
+  "version": 1,
+  "journeys": [
+    {
+      "id": "manual-scan",
+      "title": "ongoing scan --wait",
+      "description": "A shell-started full-catalog scan: lease, discovery, per-project collectors, then GitHub, while the CLI polls the catalog until the run settles.",
+      "status": "current",
+      "provenance": "Authored 2026-09-11 from bin/ongoing.ts (commandScan, waitForScan), src/routes/api/scan/+server.ts, src/lib/server/scanning/scanner.ts, and src/lib/server/collectors/discover.ts. A successful path; collector failures are recorded as warnings and are not shown.",
+      "participants": [
+        { "id": "shell", "title": "Shell or agent", "color": "#759EB5" },
+        { "id": "cli", "element": "cli.scan_cmd", "title": "ongoing scan" },
+        { "id": "api", "element": "service.scan_api", "title": "Scan API" },
+        { "id": "scanner", "element": "scanning.scanner", "title": "Scanner" },
+        { "id": "repo", "element": "catalog.repository", "title": "Repository" },
+        { "id": "discover", "element": "scanning.discover", "title": "Discovery" },
+        { "id": "local", "element": "scanning.git", "title": "git / td / stack / cloc" },
+        { "id": "github", "element": "scanning.github", "title": "GitHub enrichment" }
+      ],
+      "groups": [
+        {
+          "id": "process",
+          "title": "Web process",
+          "participants": ["api", "scanner", "repo", "discover", "local", "github"]
+        }
+      ],
+      "steps": [
+        {
+          "type": "phase",
+          "id": "start",
+          "title": "1. Acquire the lease",
+          "description": "A second concurrent scan is refused with 409 rather than queued.",
+          "steps": [
+            {
+              "type": "message",
+              "id": "invoke",
+              "from": "shell",
+              "to": "cli",
+              "title": "ongoing scan --wait",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "post",
+              "from": "cli",
+              "to": "api",
+              "title": "POST /api/scan {}",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "start-run",
+              "from": "api",
+              "to": "scanner",
+              "title": "start({ reason: manual })",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "lease",
+              "from": "scanner",
+              "to": "repo",
+              "title": "tryCreateScanRun with lease owner",
+              "kind": "call",
+              "description": "Fails if another run is running and its heartbeat is not stale."
+            },
+            {
+              "type": "message",
+              "id": "accepted",
+              "from": "api",
+              "to": "cli",
+              "title": "202 { runId, status: running }",
+              "kind": "return"
+            }
+          ]
+        },
+        {
+          "type": "phase",
+          "id": "discovery",
+          "title": "2. Discover and reconcile",
+          "steps": [
+            {
+              "type": "message",
+              "id": "walk",
+              "from": "scanner",
+              "to": "discover",
+              "title": "discoverAndReconcile(roots, depth, globs)",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "upsert",
+              "from": "discover",
+              "to": "repo",
+              "title": "upsertDiscovered per repository",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "missing",
+              "from": "discover",
+              "to": "repo",
+              "title": "markUnseenMissing; forget confirmed-gone after grace",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "discovered",
+              "from": "discover",
+              "to": "scanner",
+              "title": "projects, enrichmentProjects (hidden excluded)",
+              "kind": "return"
+            }
+          ]
+        },
+        {
+          "type": "phase",
+          "id": "collect",
+          "title": "3. Collect per project",
+          "description": "Runs under gitConcurrency; cloc additionally under clocConcurrency and only when the tracked-worktree fingerprint changed (policy: changed).",
+          "steps": [
+            {
+              "type": "message",
+              "id": "heartbeat",
+              "from": "scanner",
+              "to": "repo",
+              "title": "renewScanLease every 10 s",
+              "kind": "async"
+            },
+            {
+              "type": "message",
+              "id": "git",
+              "from": "scanner",
+              "to": "local",
+              "title": "collectGitMetrics",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "td",
+              "from": "scanner",
+              "to": "local",
+              "title": "collectTdMetrics (HTTP, else CLI)",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "stack",
+              "from": "scanner",
+              "to": "local",
+              "title": "collectStackDeclarations",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "loc",
+              "from": "scanner",
+              "to": "local",
+              "title": "collectLocMetrics if fingerprint changed",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "metrics",
+              "from": "scanner",
+              "to": "repo",
+              "title": "updateMetrics, saveSnapshot, resolve or record collection errors",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "type": "phase",
+          "id": "remote",
+          "title": "4. Baselines and GitHub, once per run",
+          "steps": [
+            {
+              "type": "message",
+              "id": "baseline",
+              "from": "scanner",
+              "to": "repo",
+              "title": "refreshReleaseBaselines for declared toolchains",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "hosting",
+              "from": "scanner",
+              "to": "github",
+              "title": "collectGitHubEnrichment(projects, force: false)",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "hosting-write",
+              "from": "github",
+              "to": "repo",
+              "title": "hosting and traffic metrics, star and traffic snapshots",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "finish",
+              "from": "scanner",
+              "to": "repo",
+              "title": "finishScanRun(completed, counts)",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "type": "phase",
+          "id": "wait",
+          "title": "5. The CLI polls until the run settles",
+          "steps": [
+            {
+              "type": "message",
+              "id": "poll",
+              "from": "cli",
+              "to": "api",
+              "title": "GET /api/projects every 2 s, read scan.status",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "settled",
+              "from": "api",
+              "to": "cli",
+              "title": "scan.status: completed",
+              "kind": "return"
+            },
+            {
+              "type": "message",
+              "id": "report",
+              "from": "cli",
+              "to": "shell",
+              "title": "discovered · updated · errors (exit 1 unless completed)",
+              "kind": "return"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "daily-refresh",
+      "title": "The 03:00 calendar scan",
+      "description": "launchd starts a separate process that opens the same database, takes the lease, and runs one changed-policy scan while the web agent keeps serving.",
+      "status": "current",
+      "provenance": "Authored 2026-09-11 from docs/deployment.md, scripts/scan.ts, src/lib/server/scanning/dependencies.ts, and the lease logic in src/lib/server/catalog/repository.ts. Timing is a launchd calendar interval, not measured.",
+      "participants": [
+        { "id": "launchd", "element": "external.launchd", "title": "launchd" },
+        { "id": "job", "element": "ops.scan_job", "title": "scripts/scan.ts" },
+        { "id": "wiring", "element": "scanning.wiring", "title": "Collector wiring" },
+        { "id": "scanner", "element": "scanning.scanner", "title": "Scanner" },
+        { "id": "sqlite", "element": "catalog.sqlite", "title": "ongoing.sqlite" },
+        { "id": "web", "element": "service.runtime", "title": "Web process" }
+      ],
+      "groups": [
+        {
+          "id": "scan-process",
+          "title": "Scan agent process",
+          "participants": ["job", "wiring", "scanner"]
+        }
+      ],
+      "steps": [
+        {
+          "type": "phase",
+          "id": "launch",
+          "title": "1. Calendar event",
+          "description": "No RunAtLoad and no KeepAlive: registering the agent never triggers a scan.",
+          "steps": [
+            {
+              "type": "message",
+              "id": "fire",
+              "from": "launchd",
+              "to": "job",
+              "title": "StartCalendarInterval 03:00 with pinned Bun and a fixed PATH",
+              "kind": "async"
+            },
+            {
+              "type": "message",
+              "id": "open",
+              "from": "job",
+              "to": "sqlite",
+              "title": "Open in WAL mode; apply pending migrations",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "wire",
+              "from": "job",
+              "to": "wiring",
+              "title": "createScannerDependencies(config)",
+              "kind": "call",
+              "description": "The identical GitHub and endoflife wiring the web process uses."
+            }
+          ]
+        },
+        {
+          "type": "phase",
+          "id": "share-db",
+          "title": "2. Share the database safely",
+          "steps": [
+            {
+              "type": "message",
+              "id": "acquire",
+              "from": "scanner",
+              "to": "sqlite",
+              "title": "INSERT scan_runs with lease owner unless a fresh heartbeat exists",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "web-refused",
+              "from": "web",
+              "to": "sqlite",
+              "title": "A manual POST /api/scan during the run sees the active lease and answers 409",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "web-reads",
+              "from": "web",
+              "to": "sqlite",
+              "title": "Dashboard reads continue against the last committed rows",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "type": "phase",
+          "id": "run",
+          "title": "3. Changed policy",
+          "description": "scripts/scan.ts defaults to changed: git, TD, and stack every time, cloc only where the tracked worktree fingerprint moved, then baselines and GitHub when due.",
+          "steps": [
+            {
+              "type": "message",
+              "id": "scan",
+              "from": "job",
+              "to": "scanner",
+              "title": "scan({ reason: cli, refresh: changed })",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "writes",
+              "from": "scanner",
+              "to": "sqlite",
+              "title": "Serialized metric writes with lease checks",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "done",
+              "from": "scanner",
+              "to": "job",
+              "title": "ScanResult JSON on stdout; nonzero exit if not completed",
+              "kind": "return"
+            },
+            {
+              "type": "message",
+              "id": "close",
+              "from": "job",
+              "to": "sqlite",
+              "title": "close()",
+              "kind": "call"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "decision-edit",
+      "title": "Setting intent from the drawer",
+      "description": "An optimistic edit: the browser re-classifies the project locally with the same pure rules the server uses, then persists through the API.",
+      "status": "current",
+      "provenance": "Authored 2026-09-11 from src/routes/+page.svelte, src/lib/components/dashboard/ProjectDrawer.svelte, src/routes/api/projects/[id]/+server.ts, and src/lib/domain/attention.ts.",
+      "participants": [
+        { "id": "person", "title": "Marcus", "color": "#759EB5" },
+        { "id": "drawer", "element": "web.drawer", "title": "Project drawer" },
+        { "id": "attention", "element": "domain.attention", "title": "Attention rules (browser)" },
+        { "id": "api", "element": "service.projects_api", "title": "Projects API" },
+        { "id": "rules", "element": "domain.project", "title": "Decision rules" },
+        { "id": "repo", "element": "catalog.repository", "title": "Repository" }
+      ],
+      "groups": [
+        { "id": "browser", "title": "Browser", "participants": ["drawer", "attention"] },
+        { "id": "server", "title": "Web process", "participants": ["api", "rules", "repo"] }
+      ],
+      "steps": [
+        {
+          "type": "phase",
+          "id": "optimistic",
+          "title": "1. Reflect the change immediately",
+          "steps": [
+            {
+              "type": "message",
+              "id": "choose",
+              "from": "person",
+              "to": "drawer",
+              "title": "Set intent to invest",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "reclassify",
+              "from": "drawer",
+              "to": "attention",
+              "title": "classifyAttentionViews(project with new intent)",
+              "kind": "call",
+              "description": "Dormant requires intent other than invest, so the row can leave that view before the server answers."
+            },
+            {
+              "type": "message",
+              "id": "views",
+              "from": "attention",
+              "to": "drawer",
+              "title": "Updated memberships and reasons",
+              "kind": "return"
+            }
+          ]
+        },
+        {
+          "type": "phase",
+          "id": "persist",
+          "title": "2. Persist through the same API the CLI uses",
+          "steps": [
+            {
+              "type": "message",
+              "id": "patch",
+              "from": "drawer",
+              "to": "api",
+              "title": "PATCH /api/projects/:id { intent: invest }",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "validate",
+              "from": "api",
+              "to": "rules",
+              "title": "validateDecisionUpdate",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "write",
+              "from": "api",
+              "to": "repo",
+              "title": "updateDecision(id, { intent })",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "ok",
+              "from": "api",
+              "to": "drawer",
+              "title": "200 { id, intent }",
+              "kind": "return"
+            },
+            {
+              "type": "message",
+              "id": "reload",
+              "from": "drawer",
+              "to": "api",
+              "title": "invalidateAll → GET page model",
+              "kind": "call"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
