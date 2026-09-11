@@ -11,7 +11,6 @@ import {
   PRODUCTION_DATABASE,
   PRODUCTION_HOST,
   PRODUCTION_BUN,
-  PRODUCTION_BUN_VERSION,
   PRODUCTION_SCAN_LABEL,
   PRODUCTION_SCAN_PATH,
   PRODUCTION_SCAN_PLIST,
@@ -45,7 +44,6 @@ describe('release tooling', () => {
     const { config } = parseReleaseArgs(required);
     expect(config).toMatchObject({
       bunExecutable: PRODUCTION_BUN,
-      bunVersion: PRODUCTION_BUN_VERSION,
       webLabel: PRODUCTION_WEB_LABEL,
       scanLabel: PRODUCTION_SCAN_LABEL,
       webPlist: PRODUCTION_WEB_PLIST,
@@ -55,7 +53,7 @@ describe('release tooling', () => {
     expect(decodeReleaseConfig(encodeReleaseConfig(config))).toEqual(config);
     expect(() => decodeReleaseConfig('not valid config!')).toThrow(/base64url/);
     expect(() =>
-      decodeReleaseConfig(encodeReleaseConfig({ ...config, bunVersion: '1.3.1' }))
+      decodeReleaseConfig(encodeReleaseConfig({ ...config, bunExecutable: '/usr/local/bin/bun' }))
     ).toThrow(/unsupported targets/);
   });
 
@@ -66,7 +64,7 @@ describe('release tooling', () => {
       database: '/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite',
       webPlist: '/Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist',
       scanPlist: '/Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.scan.plist',
-      bunExecutable: '/Users/marcus/.local/share/ongoing/mise/installs/bun/1.3.9/bin/bun'
+      bunExecutable: '/Users/marcus/.local/share/ongoing/bun'
     });
   });
 
@@ -118,15 +116,36 @@ describe('production LaunchAgent definitions', () => {
   const productionSmoke = readFileSync(resolve('scripts/production-smoke.ts'), 'utf8');
   const remoteRelease = readFileSync(resolve('scripts/remote-release.ts'), 'utf8');
 
-  it('uses one exact app-scoped Bun 1.3.9 executable for both agents', () => {
+  it('uses one stable app-scoped Bun executable, provisioned from .bun-version, for both agents', () => {
+    expect(PRODUCTION_BUN).not.toMatch(/\d+\.\d+\.\d+/);
     expect(web).toContain(`<string>${PRODUCTION_BUN}</string>`);
     expect(web).toContain(
       '<string>/Users/marcus/code/ongoing/scripts/production-server.ts</string>'
     );
     expect(scan).toContain(`<string>${PRODUCTION_BUN}</string>`);
     expect(provision).toContain(`readonly bun=${PRODUCTION_BUN}`);
-    expect(provision).toContain('MISE_DATA_DIR="$mise_data" "$mise" install');
+    expect(provision).toContain('< "$checkout/.bun-version"');
+    expect(provision).toContain(
+      'MISE_DATA_DIR="$mise_data" "$mise" install "bun@$required_version"'
+    );
+    expect(provision).toContain('ln -sfn "$installed" "$bun"');
     expect(provision).not.toContain('/.bun/bin/bun');
+    expect(deployment).toContain(`ongoing_bun=${PRODUCTION_BUN}`);
+  });
+
+  it('re-provisions the runtime whenever the checkout moves, before building with it', () => {
+    const deploySteps = remoteRelease.slice(remoteRelease.indexOf('async function deploy('));
+    expect(deploySteps.indexOf("'--ff-only'")).toBeLessThan(
+      deploySteps.indexOf('await provisionRuntime(config);')
+    );
+    const rollbackSteps = remoteRelease.slice(remoteRelease.indexOf('async function rollback('));
+    expect(rollbackSteps.indexOf("'--detach'")).toBeLessThan(
+      rollbackSteps.indexOf('await provisionRuntime(config);')
+    );
+    for (const steps of [deploySteps, rollbackSteps])
+      expect(steps.indexOf('await provisionRuntime(config);')).toBeLessThan(
+        steps.indexOf("'--frozen-lockfile'")
+      );
   });
 
   it('keeps production entrypoints on the invoking exact Bun without ambient PATH fallback', () => {
@@ -213,7 +232,7 @@ describe('production LaunchAgent definitions', () => {
     } finally {
       await rm(home, { recursive: true, force: true });
     }
-    expect(Bun.version).toBe(PRODUCTION_BUN_VERSION);
+    expect(Bun.version).toBe(readFileSync(resolve('.bun-version'), 'utf8').trim());
   });
 
   it('preflights tooling before quiescing and reloads the installed scan definition', () => {

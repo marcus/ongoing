@@ -11,8 +11,8 @@ the UI can never drift apart or disagree about validation. Only the service comm
 ln -s /Users/marcus/code/ongoing/bin/ongoing ~/.local/bin/ongoing
 ```
 
-`bin/ongoing` is a `/bin/sh` wrapper that resolves the symlink, reads `.bun-version`, and execs
-`bin/ongoing.ts` with the app-scoped pinned Bun (falling back to whatever `bun` is on `PATH`). There
+`bin/ongoing` is a `/bin/sh` wrapper that resolves the symlink and execs `bin/ongoing.ts` with the
+app-scoped Bun at `~/.local/share/ongoing/bun` (falling back to whatever `bun` is on `PATH`). There
 is nothing to rebuild after editing the CLI — it runs from source.
 
 ## Talking to the right instance

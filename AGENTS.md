@@ -30,21 +30,6 @@ you touched as evidence, and re-run `~/code/fractal/bin/fractal validate --direc
 before committing. Re-export scenes you changed with `bin/fractal export`. Do not model every file; model
 responsibilities. Authoring guidance: `~/code/fractal/skills/fractal/SKILL.md`.
 
-## Pinned Bun version
-
-The exact Bun version is pinned in multiple places and must be kept in sync: `.bun-version`, `package.json`
-(`packageManager` + `engines.bun` + `@types/bun`), both `config/*.plist.example` files, both installed plists in
-`~/Library/LaunchAgents/`, `scripts/provision-runtime.sh`, and `scripts/release-config.ts`
-(`PRODUCTION_BUN_VERSION` / `PRODUCTION_BUN`). `tests/release.test.ts` and `tests/foundation.test.ts` assert this
-consistency — if you bump the version, update every file above, then `bun install` to refresh `bun.lock`, and
-reinstall the pinned Bun into the app-scoped mise dir:
-
-```sh
-MISE_DATA_DIR=/Users/marcus/.local/share/ongoing/mise mise install bun@<version>
-```
-
-Currently pinned: `1.3.9`.
-
 ## Restarting the production service
 
 Production runs as the launchd agent `com.marcusvorwaller.ongoing`, serving `http://aerie.local:7766` (also
@@ -58,15 +43,20 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.marcusvorwaller.ongo
 ```
 
 `launchctl kickstart -k` restarts the process but does **not** reload the plist file itself — use bootout +
-bootstrap when the plist changed (e.g. after a Bun version bump). Logs: `~/Library/Logs/Ongoing/{stdout,stderr}.log`.
+bootstrap when the plist changed. Logs: `~/Library/Logs/Ongoing/{stdout,stderr}.log`.
 
 The daily scanner is a separate agent, `com.marcusvorwaller.ongoing.scan`, on its own plist — restart it the same
 way if you change scanner code.
 
-## Before committing
+## Committing and pushing
+
+Always commit and push your work to `main` when it is done, unless told otherwise. Don't leave finished changes
+sitting in the working tree waiting for someone to ask.
+
+Before committing:
 
 - `bun run lint` (ESLint + Prettier)
-- `bun run test` (Vitest — currently 162 tests)
+- `bun run test` (Vitest)
 - `bun run check` (svelte-kit sync + svelte-check) — may be blocked by the sandbox in some agent environments; if
   so, note that explicitly rather than skipping silently.
 

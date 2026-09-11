@@ -50,7 +50,7 @@ live repositories.
 
 | Release boundary                                                                                 | Executable evidence                                                                                                         |
 | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| Exact app-scoped Bun 1.3.9 and frozen dependency graph                                           | `.bun-version`, both plists, `scripts/provision-runtime.sh`, `tests/release.test.ts`; `bun install --frozen-lockfile`       |
+| Exact app-scoped Bun from `.bun-version` alone and frozen dependency graph                       | `scripts/provision-runtime.sh`, `tests/foundation.test.ts`, `tests/release.test.ts`; `bun install --frozen-lockfile`        |
 | Format, lint, strict Svelte/type checks, unit/integration, and Playwright                        | Package scripts `format:check`, `lint`, `check`, `test`, `test:e2e`, and `test:e2e:auth`                                    |
 | Raw fixed/chunked mutation ceiling before adapter actions and health without catalog leakage     | `scripts/production-server.ts`, `tests/production-server.test.ts`, `scripts/production-smoke.ts`, `bun run test:production` |
 | Non-loopback authentication fails closed and valid sessions work                                 | Config/security tests plus `bun run test:e2e:auth`                                                                          |

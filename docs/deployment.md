@@ -14,13 +14,13 @@ Ongoing is designed for one trusted user on a private LAN. It is not hardened fo
 - daily scan agent: `com.marcusvorwaller.ongoing.scan` at `~/Library/LaunchAgents/com.marcusvorwaller.ongoing.scan.plist`
 - web logs: `~/Library/Logs/Ongoing/stdout.log` and `stderr.log`
 - scan logs: `~/Library/Logs/Ongoing/scan-stdout.log` and `scan-stderr.log`
-- app runtime: `/Users/marcus/.local/share/ongoing/mise/installs/bun/1.3.9/bin/bun`
+- app runtime: `/Users/marcus/.local/share/ongoing/bun` (a symlink into `/Users/marcus/.local/share/ongoing/mise/installs/bun/<version>/`)
 - release record: `/Users/marcus/code/ongoing/.deploy/release.json`
 - database backups: `/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite.backups/` (newest five)
 
-Both agents use that one app-owned Bun executable, which must report the exact version in `.bun-version`. Provisioning scopes `/opt/homebrew/bin/mise` to Ongoing's own data directory; it does not install into, replace, or select Marcus's `~/.bun` runtime and does not change a global mise default. Release scripts reject different hosts, paths, labels, runtime versions, and health targets. They do not use `sudo`, modify the firewall/router, or touch unrelated services.
+Both agents use that one app-owned Bun executable. `.bun-version` is the only place the Bun version is written down: `scripts/provision-runtime.sh` installs that release with `/opt/homebrew/bin/mise` scoped to Ongoing's own data directory and points the stable executable at it, and the release worker re-runs provisioning whenever the checkout moves, so bumping Bun is editing `.bun-version`, running `bun install` to refresh `bun.lock`, and deploying. Provisioning does not install into, replace, or select Marcus's `~/.bun` runtime and does not change a global mise default. Release scripts reject different hosts, paths, labels, and health targets. They do not use `sudo`, modify the firewall/router, or touch unrelated services.
 
-The daily agent sets `PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin`, so launchd resolves Homebrew's `gh`, `td`, `cloc`, and `git` without inheriting interactive shell startup files or user runtime shims. Its `ProgramArguments` still selects the absolute app-owned Bun 1.3.9 executable. Deployment verifies the committed PATH and all four tools before stopping either agent, then installs the definition atomically and bootstraps the calendar agent from that installed file.
+The daily agent sets `PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin`, so launchd resolves Homebrew's `gh`, `td`, `cloc`, and `git` without inheriting interactive shell startup files or user runtime shims. Its `ProgramArguments` still selects the absolute app-owned Bun executable. Deployment verifies the committed PATH and all four tools before stopping either agent, then installs the definition atomically and bootstraps the calendar agent from that installed file.
 
 The web process runs the committed `scripts/production-server.ts` boundary in front of adapter-node. It counts raw fixed-length and chunked mutation bytes before SvelteKit actions, then forwards bounded requests to a private ephemeral loopback adapter listener. It also has `ONGOING_ENABLE_SCAN_SCHEDULER=false`, so it creates neither the development startup scan nor the five-minute interval. The scan agent invokes the shared `scripts/scan.ts` once at 03:00 local time against the same database and scan root. Its definition has no `RunAtLoad` or `KeepAlive`; registering or restarting it does not cause an immediate scan. A manual or per-project scan remains available, and the durable scan lease prevents overlap.
 
@@ -47,7 +47,7 @@ chmod 600 /Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist /
 After replacing the web secret, initialize through the exact app runtime:
 
 ```sh
-ongoing_bun=/Users/marcus/.local/share/ongoing/mise/installs/bun/1.3.9/bin/bun
+ongoing_bun=/Users/marcus/.local/share/ongoing/bun
 "$ongoing_bun" --version
 "$ongoing_bun" install --frozen-lockfile
 "$ongoing_bun" run build
@@ -84,14 +84,14 @@ Preview every operation locally first:
 bun run deploy --host marcus@aerie.local --checkout /Users/marcus/code/ongoing --database '/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite' --dry-run
 ```
 
-Remove `--dry-run` only after review. The client provisions and validates app-scoped Bun 1.3.9, then invokes the remote worker with that absolute executable. The worker requires a clean checkout, records the prior SHA, fetches and fast-forwards `main`, revalidates the pin, quiesces both agents so neither serving nor a calendar scan can overlap backup/migration, takes a consistent SQLite backup, installs the frozen lockfile, builds, migrates once, and preserves the machine-local web secret while installing both committed definitions. It registers the scan calendar without running it, starts the web agent, waits 30 seconds for exact health on port 7766, retains five backups, and records the deployed SHA. Fix failed deployments in Git; never patch the production checkout by hand.
+Remove `--dry-run` only after review. The client provisions the app-scoped Bun from the current `.bun-version`, then invokes the remote worker with that absolute executable. The worker requires a clean checkout, records the prior SHA, fetches and fast-forwards `main`, re-provisions from the fetched `.bun-version`, quiesces both agents so neither serving nor a calendar scan can overlap backup/migration, takes a consistent SQLite backup, installs the frozen lockfile, builds, migrates once, and preserves the machine-local web secret while installing both committed definitions. It registers the scan calendar without running it, starts the web agent, waits 30 seconds for exact health on port 7766, retains five backups, and records the deployed SHA. Fix failed deployments in Git; never patch the production checkout by hand.
 
 ## Smoke and rollback
 
 Keep the secret in the environment, not argv, URLs, logs, or the database:
 
 ```sh
-ongoing_bun=/Users/marcus/.local/share/ongoing/mise/installs/bun/1.3.9/bin/bun
+ongoing_bun=/Users/marcus/.local/share/ongoing/bun
 curl --fail --silent http://127.0.0.1:7766/api/health
 ONGOING_ACCESS_SECRET='...' "$ongoing_bun" run scripts/smoke.ts http://aerie.local:7766
 bun run rollback --host marcus@aerie.local --checkout /Users/marcus/code/ongoing --database '/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite' --dry-run

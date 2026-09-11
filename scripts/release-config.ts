@@ -10,8 +10,8 @@ export const PRODUCTION_WEB_PLIST =
   '/Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist';
 export const PRODUCTION_SCAN_PLIST =
   '/Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.scan.plist';
-export const PRODUCTION_BUN_VERSION = '1.3.9';
-export const PRODUCTION_BUN = '/Users/marcus/.local/share/ongoing/mise/installs/bun/1.3.9/bin/bun';
+// Stable, version-free path. scripts/provision-runtime.sh points it at the release named in .bun-version.
+export const PRODUCTION_BUN = '/Users/marcus/.local/share/ongoing/bun';
 export const PRODUCTION_SCAN_PATH = '/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin';
 
 export interface ReleaseConfig {
@@ -23,7 +23,6 @@ export interface ReleaseConfig {
   webPlist: string;
   scanPlist: string;
   bunExecutable: string;
-  bunVersion: string;
   healthUrl: string;
   backupRetention: number;
 }
@@ -70,7 +69,6 @@ export function parseReleaseArgs(args: string[]): {
       webPlist: PRODUCTION_WEB_PLIST,
       scanPlist: PRODUCTION_SCAN_PLIST,
       bunExecutable: PRODUCTION_BUN,
-      bunVersion: PRODUCTION_BUN_VERSION,
       healthUrl: 'http://127.0.0.1:7766/api/health',
       backupRetention: 5
     },
@@ -100,7 +98,6 @@ export function decodeReleaseConfig(encoded: string): ReleaseConfig {
     config.webPlist !== parsed.webPlist ||
     config.scanPlist !== parsed.scanPlist ||
     config.bunExecutable !== parsed.bunExecutable ||
-    config.bunVersion !== parsed.bunVersion ||
     config.healthUrl !== parsed.healthUrl ||
     config.backupRetention !== parsed.backupRetention
   )
@@ -115,11 +112,11 @@ export function releasePlan(
 ): string[] {
   return mode === 'deploy'
     ? [
-        `provision and verify app-scoped ${config.bunExecutable} reports Bun ${config.bunVersion}`,
+        `provision app-scoped ${config.bunExecutable} from .bun-version`,
         `verify clean checkout ${config.checkout}`,
         `record current SHA for ${config.checkout}`,
         'fetch origin main and fast-forward only',
-        `verify ${config.bunExecutable} still matches the fetched .bun-version`,
+        `provision ${config.bunExecutable} from the fetched .bun-version`,
         `validate ${PRODUCTION_SCAN_PATH} resolves gh, td, cloc, and git for the daily scanner`,
         `quiesce ${config.webLabel} and ${config.scanLabel}`,
         `back up ${config.database} and retain ${config.backupRetention} backups`,
@@ -132,14 +129,13 @@ export function releasePlan(
         'record deployed SHA'
       ]
     : [
-        `provision and verify app-scoped ${config.bunExecutable} reports Bun ${config.bunVersion}`,
+        `provision app-scoped ${config.bunExecutable} from .bun-version`,
         `verify clean checkout ${config.checkout}`,
         `read and validate ${config.checkout}/.deploy/release.json`,
-        `preflight the recorded SHA's .bun-version against ${config.bunVersion}`,
         `quiesce ${config.webLabel} and ${config.scanLabel}`,
         `back up ${config.database} and retain ${config.backupRetention} backups`,
         'switch to recorded prior SHA',
-        `verify ${config.bunExecutable} matches the selected .bun-version`,
+        `provision ${config.bunExecutable} from the selected .bun-version`,
         `install frozen lockfile and build with ${config.bunExecutable}`,
         ...(restoreDatabase ? ['restore the recorded pre-deploy database backup'] : []),
         `restore ${config.webPlist} and ${config.scanPlist} from the selected commit`,

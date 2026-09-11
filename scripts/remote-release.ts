@@ -9,6 +9,7 @@ import {
   unlink,
   writeFile
 } from 'node:fs/promises';
+import { realpathSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { decodeReleaseConfig, PRODUCTION_SCAN_PATH, type ReleaseConfig } from './release-config';
 
@@ -100,12 +101,23 @@ function userId(): number {
   return uid;
 }
 
-async function validateRuntime(config: ReleaseConfig): Promise<void> {
-  const pinned = (await readFile(join(config.checkout, '.bun-version'), 'utf8')).trim();
-  if (pinned !== config.bunVersion || Bun.version !== pinned)
-    throw new Error(`Bun version mismatch: expected ${pinned}, got ${Bun.version}`);
-  if (resolve(process.execPath) !== resolve(config.bunExecutable))
+function validateInvocation(config: ReleaseConfig): void {
+  // Bun reports the resolved binary as execPath, and the app-scoped path is a symlink to it.
+  if (realpathSync(process.execPath) !== realpathSync(config.bunExecutable))
     throw new Error(`release must run with ${config.bunExecutable}`);
+}
+
+// The checkout's .bun-version is the only place the runtime version is declared. Re-run provisioning
+// whenever the checkout moves so a version bump installs itself and re-points the stable executable
+// before anything is built with it; the release process itself may keep running on the previous Bun.
+async function provisionRuntime(config: ReleaseConfig): Promise<void> {
+  await command(
+    ['/bin/zsh', join(config.checkout, 'scripts', 'provision-runtime.sh')],
+    config.checkout
+  );
+  const pinned = (await readFile(join(config.checkout, '.bun-version'), 'utf8')).trim();
+  const actual = await command([config.bunExecutable, '--version'], config.checkout);
+  if (actual !== pinned) throw new Error(`Bun version mismatch: expected ${pinned}, got ${actual}`);
 }
 
 async function validateScanTooling(config: ReleaseConfig): Promise<void> {
@@ -173,14 +185,14 @@ async function startAgents(config: ReleaseConfig): Promise<void> {
 }
 
 async function deploy(config: ReleaseConfig, recordPath: string): Promise<void> {
-  await validateRuntime(config);
+  validateInvocation(config);
   if (await command(['git', 'status', '--porcelain'], config.checkout))
     throw new Error('production checkout is not clean');
   await command(['git', 'switch', 'main'], config.checkout);
   const priorSha = await command(['git', 'rev-parse', 'HEAD'], config.checkout);
   await command(['git', 'fetch', 'origin', 'main'], config.checkout);
   await command(['git', 'merge', '--ff-only', 'origin/main'], config.checkout);
-  await validateRuntime(config);
+  await provisionRuntime(config);
   await validateScanTooling(config);
   const deployedSha = await command(['git', 'rev-parse', 'HEAD'], config.checkout);
   await quiesce(config);
@@ -201,22 +213,16 @@ async function rollback(
   recordPath: string,
   restoreDatabase: boolean
 ): Promise<void> {
-  await validateRuntime(config);
+  validateInvocation(config);
   if (await command(['git', 'status', '--porcelain'], config.checkout))
     throw new Error('production checkout is not clean');
   const release = JSON.parse(await readFile(recordPath, 'utf8')) as ReleaseRecord;
   if (!/^[a-f0-9]{40}$/.test(release.priorSha)) throw new Error('recorded prior SHA is invalid');
-  const priorVersion = await command(
-    ['git', 'show', `${release.priorSha}:.bun-version`],
-    config.checkout
-  );
-  if (priorVersion !== config.bunVersion)
-    throw new Error(`recorded release requires unsupported Bun ${priorVersion}`);
   const current = await command(['git', 'rev-parse', 'HEAD'], config.checkout);
   await quiesce(config);
   const safetyBackup = await backupDatabase(config, current);
   await command(['git', 'switch', '--detach', release.priorSha], config.checkout);
-  await validateRuntime(config);
+  await provisionRuntime(config);
   await command([config.bunExecutable, 'install', '--frozen-lockfile'], config.checkout);
   await command([config.bunExecutable, 'run', 'build'], config.checkout);
   if (restoreDatabase) {
