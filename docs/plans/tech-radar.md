@@ -27,17 +27,17 @@ The point is a lightweight dependency view, not an enterprise architecture tool.
 
 ### Technology
 
-| Field | Meaning |
-|---|---|
-| `id` | slug, e.g. `go`, `sveltekit`, `google-auth`, `sqlite`, `td` |
-| `name` | display name |
-| `kind` | `language`, `framework`, `library`, `service`, `tool`, `platform` |
-| `ring` | `hot`, `warm`, `cool`, `out` (see below) |
-| `note` | one line: why the ring, what it is for |
-| `providedByProjectId` | optional; set when the technology *is* a managed project (`td`, `sidecar`, `comms`, `roc`) |
-| `toolSurface` | optional one-liner; when set, this row appears in the `project-standards` tool table |
-| `reviewAfter` | date after which the ring counts as stale |
-| `updatedAt` | |
+| Field                 | Meaning                                                                                    |
+| --------------------- | ------------------------------------------------------------------------------------------ |
+| `id`                  | slug, e.g. `go`, `sveltekit`, `google-auth`, `sqlite`, `td`                                |
+| `name`                | display name                                                                               |
+| `kind`                | `language`, `framework`, `library`, `service`, `tool`, `platform`                          |
+| `ring`                | `hot`, `warm`, `cool`, `out` (see below)                                                   |
+| `note`                | one line: why the ring, what it is for                                                     |
+| `providedByProjectId` | optional; set when the technology _is_ a managed project (`td`, `sidecar`, `comms`, `roc`) |
+| `toolSurface`         | optional one-liner; when set, this row appears in the `project-standards` tool table       |
+| `reviewAfter`         | date after which the ring counts as stale                                                  |
+| `updatedAt`           |                                                                                            |
 
 `providedByProjectId` is what lets "external tools instead of just projects" and "our own tools" share one table. `comms` is a project in the catalog and a technology other projects depend on. `td-c757bc` (a per-project tool-surface flag) collapses into `toolSurface` here: the flag belongs to the technology, not the project.
 
@@ -45,30 +45,30 @@ The point is a lightweight dependency view, not an enterprise architecture tool.
 
 Marcus's vocabulary, not ThoughtWorks'. Four values, ordered:
 
-| Ring | Meaning |
-|---|---|
-| `hot` | Default choice for new work in its kind. Go, SvelteKit, SQLite today. |
-| `warm` | Fine to keep using, not the default. Ruby for quick things. |
-| `cool` | Use only with a reason; expect to migrate off eventually. Python. |
-| `out` | Do not start new work on it. Flagged wherever it is still in use. |
+| Ring   | Meaning                                                               |
+| ------ | --------------------------------------------------------------------- |
+| `hot`  | Default choice for new work in its kind. Go, SvelteKit, SQLite today. |
+| `warm` | Fine to keep using, not the default. Ruby for quick things.           |
+| `cool` | Use only with a reason; expect to migrate off eventually. Python.     |
+| `out`  | Do not start new work on it. Flagged wherever it is still in use.     |
 
 A ring is a fact about now, so every ring carries `reviewAfter`. A stale ring is an attention reason, like a stale `reviewAfter` on a project.
 
 ### Usage edge
 
-| Field | Meaning |
-|---|---|
-| `projectId`, `technologyId` | |
-| `evidence` | `detected` or `declared` |
-| `sourceFile` | manifest the detector matched, when detected |
-| `version` | declared version or range, when the manifest carries one |
-| `note` | optional, for declared edges: where the integration lives |
+| Field                       | Meaning                                                   |
+| --------------------------- | --------------------------------------------------------- |
+| `projectId`, `technologyId` |                                                           |
+| `evidence`                  | `detected` or `declared`                                  |
+| `sourceFile`                | manifest the detector matched, when detected              |
+| `version`                   | declared version or range, when the manifest carries one  |
+| `note`                      | optional, for declared edges: where the integration lives |
 
 Detected edges are rewritten on every scan and never edited by hand. Declared edges are written by `ongoing tech link` and survive scans. The same pair can hold both; the resolved view prefers detected evidence and keeps the declared note.
 
 ## Detection
 
-Extend the existing stack collector (`src/lib/server/collectors/stack.ts`) rather than adding a second scanner. It already parses `go.mod`, `package.json`, `.tool-versions`, `Cargo.toml`, `Gemfile`, `pyproject.toml`. The new step reads *dependencies* from those manifests and matches them against a **signature list** keyed by technology id:
+Extend the existing stack collector (`src/lib/server/collectors/stack.ts`) rather than adding a second scanner. It already parses `go.mod`, `package.json`, `.tool-versions`, `Cargo.toml`, `Gemfile`, `pyproject.toml`. The new step reads _dependencies_ from those manifests and matches them against a **signature list** keyed by technology id:
 
 ```
 sveltekit:    package.json deps  @sveltejs/kit
