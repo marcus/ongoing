@@ -849,43 +849,24 @@ list`, `views`, and `stacks` rewritten on it with every old flag kept as a claus
 
 ## Handoff
 
-The plan is implemented and every phase is pushed to `main`. What is left needs a person, or a
-machine only Marcus has.
+The plan is implemented, every phase is pushed to `main`, and production on aerie runs the
+final bundle. Done on 2026-09-12 after Phase 6 landed:
 
-1. **Restart production on the new bundle — do this first, the service is down until you do.**
-   `bun run build` at the end of this phase rewrote `build/server/chunks/` while the web agent was
-   running, and SvelteKit imports those hash-named chunks lazily: the live process still holds a
-   manifest pointing at files the rebuild deleted, so everything except `/api/health` answers 500
-   with `Cannot find module './entries/...'`. A restart loads the new manifest and clears it. (The
-   service had also been running a pre-Phase-1 bundle against an already-migrated catalog for
-   several phases, so it needed this regardless.) From the checkout:
+- **Production restarted on the new bundle.** The web agent was bounced (bootout + bootstrap) and
+  answers on every route; the catalog was backed up first under
+  `~/Library/Application Support/Ongoing/backups/`.
+- **Installed plists updated.** Both LaunchAgents now carry the mise shims on `PATH`, so the
+  `github` provider resolves `gh` and reports active. Backups sit beside them as
+  `*.plist.bak-20260912`. The `ProgramArguments` still name `scripts/production-server.ts` and
+  `scripts/scan.ts`, which stay as two-line shims: the committed `.plist.example` files and the
+  release tests name those paths too, so retiring them is a small optional change, not a step
+  the service depends on.
+- **Production seeded and scanned.** `ongoing tech seed` created the 21 technologies and a full
+  scan filled the detected `uses` edges; `ongoing tech show go` lists the Go projects with versions.
 
-   ```sh
-   bun run build
-   launchctl bootout gui/$(id -u)/com.marcusvorwaller.ongoing
-   launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist
-   curl --fail --silent http://127.0.0.1:7766/api/health
-   ```
+What is left is one decision only Marcus can make:
 
-   `ongoing restart --build` does the same through the host adapter.
-
-2. **Update the installed plists.** They still name `scripts/production-server.ts` and
-   `scripts/scan.ts`, which are two-line shims. Point both `ProgramArguments` at
-   `src/lib/host/production-server.ts` and `src/lib/host/scan-command.ts`, delete the shims, and
-   bootstrap from the edited files (`kickstart -k` does not reload a plist). The committed
-   `.plist.example` files still name the shim paths, so nothing breaks before the edit.
-   `deploy/aerie/README.md` has the full runbook.
-
-3. **Seed and scan production.** `ongoing tech seed` has only ever run against the dev catalog:
-
-   ```sh
-   ongoing tech seed
-   ongoing scan --full --wait
-   ```
-
-   The scan is what fills the detected `uses` edges.
-
-4. **Decide about going public.** Every condition the plan set is met — MIT licence, CI workflow,
+1. **Decide about going public.** Every condition the plan set is met — MIT licence, CI workflow,
    README for a stranger, `ongoing init` proved against a fresh HOME by an integration test, and a
    core with no machine-specific strings that a test now enforces — but changing the repository's
    visibility is yours to do. Nothing in this work created a repository or changed a visibility
