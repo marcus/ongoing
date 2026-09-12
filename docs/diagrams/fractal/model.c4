@@ -216,16 +216,16 @@ model {
     metadata { uid 'catalog' fractalColor '#B59669' evidence ['src/lib/server/catalog/repository.ts', 'docs/adr/0001-app-owned-storage.md'] }
 
     database = component 'Database & migrations' {
-      description 'Opens SQLite in WAL mode, serializes writes through one promise tail, and applies six versioned migrations statement by statement inside transactions.'
-      metadata { uid 'catalog.database' fractalColor '#B59669' evidence ['src/lib/server/catalog/database.ts', 'src/lib/server/catalog/migrations.ts'] }
+      description 'Opens SQLite in WAL mode, serializes writes through one promise tail, and applies eight versioned migrations statement by statement inside transactions. Migration 007 moves projects into entries in TypeScript, because slugs have to be generated and de-duplicated.'
+      metadata { uid 'catalog.database' fractalColor '#B59669' evidence ['src/lib/server/catalog/database.ts', 'src/lib/server/catalog/migrations.ts', 'src/lib/server/catalog/migrations/007_entries.ts'] }
     }
     repository = component 'Catalog repository' {
-      description 'The one persistence interface: projects and flags, decisions, website copy, metrics and snapshots, stacks and release baselines, collection errors, and scan runs with lease acquisition, renewal, and completion.'
+      description 'The one persistence interface, expressed in entries: entries and their sources, user fields, relations, saved views, provider metrics and snapshots, stacks and baselines, collection errors, and scan runs with lease acquisition, renewal, and completion. A project is the entry projection its filesystem source completes; no caller sees SQL or the attributes JSON layout.'
       metadata { uid 'catalog.repository' fractalColor '#B59669' evidence ['src/lib/server/catalog/repository.ts'] }
     }
     sqlite = store 'ongoing.sqlite' {
-      description 'projects, project_metrics, metric_snapshots, project_stacks, toolchain_releases, toolchain_baseline_status, collection_errors, scan_runs, website_pages. Default .data/ongoing.sqlite; Application Support in production.'
-      metadata { uid 'catalog.sqlite' fractalColor '#B59669' evidence ['src/lib/server/catalog/migrations/001_initial.sql', 'src/lib/server/catalog/migrations/003_stacks.sql', 'src/lib/server/catalog/migrations/006_website_pages.sql'] }
+      description 'entries, entry_sources, fields, relations, saved_views, plus project_metrics, metric_snapshots, project_stacks re-keyed to entry_id, toolchain_releases, toolchain_baseline_status, collection_errors, scan_runs, website_pages. Default .data/ongoing.sqlite; Application Support in production.'
+      metadata { uid 'catalog.sqlite' fractalColor '#B59669' evidence ['src/lib/server/catalog/migrations/007_entries.sql', 'src/lib/server/catalog/migrations/008_rekey_metrics.sql', 'src/lib/server/catalog/migrations/001_initial.sql'] }
     }
   }
 
@@ -286,59 +286,71 @@ model {
   }
 
   inventory = subsystem 'Software inventory' {
-    #proposed
-    description 'Settled but unbuilt: the catalog becomes typed entries over a field registry, one query grammar serves every surface, collectors become declared providers behind a host adapter, and the dashboard is rebuilt as a keyboard-first inventory shell.'
-    metadata { uid 'inventory' fractalColor '#7FA8C9' evidence ['docs/plans/active/ongoing-inventory-redesign.md'] }
+    description 'The catalog as typed entries. Phase 1 is built: the entries store, the field registry, the entries API, and the CLI verbs over them. The query grammar, the provider manifests, the host adapter, and the keyboard-first shell are still the settled design, marked proposed here.'
+    metadata { uid 'inventory' fractalColor '#7FA8C9' evidence ['docs/plans/active/ongoing-inventory-redesign.md', 'src/lib/server/catalog/repository.ts'] }
 
     entries = store 'entries, fields, relations' {
-      description 'entries (kind, slug, tags, attributes JSON), entry_sources (which provider found it and where), fields (user-defined), relations (uses, provides, evidence), saved_views. Projects and technologies are rows of one table.'
-      metadata { uid 'inventory.entries' fractalColor '#7FA8C9' evidence ['docs/adr/0005-entry-model-and-field-registry.md', 'docs/plans/active/ongoing-inventory-redesign.md'] }
+      #current
+      description 'entries (kind, slug, tags, attributes JSON), entry_sources (which provider found it, and where — the filesystem provider writes the canonical path), fields (user-defined), relations (uses, provides, depends_on, part_of, with declared or detected evidence), saved_views. Projects and technologies are rows of one table.'
+      metadata { uid 'inventory.entries' fractalColor '#7FA8C9' evidence ['src/lib/server/catalog/migrations/007_entries.sql', 'src/lib/server/catalog/migrations/008_rekey_metrics.sql', 'docs/adr/0005-entry-model-and-field-registry.md'] }
     }
     registry = component 'Field registry & validation' {
-      description 'Built-in fields declared in code, user fields as rows, provider fields from manifests. validateEntryPatch(registry, kind, patch) is the one pure validation path the API, the CLI, and the browser all run.'
-      metadata { uid 'inventory.registry' fractalColor '#89A579' evidence ['docs/adr/0005-entry-model-and-field-registry.md'] }
+      #current
+      description 'Built-in fields declared in code, user fields as rows, provider fields projected from the metric tables as namespaced read-only keys. validateEntryPatch(registry, kind, patch) is the one pure validation path the API, the CLI, and the browser all run; an unknown key names the closest registered field.'
+      metadata { uid 'inventory.registry' fractalColor '#89A579' evidence ['src/lib/domain/fields.ts', 'src/lib/domain/provider-fields.ts', 'src/lib/domain/fields.test.ts'] }
     }
     query = component 'Query grammar' {
+      #proposed
       description 'One pure parser and evaluator for filter clauses, multi-key sorts, and column sets. Unknown keys error with the nearest registered field; a saved view is the same string stored.'
       metadata { uid 'inventory.query' fractalColor '#89A579' evidence ['docs/adr/0006-one-query-grammar.md'] }
     }
     entries_api = component 'Entries API' {
-      description '/api/entries with q, sort, columns and saved; /api/fields, /api/relations, /api/views, /api/providers. /api/projects survives as a thin alias until the new shell ships.'
-      metadata { uid 'inventory.entries_api' fractalColor '#739886' evidence ['docs/plans/active/ongoing-inventory-redesign.md'] }
+      #current
+      description 'GET/POST /api/entries and GET/PATCH/DELETE /api/entries/:kind/:slug, plus /api/fields, /api/relations, and /api/views. One flat patch of field keys per write, validated by the registry. /api/projects survives as the project projection of the same entries until the new shell ships; q, sort, columns and saved arrive with the query grammar.'
+      metadata { uid 'inventory.entries_api' fractalColor '#739886' evidence ['src/routes/api/entries/+server.ts', 'src/routes/api/fields/+server.ts', 'src/routes/api/relations/+server.ts', 'src/routes/api/views/+server.ts'] }
     }
     entry_cli = component 'Entry CLI verbs' {
-      description 'get, set, field, tag, link, unlink, view, providers, and a rewritten list on the query model. A transport adapter links the core in-process when no service is running.'
-      metadata { uid 'inventory.entry_cli' fractalColor '#82A6B6' evidence ['docs/plans/active/ongoing-inventory-redesign.md'] }
+      #current
+      description 'get, set <entry> <field> <value> with the original decision flags as aliases, entry add|list|remove, field list|add|remove, tag, untag, link, unlink, and view save|list|delete. The CLI imports the domain registry directly, so a bad value is refused before the round trip. A transport adapter and the query-model list arrive in later phases.'
+      metadata { uid 'inventory.entry_cli' fractalColor '#82A6B6' evidence ['bin/ongoing.ts', 'docs/cli.md'] }
     }
     providers = component 'Provider registry & manifests' {
+      #proposed
       description 'Each collector declares the kinds it touches, the fields and relation kinds it contributes, what it requires, and when it runs. The scanner iterates enabled providers; a disabled one contributes no fields, so rules reading them stay inert.'
       metadata { uid 'inventory.providers' fractalColor '#9A91C4' evidence ['docs/adr/0007-provider-manifests-and-host-adapters.md'] }
     }
     config = component 'Configuration' {
+      #proposed
       description 'One TOML file with a [providers] section, --config to point elsewhere, environment variables as overrides and secret carriers.'
       metadata { uid 'inventory.config' fractalColor '#9A91C4' evidence ['docs/adr/0007-provider-manifests-and-host-adapters.md'] }
     }
     host = adapter 'Host adapter' {
+      #proposed
       description 'serve, scan, restart, stop, logs behind one interface. launchd first, foreground second, so an install without launchd is a configuration choice rather than a fork.'
       metadata { uid 'inventory.host' fractalColor '#9FA8B3' evidence ['docs/adr/0007-provider-manifests-and-host-adapters.md'] }
     }
     profile = component 'Deployment & export profiles' {
+      #proposed
       description 'The aerie constants and release scripts move to deploy/aerie/ and the website export becomes the opentangle profile. The core imports neither; ongoing init, serve, and scan are all a new machine needs.'
       metadata { uid 'inventory.profile' fractalColor '#9FA8B3' evidence ['docs/adr/0007-provider-manifests-and-host-adapters.md'] }
     }
     shell = component 'Inventory shell' {
+      #proposed
       description 'Rail of kinds, attention views, saved views, radar and providers; a table with chosen columns, inline editors per field type, j/k, / to filter, , to sort, c for columns; a detail panel on Enter.'
       metadata { uid 'inventory.shell' fractalColor '#759EB5' evidence ['docs/adr/0008-frontend-design-system.md'] }
     }
     palette = component 'Command palette' {
+      #proposed
       description 'Cmd+K jump to any entry by fuzzy name and run commands against it: set intent, favorite, hide, reorder, open in terminal, switch view.'
       metadata { uid 'inventory.palette' fractalColor '#759EB5' evidence ['docs/adr/0008-frontend-design-system.md'] }
     }
     entry_page = component 'Entry fact sheet' {
+      #proposed
       description '/p/<slug> and /t/<slug>: identity, decision fields, provider panels that have data, relations, and every attention reason with its input, comparison, and threshold. Edit in place.'
       metadata { uid 'inventory.entry_page' fractalColor '#759EB5' evidence ['docs/adr/0008-frontend-design-system.md'] }
     }
     ui_kit = component 'Design system' {
+      #proposed
       description 'src/lib/ui: Table, a cell editor per field type, Palette, Panel, Rail, Badge, Sparkline, over dark-first LCH tokens on a 4px grid. Replaces dashboard.css, the ticker, the flyout, and drag reorder.'
       metadata { uid 'inventory.ui_kit' fractalColor '#759EB5' evidence ['docs/adr/0008-frontend-design-system.md'] }
     }
@@ -466,40 +478,41 @@ model {
   // Website consumer
   external.opentangle .calls service.website_api 'GET /api/website on deployment' { metadata { uid 'opentangle-export' } }
 
-  // Proposed: the software inventory
-  user .calls inventory.shell 'Browses, filters, and edits in the table' { metadata { uid 'user-inventory' } }
+  // The software inventory: built in Phase 1, proposed beyond it
+  user .calls inventory.shell 'Browses, filters, and edits in the table' { #proposed metadata { uid 'user-inventory' } }
   user .calls inventory.entry_cli 'Runs the same verbs from a shell' { metadata { uid 'user-entry-cli' } }
-  inventory.shell .calls inventory.entries_api 'GET /api/entries?q=&sort=&columns=' { metadata { uid 'shell-api' } }
-  inventory.shell .calls inventory.ui_kit 'Table, cell editors, rail, panel' { metadata { uid 'shell-uikit' } }
-  inventory.shell .calls inventory.query 'Builds and validates the filter string in the browser' { metadata { uid 'shell-query' } }
-  inventory.palette .calls inventory.entries_api 'Jump to an entry, run a command against it' { metadata { uid 'palette-api' } }
-  inventory.entry_page .calls inventory.entries_api 'PATCH one field in place' { metadata { uid 'entrypage-api' } }
-  inventory.entry_page .calls domain.attention 'Re-runs the reasons after an optimistic edit' { metadata { uid 'entrypage-attention' } }
+  inventory.shell .calls inventory.entries_api 'GET /api/entries?q=&sort=&columns=' { #proposed metadata { uid 'shell-api' } }
+  inventory.shell .calls inventory.ui_kit 'Table, cell editors, rail, panel' { #proposed metadata { uid 'shell-uikit' } }
+  inventory.shell .calls inventory.query 'Builds and validates the filter string in the browser' { #proposed metadata { uid 'shell-query' } }
+  inventory.palette .calls inventory.entries_api 'Jump to an entry, run a command against it' { #proposed metadata { uid 'palette-api' } }
+  inventory.entry_page .calls inventory.entries_api 'PATCH one field in place' { #proposed metadata { uid 'entrypage-api' } }
+  inventory.entry_page .calls domain.attention 'Re-runs the reasons after an optimistic edit' { #proposed metadata { uid 'entrypage-attention' } }
   inventory.entry_cli .calls inventory.entries_api 'Over HTTP, or the core in-process when no service runs' { metadata { uid 'entrycli-api' } }
-  inventory.entry_cli .calls inventory.host 'serve, scan, restart, stop, logs' { metadata { uid 'entrycli-host' } }
+  inventory.entry_cli .calls inventory.host 'serve, scan, restart, stop, logs' { #proposed metadata { uid 'entrycli-host' } }
   inventory.entries_api .calls inventory.registry 'validateEntryPatch before any write' { metadata { uid 'api-registry' } }
-  inventory.entries_api .calls inventory.query 'Parses q, sort, columns, saved' { metadata { uid 'api-query' } }
-  inventory.entries_api .calls domain.readmodel 'Projects provider metrics into namespaced fields' { metadata { uid 'api-readmodel' } }
+  inventory.entries_api .calls inventory.query 'Parses q, sort, columns, saved' { #proposed metadata { uid 'api-query' } }
+  inventory.entries_api .calls domain.readmodel 'Merges stored attributes and projected provider metrics into one field map' { metadata { uid 'api-readmodel' } }
   inventory.entries_api .writes catalog.repository 'Entries, fields, relations, saved views' { metadata { uid 'api-repo' } }
-  inventory.query .reads inventory.registry 'Resolves and type-checks every field key' { metadata { uid 'query-registry' } }
+  inventory.query .reads inventory.registry 'Resolves and type-checks every field key' { #proposed metadata { uid 'query-registry' } }
   inventory.registry .reads inventory.entries 'User-defined field rows' { metadata { uid 'registry-entries' } }
-  inventory.providers .supplies inventory.registry 'Namespaced read-only field and relation definitions' { metadata { uid 'providers-registry' } }
-  inventory.providers .supplies scanning.scanner 'The enabled provider set, replacing the fixed sequence' { metadata { uid 'providers-scanner' } }
-  inventory.config .supplies inventory.providers 'Which providers are on, and their settings' { metadata { uid 'config-providers' } }
-  inventory.config .supplies inventory.host 'Which host implementation serves and schedules' { metadata { uid 'config-host' } }
-  inventory.host .calls external.launchd 'launchd profile; foreground is the second implementation' { metadata { uid 'host-launchd' } }
-  inventory.profile .calls inventory.host 'aerie deploy and rollback through the adapter' { metadata { uid 'profile-host' } }
-  inventory.profile .calls service.website_api 'The opentangle export profile' { metadata { uid 'profile-export' } }
+  service.projects_api .reads inventory.entries 'The project projection of the same entries, tags and attributes included' { metadata { uid 'projects-entries' } }
+  inventory.providers .supplies inventory.registry 'Namespaced read-only field and relation definitions' { #proposed metadata { uid 'providers-registry' } }
+  inventory.providers .supplies scanning.scanner 'The enabled provider set, replacing the fixed sequence' { #proposed metadata { uid 'providers-scanner' } }
+  inventory.config .supplies inventory.providers 'Which providers are on, and their settings' { #proposed metadata { uid 'config-providers' } }
+  inventory.config .supplies inventory.host 'Which host implementation serves and schedules' { #proposed metadata { uid 'config-host' } }
+  inventory.host .calls external.launchd 'launchd profile; foreground is the second implementation' { #proposed metadata { uid 'host-launchd' } }
+  inventory.profile .calls inventory.host 'aerie deploy and rollback through the adapter' { #proposed metadata { uid 'profile-host' } }
+  inventory.profile .calls service.website_api 'The opentangle export profile' { #proposed metadata { uid 'profile-export' } }
   catalog.repository .writes inventory.entries 'The one persistence interface; no caller sees SQL or the JSON layout' { metadata { uid 'repo-entries' } }
 
   // Proposed tech radar, Phase 3 of the inventory redesign
-  radar.signatures .calls scanning.stack 'Reads manifest dependencies alongside toolchains' { metadata { uid 'radar-stack' } }
-  radar.signatures .writes inventory.entries 'Rewrites detected uses relations every scan' { metadata { uid 'radar-detected' } }
-  radar.signatures .supplies inventory.providers 'Declares its fields and the uses relation kind' { metadata { uid 'radar-manifest' } }
-  radar.tech_cli .writes inventory.entries 'Rings, notes, declared relations' { metadata { uid 'radar-cli-tables' } }
-  radar.tech_cli .calls inventory.entries_api 'Through the same HTTP contract as everything else' { metadata { uid 'radar-cli-client' } }
-  radar.page .reads inventory.entries 'Rings and project counts' { metadata { uid 'radar-page-tables' } }
-  radar.page .calls inventory.ui_kit 'Chips and badges from the shared design system' { metadata { uid 'radar-page-uikit' } }
+  radar.signatures .calls scanning.stack 'Reads manifest dependencies alongside toolchains' { #proposed metadata { uid 'radar-stack' } }
+  radar.signatures .writes inventory.entries 'Rewrites detected uses relations every scan' { #proposed metadata { uid 'radar-detected' } }
+  radar.signatures .supplies inventory.providers 'Declares its fields and the uses relation kind' { #proposed metadata { uid 'radar-manifest' } }
+  radar.tech_cli .writes inventory.entries 'Rings, notes, declared relations' { #proposed metadata { uid 'radar-cli-tables' } }
+  radar.tech_cli .calls inventory.entries_api 'Through the same HTTP contract as everything else' { #proposed metadata { uid 'radar-cli-client' } }
+  radar.page .reads inventory.entries 'Rings and project counts' { #proposed metadata { uid 'radar-page-tables' } }
+  radar.page .calls inventory.ui_kit 'Chips and badges from the shared design system' { #proposed metadata { uid 'radar-page-uikit' } }
 }
 
 views {

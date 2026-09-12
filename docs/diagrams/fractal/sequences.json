@@ -560,9 +560,9 @@
     {
       "id": "proposed-field-add",
       "title": "Adding a field is a row, not a migration",
-      "description": "A user field registered from the shell is immediately valid to set, filterable by the query grammar, and offered as a column in the browser, with no schema change and no frontend change.",
-      "status": "proposed",
-      "provenance": "Authored 2026-09-11 from docs/plans/active/ongoing-inventory-redesign.md and ADRs 0005 and 0006. Nothing here is built: the verbs, routes, and registry are the settled design, not observed behaviour.",
+      "description": "A user field registered from the shell is immediately valid to set on an entry and visible everywhere the catalog is read — no schema change, no frontend change. Filtering on it by name arrives with the query grammar in Phase 2.",
+      "status": "current",
+      "provenance": "Authored 2026-09-11 from docs/plans/active/ongoing-inventory-redesign.md and ADRs 0005 and 0006; rewritten the same day against the shipped Phase 1 code (bin/ongoing.ts, src/routes/api/fields/+server.ts, src/routes/api/entries, src/lib/domain/fields.ts) and exercised end to end in tests/e2e/entries.test.ts.",
       "participants": [
         {
           "id": "shell",
@@ -585,26 +585,16 @@
           "title": "Field registry"
         },
         {
-          "id": "query",
-          "element": "inventory.query",
-          "title": "Query grammar"
-        },
-        {
           "id": "repo",
           "element": "catalog.repository",
           "title": "Repository"
-        },
-        {
-          "id": "table",
-          "element": "inventory.shell",
-          "title": "Inventory shell"
         }
       ],
       "groups": [
         {
           "id": "core",
           "title": "One process",
-          "participants": ["api", "registry", "query", "repo"]
+          "participants": ["api", "registry", "repo"]
         }
       ],
       "steps": [
@@ -619,7 +609,7 @@
               "id": "field-add",
               "from": "shell",
               "to": "cli",
-              "title": "ongoing field add x.customer --kinds project --type text",
+              "title": "ongoing field add x.customer --type text --label Customer",
               "kind": "call"
             },
             {
@@ -667,7 +657,7 @@
               "id": "set-patch",
               "from": "cli",
               "to": "api",
-              "title": "PATCH /api/entries/project/acme-site { attributes }",
+              "title": "PATCH /api/entries/project/acme-site { \"x.customer\": \"acme\" }",
               "kind": "call"
             },
             {
@@ -677,7 +667,7 @@
               "to": "registry",
               "title": "validateEntryPatch(registry, 'project', patch)",
               "kind": "call",
-              "description": "The browser runs this identical pure function before sending, so a bad value never leaves the client."
+              "description": "The CLI runs this identical pure function before sending, and the browser will too, so a bad value never leaves the client. An unknown key comes back naming the closest registered field."
             },
             {
               "type": "message",
@@ -700,14 +690,14 @@
         {
           "type": "phase",
           "id": "use",
-          "title": "3. Filter, sort, and show it",
+          "title": "3. Read it back",
           "steps": [
             {
               "type": "message",
               "id": "list-cmd",
               "from": "shell",
               "to": "cli",
-              "title": "ongoing list 'x.customer:acme' --columns name,x.customer --json",
+              "title": "ongoing get acme-site x.customer",
               "kind": "call"
             },
             {
@@ -715,15 +705,7 @@
               "id": "list-get",
               "from": "cli",
               "to": "api",
-              "title": "GET /api/entries?q=&columns=",
-              "kind": "call"
-            },
-            {
-              "type": "message",
-              "id": "list-parse",
-              "from": "api",
-              "to": "query",
-              "title": "Parse the clause; an unknown key errors with the nearest registered field",
+              "title": "GET /api/entries",
               "kind": "call"
             },
             {
@@ -731,7 +713,7 @@
               "id": "list-read",
               "from": "api",
               "to": "repo",
-              "title": "Read entries and project provider metrics into namespaced fields",
+              "title": "Read entries, then project provider metrics into namespaced fields",
               "kind": "call"
             },
             {
@@ -739,17 +721,9 @@
               "id": "list-rows",
               "from": "api",
               "to": "cli",
-              "title": "Matching rows, chosen columns only",
-              "kind": "return"
-            },
-            {
-              "type": "message",
-              "id": "ui-column",
-              "from": "table",
-              "to": "api",
-              "title": "The column chooser offers x.customer with no frontend change",
-              "kind": "call",
-              "description": "Components read the registry, so the browser learns the field the moment it is registered."
+              "title": "Every field the entry carries, stored and projected alike",
+              "kind": "return",
+              "description": "The dashboard payload carries the same attributes, so `ongoing show` and `ongoing list --json` see the new field without a second read model."
             }
           ]
         }

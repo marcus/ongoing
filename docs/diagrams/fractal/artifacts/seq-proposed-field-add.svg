@@ -1,137 +1,119 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" role="img" aria-labelledby="sequence-title sequence-description" data-theme="graphite" data-theme-appearance="light">
-  <title id="sequence-title">Adding a field is a row, not a migration</title><desc id="sequence-description">A user field registered from the shell is immediately valid to set, filterable by the query grammar, and offered as a column in the browser, with no schema change and no frontend change.</desc><metadata>{&quot;journeyId&quot;:&quot;proposed-field-add&quot;,&quot;provenance&quot;:&quot;Authored 2026-09-11 from docs/plans/active/ongoing-inventory-redesign.md and ADRs 0005 and 0006. Nothing here is built: the verbs, routes, and registry are the settled design, not observed behaviour.&quot;,&quot;hiddenLanes&quot;:[],&quot;rows&quot;:[{&quot;id&quot;:&quot;register&quot;,&quot;type&quot;:&quot;phase&quot;,&quot;messageIds&quot;:[&quot;field-add&quot;,&quot;field-post&quot;,&quot;field-check&quot;,&quot;field-store&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;shell&quot;,&quot;cli&quot;,&quot;api&quot;,&quot;registry&quot;,&quot;repo&quot;]},{&quot;id&quot;:&quot;field-add&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;field-add&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;shell&quot;,&quot;cli&quot;]},{&quot;id&quot;:&quot;field-post&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;field-post&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;cli&quot;,&quot;api&quot;]},{&quot;id&quot;:&quot;field-check&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;field-check&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;api&quot;,&quot;registry&quot;]},{&quot;id&quot;:&quot;field-store&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;field-store&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;api&quot;,&quot;repo&quot;]},{&quot;id&quot;:&quot;assign&quot;,&quot;type&quot;:&quot;phase&quot;,&quot;messageIds&quot;:[&quot;set-cmd&quot;,&quot;set-patch&quot;,&quot;set-validate&quot;,&quot;set-write&quot;,&quot;set-ok&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;shell&quot;,&quot;cli&quot;,&quot;api&quot;,&quot;registry&quot;,&quot;repo&quot;]},{&quot;id&quot;:&quot;set-cmd&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;set-cmd&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;shell&quot;,&quot;cli&quot;]},{&quot;id&quot;:&quot;set-patch&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;set-patch&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;cli&quot;,&quot;api&quot;]},{&quot;id&quot;:&quot;set-validate&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;set-validate&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;api&quot;,&quot;registry&quot;]},{&quot;id&quot;:&quot;set-write&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;set-write&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;api&quot;,&quot;repo&quot;]},{&quot;id&quot;:&quot;set-ok&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;set-ok&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;api&quot;,&quot;cli&quot;]},{&quot;id&quot;:&quot;use&quot;,&quot;type&quot;:&quot;phase&quot;,&quot;messageIds&quot;:[&quot;list-cmd&quot;,&quot;list-get&quot;,&quot;list-parse&quot;,&quot;list-read&quot;,&quot;list-rows&quot;,&quot;ui-column&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;shell&quot;,&quot;cli&quot;,&quot;api&quot;,&quot;query&quot;,&quot;repo&quot;,&quot;table&quot;]},{&quot;id&quot;:&quot;list-cmd&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;list-cmd&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;shell&quot;,&quot;cli&quot;]},{&quot;id&quot;:&quot;list-get&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;list-get&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;cli&quot;,&quot;api&quot;]},{&quot;id&quot;:&quot;list-parse&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;list-parse&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;api&quot;,&quot;query&quot;]},{&quot;id&quot;:&quot;list-read&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;list-read&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;api&quot;,&quot;repo&quot;]},{&quot;id&quot;:&quot;list-rows&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;list-rows&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;api&quot;,&quot;cli&quot;]},{&quot;id&quot;:&quot;ui-column&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;ui-column&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;table&quot;,&quot;api&quot;]}]}</metadata>
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" role="img" aria-labelledby="sequence-title sequence-description" data-theme="grove" data-theme-appearance="light">
+  <title id="sequence-title">Adding a field is a row, not a migration</title><desc id="sequence-description">A user field registered from the shell is immediately valid to set on an entry and visible everywhere the catalog is read — no schema change, no frontend change. Filtering on it by name arrives with the query grammar in Phase 2.</desc><metadata>{&quot;journeyId&quot;:&quot;proposed-field-add&quot;,&quot;provenance&quot;:&quot;Authored 2026-09-11 from docs/plans/active/ongoing-inventory-redesign.md and ADRs 0005 and 0006; rewritten the same day against the shipped Phase 1 code (bin/ongoing.ts, src/routes/api/fields/+server.ts, src/routes/api/entries, src/lib/domain/fields.ts) and exercised end to end in tests/e2e/entries.test.ts.&quot;,&quot;hiddenLanes&quot;:[],&quot;rows&quot;:[{&quot;id&quot;:&quot;register&quot;,&quot;type&quot;:&quot;phase&quot;,&quot;messageIds&quot;:[&quot;field-add&quot;,&quot;field-post&quot;,&quot;field-check&quot;,&quot;field-store&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;shell&quot;,&quot;cli&quot;,&quot;api&quot;,&quot;registry&quot;,&quot;repo&quot;]},{&quot;id&quot;:&quot;field-add&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;field-add&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;shell&quot;,&quot;cli&quot;]},{&quot;id&quot;:&quot;field-post&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;field-post&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;cli&quot;,&quot;api&quot;]},{&quot;id&quot;:&quot;field-check&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;field-check&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;api&quot;,&quot;registry&quot;]},{&quot;id&quot;:&quot;field-store&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;field-store&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;api&quot;,&quot;repo&quot;]},{&quot;id&quot;:&quot;assign&quot;,&quot;type&quot;:&quot;phase&quot;,&quot;messageIds&quot;:[&quot;set-cmd&quot;,&quot;set-patch&quot;,&quot;set-validate&quot;,&quot;set-write&quot;,&quot;set-ok&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;shell&quot;,&quot;cli&quot;,&quot;api&quot;,&quot;registry&quot;,&quot;repo&quot;]},{&quot;id&quot;:&quot;set-cmd&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;set-cmd&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;shell&quot;,&quot;cli&quot;]},{&quot;id&quot;:&quot;set-patch&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;set-patch&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;cli&quot;,&quot;api&quot;]},{&quot;id&quot;:&quot;set-validate&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;set-validate&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;api&quot;,&quot;registry&quot;]},{&quot;id&quot;:&quot;set-write&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;set-write&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;api&quot;,&quot;repo&quot;]},{&quot;id&quot;:&quot;set-ok&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;set-ok&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;api&quot;,&quot;cli&quot;]},{&quot;id&quot;:&quot;use&quot;,&quot;type&quot;:&quot;phase&quot;,&quot;messageIds&quot;:[&quot;list-cmd&quot;,&quot;list-get&quot;,&quot;list-read&quot;,&quot;list-rows&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;shell&quot;,&quot;cli&quot;,&quot;api&quot;,&quot;repo&quot;]},{&quot;id&quot;:&quot;list-cmd&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;list-cmd&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;shell&quot;,&quot;cli&quot;]},{&quot;id&quot;:&quot;list-get&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;list-get&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;cli&quot;,&quot;api&quot;]},{&quot;id&quot;:&quot;list-read&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;list-read&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;api&quot;,&quot;repo&quot;]},{&quot;id&quot;:&quot;list-rows&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;list-rows&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;api&quot;,&quot;cli&quot;]}]}</metadata>
   <defs>
-    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#85857f"/></marker>
-    <marker id="arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10" fill="none" stroke="#85857f" stroke-width="1.5"/></marker>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#84948b"/></marker>
+    <marker id="arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10" fill="none" stroke="#84948b" stroke-width="1.5"/></marker>
   </defs>
-  <rect width="1920" height="1080" fill="#f8f8f6"/>
+  <rect width="1920" height="1080" fill="#fafbf8"/>
   <g font-family="Arial, Helvetica, sans-serif" data-export-layer="title">
-    <text x="70" y="43" font-size="11" letter-spacing="2.5" fill="#626b6f">FRACTAL / SEQUENCE JOURNEY</text>
-    <text x="70" y="88" text-anchor="start" font-size="34" fill="#292927"><tspan x="70" dy="0">Adding a field is a row, not a migration</tspan></text>
-    <text x="70" y="126" text-anchor="start" font-size="15" fill="#74746f"><tspan x="70" dy="0">A user field registered from the shell is immediately valid to set, filterable by the query grammar, and offered as a column in the browser, with no schema change and no frontend change.</tspan></text>
+    <text x="70" y="43" font-size="11" letter-spacing="2.5" fill="#607c69">FRACTAL / SEQUENCE JOURNEY</text>
+    <text x="70" y="88" text-anchor="start" font-size="34" fill="#243b34"><tspan x="70" dy="0">Adding a field is a row, not a migration</tspan></text>
+    <text x="70" y="126" text-anchor="start" font-size="15" fill="#6e7d72"><tspan x="70" dy="0">A user field registered from the shell is immediately valid to set on an entry and visible everywhere the catalog is read — no schema change, no frontend change. Filtering on it by name arrives with</tspan><tspan x="70" dy="19">the query grammar in Phase 2.</tspan></text>
   </g>
-  <g font-family="Arial, Helvetica, sans-serif" transform="translate(456.1325966850829 190) scale(0.5248618784530387)"><g data-column="shell" data-members="shell" data-elements="">
-    <rect x="102.00000000000001" y="32" width="207.42857142857142" height="44" rx="12" fill="#ffffff" stroke="#759EB5" stroke-width="2"/>
-    <text x="205.71428571428572" y="59" text-anchor="middle" font-size="15" fill="#292927"><tspan x="205.71428571428572" dy="0">Shell or agent</tspan></text>
-    <path d="M205.71428571428572 76V1378" stroke="#ddddda" stroke-width="1.2" stroke-dasharray="5 7"/>
+  <g font-family="Arial, Helvetica, sans-serif" transform="translate(504.56928838951313 190.00000000000006) scale(0.5692883895131086)"><g data-column="shell" data-members="shell" data-elements="">
+    <rect x="102" y="32" width="244" height="44" rx="12" fill="#ffffff" stroke="#759EB5" stroke-width="2"/>
+    <text x="224" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="224" dy="0">Shell or agent</tspan></text>
+    <path d="M224 76V1265" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
   </g><g data-column="cli" data-members="cli" data-elements="inventory.entry_cli">
-    <rect x="353.42857142857144" y="32" width="207.42857142857142" height="44" rx="12" fill="#ffffff" stroke="#82A6B6" stroke-width="2"/>
-    <text x="457.14285714285717" y="59" text-anchor="middle" font-size="15" fill="#292927"><tspan x="457.14285714285717" dy="0">ongoing</tspan></text>
-    <path d="M457.14285714285717 76V1378" stroke="#ddddda" stroke-width="1.2" stroke-dasharray="5 7"/>
+    <rect x="390" y="32" width="244" height="44" rx="12" fill="#ffffff" stroke="#82A6B6" stroke-width="2"/>
+    <text x="512" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="512" dy="0">ongoing</tspan></text>
+    <path d="M512 76V1265" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
   </g><g data-column="api" data-members="api" data-elements="inventory.entries_api">
-    <rect x="604.8571428571429" y="32" width="207.42857142857142" height="44" rx="12" fill="#ffffff" stroke="#739886" stroke-width="2"/>
-    <text x="708.5714285714286" y="59" text-anchor="middle" font-size="15" fill="#292927"><tspan x="708.5714285714286" dy="0">Entries API</tspan></text>
-    <path d="M708.5714285714286 76V1378" stroke="#ddddda" stroke-width="1.2" stroke-dasharray="5 7"/>
+    <rect x="678" y="32" width="244" height="44" rx="12" fill="#ffffff" stroke="#739886" stroke-width="2"/>
+    <text x="800" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="800" dy="0">Entries API</tspan></text>
+    <path d="M800 76V1265" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
   </g><g data-column="registry" data-members="registry" data-elements="inventory.registry">
-    <rect x="856.2857142857142" y="32" width="207.42857142857142" height="44" rx="12" fill="#ffffff" stroke="#89A579" stroke-width="2"/>
-    <text x="959.9999999999999" y="59" text-anchor="middle" font-size="15" fill="#292927"><tspan x="959.9999999999999" dy="0">Field registry</tspan></text>
-    <path d="M959.9999999999999 76V1378" stroke="#ddddda" stroke-width="1.2" stroke-dasharray="5 7"/>
-  </g><g data-column="query" data-members="query" data-elements="inventory.query">
-    <rect x="1107.7142857142858" y="32" width="207.42857142857142" height="44" rx="12" fill="#ffffff" stroke="#89A579" stroke-width="2"/>
-    <text x="1211.4285714285716" y="59" text-anchor="middle" font-size="15" fill="#292927"><tspan x="1211.4285714285716" dy="0">Query grammar</tspan></text>
-    <path d="M1211.4285714285716 76V1378" stroke="#ddddda" stroke-width="1.2" stroke-dasharray="5 7"/>
+    <rect x="966" y="32" width="244" height="44" rx="12" fill="#ffffff" stroke="#89A579" stroke-width="2"/>
+    <text x="1088" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="1088" dy="0">Field registry</tspan></text>
+    <path d="M1088 76V1265" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
   </g><g data-column="repo" data-members="repo" data-elements="catalog.repository">
-    <rect x="1359.142857142857" y="32" width="207.42857142857142" height="44" rx="12" fill="#ffffff" stroke="#B59669" stroke-width="2"/>
-    <text x="1462.857142857143" y="59" text-anchor="middle" font-size="15" fill="#292927"><tspan x="1462.857142857143" dy="0">Repository</tspan></text>
-    <path d="M1462.857142857143 76V1378" stroke="#ddddda" stroke-width="1.2" stroke-dasharray="5 7"/>
-  </g><g data-column="table" data-members="table" data-elements="inventory.shell">
-    <rect x="1610.5714285714284" y="32" width="207.42857142857142" height="44" rx="12" fill="#ffffff" stroke="#759EB5" stroke-width="2"/>
-    <text x="1714.2857142857142" y="59" text-anchor="middle" font-size="15" fill="#292927"><tspan x="1714.2857142857142" dy="0">Inventory shell</tspan></text>
-    <path d="M1714.2857142857142 76V1378" stroke="#ddddda" stroke-width="1.2" stroke-dasharray="5 7"/>
+    <rect x="1254" y="32" width="244" height="44" rx="12" fill="#ffffff" stroke="#B59669" stroke-width="2"/>
+    <text x="1376" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="1376" dy="0">Repository</tspan></text>
+    <path d="M1376 76V1265" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
   </g><g data-row-id="register" data-message-ids="field-add,field-post,field-check,field-store" data-participant-ids="shell,cli,api,registry,repo" data-row-type="phase" data-phase-depth="0" data-collapsed="false">
-        <rect x="58" y="118" width="1804" height="35" rx="10" fill="#eeeeeb" stroke="#d5d5d0"/>
-        <text x="78" y="141" text-anchor="start" font-size="15" fill="#292927"><tspan x="78" dy="0">1. Register the field</tspan></text>
-        <text x="261.62" y="141" text-anchor="start" font-size="11" fill="#7d7d77"><tspan x="261.62" dy="0">Owner user, so the API may create and delete it; core and provider fields are not editable this way.</tspan></text>
-        <text x="1820" y="139.5" text-anchor="end" font-size="11" fill="#7d7d77">4 interactions</text>
+        <rect x="58" y="118" width="1484" height="35" rx="10" fill="#f4f6f3" stroke="#d9e0da"/>
+        <text x="78" y="141" text-anchor="start" font-size="15" fill="#243b34"><tspan x="78" dy="0">1. Register the field</tspan></text>
+        <text x="261.62" y="141" text-anchor="start" font-size="11" fill="#78867c"><tspan x="261.62" dy="0">Owner user, so the API may create and delete it; core and provider fields are not editable this way.</tspan></text>
+        <text x="1500" y="139.5" text-anchor="end" font-size="11" fill="#78867c">4 interactions</text>
       </g><g data-row-id="field-add" data-message-ids="field-add" data-participant-ids="shell,cli" data-row-type="message" data-kind="call">
-      <rect x="151.42857142857144" y="167" width="360" height="49" rx="7" fill="#f8f8f6"/>
-      <text x="331.42857142857144" y="190" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="331.42857142857144" dy="0">ongoing field add x.customer --kinds project</tspan><tspan x="331.42857142857144" dy="17">--type text</tspan></text>
+      <rect x="188" y="167" width="360" height="49" rx="7" fill="#fafbf8"/>
+      <text x="368" y="190" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="368" dy="0">ongoing field add x.customer --type text --label</tspan><tspan x="368" dy="17">Customer</tspan></text>
       
-      <path d="M205.71428571428572 221H449.14285714285717" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M224 221H504" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="field-post" data-message-ids="field-post" data-participant-ids="cli,api" data-row-type="message" data-kind="call">
-      <rect x="402.8571428571429" y="246" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="582.8571428571429" y="269" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="582.8571428571429" dy="0">POST /api/fields { key, kinds, type, label }</tspan></text>
+      <rect x="476" y="246" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="656" y="269" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="656" dy="0">POST /api/fields { key, kinds, type, label }</tspan></text>
       
-      <path d="M457.14285714285717 285H700.5714285714286" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M512 285H792" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="field-check" data-message-ids="field-check" data-participant-ids="api,registry" data-row-type="message" data-kind="call">
-      <rect x="654.2857142857142" y="310" width="360" height="49" rx="7" fill="#f8f8f6"/>
-      <text x="834.2857142857142" y="333" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="834.2857142857142" dy="0">Validate the definition against the field-property</tspan><tspan x="834.2857142857142" dy="17">rules</tspan></text>
+      <rect x="764" y="310" width="360" height="49" rx="7" fill="#fafbf8"/>
+      <text x="944" y="333" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="944" dy="0">Validate the definition against the field-property</tspan><tspan x="944" dy="17">rules</tspan></text>
       
-      <path d="M708.5714285714286 364H951.9999999999999" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M800 364H1080" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="field-store" data-message-ids="field-store" data-participant-ids="api,repo" data-row-type="message" data-kind="call">
-      <rect x="905.7142857142858" y="389" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="1085.7142857142858" y="412" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="1085.7142857142858" dy="0">Insert the fields row; the registry reloads</tspan></text>
+      <rect x="908" y="389" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="1088" y="412" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="1088" dy="0">Insert the fields row; the registry reloads</tspan></text>
       
-      <path d="M708.5714285714286 428H1454.857142857143" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M800 428H1368" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="assign" data-message-ids="set-cmd,set-patch,set-validate,set-write,set-ok" data-participant-ids="shell,cli,api,registry,repo" data-row-type="phase" data-phase-depth="0" data-collapsed="false">
-        <rect x="58" y="453" width="1804" height="35" rx="10" fill="#eeeeeb" stroke="#d5d5d0"/>
-        <text x="78" y="476" text-anchor="start" font-size="15" fill="#292927"><tspan x="78" dy="0">2. Set it on an entry</tspan></text>
-        <text x="262.28000000000003" y="476" text-anchor="start" font-size="11" fill="#7d7d77"><tspan x="262.28000000000003" dy="0">The same path a core field takes. There is no second write route for user fields.</tspan></text>
-        <text x="1820" y="474.5" text-anchor="end" font-size="11" fill="#7d7d77">5 interactions</text>
+        <rect x="58" y="453" width="1484" height="35" rx="10" fill="#f4f6f3" stroke="#d9e0da"/>
+        <text x="78" y="476" text-anchor="start" font-size="15" fill="#243b34"><tspan x="78" dy="0">2. Set it on an entry</tspan></text>
+        <text x="262.28000000000003" y="476" text-anchor="start" font-size="11" fill="#78867c"><tspan x="262.28000000000003" dy="0">The same path a core field takes. There is no second write route for user fields.</tspan></text>
+        <text x="1500" y="474.5" text-anchor="end" font-size="11" fill="#78867c">5 interactions</text>
       </g><g data-row-id="set-cmd" data-message-ids="set-cmd" data-participant-ids="shell,cli" data-row-type="message" data-kind="call">
-      <rect x="151.42857142857144" y="502" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="331.42857142857144" y="525" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="331.42857142857144" dy="0">ongoing set acme-site x.customer acme</tspan></text>
+      <rect x="188" y="502" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="368" y="525" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="368" dy="0">ongoing set acme-site x.customer acme</tspan></text>
       
-      <path d="M205.71428571428572 541H449.14285714285717" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M224 541H504" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="set-patch" data-message-ids="set-patch" data-participant-ids="cli,api" data-row-type="message" data-kind="call">
-      <rect x="402.8571428571429" y="566" width="360" height="49" rx="7" fill="#f8f8f6"/>
-      <text x="582.8571428571429" y="589" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="582.8571428571429" dy="0">PATCH /api/entries/project/acme-site {</tspan><tspan x="582.8571428571429" dy="17">attributes }</tspan></text>
+      <rect x="476" y="566" width="360" height="49" rx="7" fill="#fafbf8"/>
+      <text x="656" y="589" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="656" dy="0">PATCH /api/entries/project/acme-site {</tspan><tspan x="656" dy="17">&quot;x.customer&quot;: &quot;acme&quot; }</tspan></text>
       
-      <path d="M457.14285714285717 620H700.5714285714286" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M512 620H792" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="set-validate" data-message-ids="set-validate" data-participant-ids="api,registry" data-row-type="message" data-kind="call">
-      <rect x="654.2857142857142" y="645" width="360" height="66" rx="7" fill="#f8f8f6"/>
-      <text x="834.2857142857142" y="668" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="834.2857142857142" dy="0">validateEntryPatch(registry, &apos;project&apos;, patch)</tspan></text>
-      <text x="834.2857142857142" y="690" text-anchor="middle" font-size="11" fill="#7d7d77"><tspan x="834.2857142857142" dy="0">The browser runs this identical pure function before</tspan><tspan x="834.2857142857142" dy="15">sending, so a bad value never leaves the client.</tspan></text>
-      <path d="M708.5714285714286 716H951.9999999999999" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <rect x="764" y="645" width="360" height="96" rx="7" fill="#fafbf8"/>
+      <text x="944" y="668" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="944" dy="0">validateEntryPatch(registry, &apos;project&apos;, patch)</tspan></text>
+      <text x="944" y="690" text-anchor="middle" font-size="11" fill="#78867c"><tspan x="944" dy="0">The CLI runs this identical pure function before sending,</tspan><tspan x="944" dy="15">and the browser will too, so a bad value never leaves the</tspan><tspan x="944" dy="15">client. An unknown key comes back naming the closest</tspan><tspan x="944" dy="15">registered field.</tspan></text>
+      <path d="M800 746H1080" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="set-write" data-message-ids="set-write" data-participant-ids="api,repo" data-row-type="message" data-kind="call">
-      <rect x="905.7142857142858" y="741" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="1085.7142857142858" y="764" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="1085.7142857142858" dy="0">Merge into the entry&apos;s attributes document</tspan></text>
+      <rect x="908" y="771" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="1088" y="794" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="1088" dy="0">Merge into the entry&apos;s attributes document</tspan></text>
       
-      <path d="M708.5714285714286 780H1454.857142857143" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M800 810H1368" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="set-ok" data-message-ids="set-ok" data-participant-ids="api,cli" data-row-type="message" data-kind="return">
-      <rect x="402.8571428571429" y="805" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="582.8571428571429" y="828" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="582.8571428571429" dy="0">200 with the stored value</tspan></text>
+      <rect x="476" y="835" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="656" y="858" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="656" dy="0">200 with the stored value</tspan></text>
       
-      <path d="M708.5714285714286 844H465.14285714285717" fill="none" stroke="#85857f" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow)"/>
-    </g><g data-row-id="use" data-message-ids="list-cmd,list-get,list-parse,list-read,list-rows,ui-column" data-participant-ids="shell,cli,api,query,repo,table" data-row-type="phase" data-phase-depth="0" data-collapsed="false">
-        <rect x="58" y="869" width="1804" height="35" rx="10" fill="#eeeeeb" stroke="#d5d5d0"/>
-        <text x="78" y="892" text-anchor="start" font-size="15" fill="#292927"><tspan x="78" dy="0">3. Filter, sort, and show it</tspan></text>
+      <path d="M800 874H520" fill="none" stroke="#84948b" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow)"/>
+    </g><g data-row-id="use" data-message-ids="list-cmd,list-get,list-read,list-rows" data-participant-ids="shell,cli,api,repo" data-row-type="phase" data-phase-depth="0" data-collapsed="false">
+        <rect x="58" y="899" width="1484" height="35" rx="10" fill="#f4f6f3" stroke="#d9e0da"/>
+        <text x="78" y="922" text-anchor="start" font-size="15" fill="#243b34"><tspan x="78" dy="0">3. Read it back</tspan></text>
         
-        <text x="1820" y="890.5" text-anchor="end" font-size="11" fill="#7d7d77">6 interactions</text>
+        <text x="1500" y="920.5" text-anchor="end" font-size="11" fill="#78867c">4 interactions</text>
       </g><g data-row-id="list-cmd" data-message-ids="list-cmd" data-participant-ids="shell,cli" data-row-type="message" data-kind="call">
-      <rect x="151.42857142857144" y="918" width="360" height="49" rx="7" fill="#f8f8f6"/>
-      <text x="331.42857142857144" y="941" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="331.42857142857144" dy="0">ongoing list &apos;x.customer:acme&apos; --columns</tspan><tspan x="331.42857142857144" dy="17">name,x.customer --json</tspan></text>
+      <rect x="188" y="948" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="368" y="971" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="368" dy="0">ongoing get acme-site x.customer</tspan></text>
       
-      <path d="M205.71428571428572 972H449.14285714285717" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M224 987H504" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="list-get" data-message-ids="list-get" data-participant-ids="cli,api" data-row-type="message" data-kind="call">
-      <rect x="402.8571428571429" y="997" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="582.8571428571429" y="1020" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="582.8571428571429" dy="0">GET /api/entries?q=&amp;columns=</tspan></text>
+      <rect x="476" y="1012" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="656" y="1035" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="656" dy="0">GET /api/entries</tspan></text>
       
-      <path d="M457.14285714285717 1036H700.5714285714286" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
-    </g><g data-row-id="list-parse" data-message-ids="list-parse" data-participant-ids="api,query" data-row-type="message" data-kind="call">
-      <rect x="780" y="1061" width="360" height="49" rx="7" fill="#f8f8f6"/>
-      <text x="960" y="1084" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="960" dy="0">Parse the clause; an unknown key errors with the</tspan><tspan x="960" dy="17">nearest registered field</tspan></text>
-      
-      <path d="M708.5714285714286 1115H1203.4285714285716" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M512 1051H792" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="list-read" data-message-ids="list-read" data-participant-ids="api,repo" data-row-type="message" data-kind="call">
-      <rect x="905.7142857142858" y="1140" width="360" height="49" rx="7" fill="#f8f8f6"/>
-      <text x="1085.7142857142858" y="1163" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="1085.7142857142858" dy="0">Read entries and project provider metrics into</tspan><tspan x="1085.7142857142858" dy="17">namespaced fields</tspan></text>
+      <rect x="908" y="1076" width="360" height="49" rx="7" fill="#fafbf8"/>
+      <text x="1088" y="1099" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="1088" dy="0">Read entries, then project provider metrics into</tspan><tspan x="1088" dy="17">namespaced fields</tspan></text>
       
-      <path d="M708.5714285714286 1194H1454.857142857143" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M800 1130H1368" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="list-rows" data-message-ids="list-rows" data-participant-ids="api,cli" data-row-type="message" data-kind="return">
-      <rect x="402.8571428571429" y="1219" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="582.8571428571429" y="1242" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="582.8571428571429" dy="0">Matching rows, chosen columns only</tspan></text>
-      
-      <path d="M708.5714285714286 1258H465.14285714285717" fill="none" stroke="#85857f" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow)"/>
-    </g><g data-row-id="ui-column" data-message-ids="ui-column" data-participant-ids="table,api" data-row-type="message" data-kind="call">
-      <rect x="1031.4285714285713" y="1283" width="360" height="85" rx="7" fill="#f8f8f6"/>
-      <text x="1211.4285714285713" y="1306" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="1211.4285714285713" dy="0">The column chooser offers x.customer with no</tspan><tspan x="1211.4285714285713" dy="17">frontend change</tspan></text>
-      <text x="1211.4285714285713" y="1347" text-anchor="middle" font-size="11" fill="#7d7d77"><tspan x="1211.4285714285713" dy="0">Components read the registry, so the browser learns the</tspan><tspan x="1211.4285714285713" dy="15">field the moment it is registered.</tspan></text>
-      <path d="M1714.2857142857142 1373H716.5714285714286" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <rect x="476" y="1155" width="360" height="100" rx="7" fill="#fafbf8"/>
+      <text x="656" y="1178" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="656" dy="0">Every field the entry carries, stored and</tspan><tspan x="656" dy="17">projected alike</tspan></text>
+      <text x="656" y="1219" text-anchor="middle" font-size="11" fill="#78867c"><tspan x="656" dy="0">The dashboard payload carries the same attributes, so</tspan><tspan x="656" dy="15">`ongoing show` and `ongoing list --json` see the new field</tspan><tspan x="656" dy="15">without a second read model.</tspan></text>
+      <path d="M800 1260H520" fill="none" stroke="#84948b" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow)"/>
     </g></g>
   <g font-family="Arial, Helvetica, sans-serif" data-export-layer="footer">
-    <path d="M70 992H1850" stroke="#ddddda"/>
-    <text x="70" y="1027" font-size="12" font-weight="600" letter-spacing="1" fill="#626b6f">PROPOSED · 15 INTERACTIONS</text>
-    <text x="620" y="1027" font-size="11" fill="#7d7d77">SOURCE · Authored 2026-09-11 from docs/plans/active/ongoing-inventory-redesign.md and ADRs 0005 and 0006. Nothing here is built: the verbs, routes, and registry are the settled design, not observed behaviour.</text>
+    <path d="M70 992H1850" stroke="#dce2db"/>
+    <text x="70" y="1027" font-size="12" font-weight="600" letter-spacing="1" fill="#607c69">CURRENT · 13 INTERACTIONS</text>
+    <text x="620" y="1027" font-size="11" fill="#78867c">SOURCE · Authored 2026-09-11 from docs/plans/active/ongoing-inventory-redesign.md and ADRs 0005 and 0006; rewritten the same day against the shipped Phase 1 code (bin/ongoing.ts, src/routes/api/fields/+server.ts, src/rou…</text>
   </g>
   </svg>

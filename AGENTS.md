@@ -32,6 +32,12 @@ ADRs [0005](docs/adr/0005-entry-model-and-field-registry.md), [0006](docs/adr/00
 Before adding a table, a column, a list parameter, or a collector, check whether the plan already says where it
 goes. New capability order is unchanged: domain function, repository method, API route, CLI verb, then UI.
 
+**Phase 1 has landed.** The catalog is `entries` + `entry_sources` + `fields` + `relations` + `saved_views`; the
+`projects` table is gone and the metric tables are keyed by `entry_id`. Do not add a column for a new per-entry
+value — register a field. `validateEntryPatch(registry, kind, patch)` in `src/lib/domain/fields.ts` is the only
+path from an untrusted patch to stored values, and the API, the CLI, and (from Phase 4) the browser all call it.
+`/api/projects` is now the project projection of the same entries and stays until the new shell ships.
+
 ## Keep the architecture model current
 
 `docs/diagrams/fractal/` holds the Fractal model of this system (`model.c4`, `fractal.json`,

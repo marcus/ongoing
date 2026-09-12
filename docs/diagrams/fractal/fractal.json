@@ -3,12 +3,12 @@
   "id": "ongoing",
   "title": "Ongoing",
   "description": "Which local projects deserve attention: one API, two clients, a cache-first scanner, and an app-owned catalog.",
-  "provenance": "Authored 2026-09-11 from the Ongoing source tree, ADRs, README, AGENTS.md, deployment and website docs. Every current component cites the files inspected. The catalog repository is modeled as one component rather than per table; the Svelte component tree and the test suites are intentionally shallow. The 'Software inventory' and 'Tech radar' subsystems are proposed, not built: they are drawn from docs/plans/active/ongoing-inventory-redesign.md and ADRs 0005-0008, settled on 2026-09-11, and their evidence paths are plans rather than code.",
+  "provenance": "Authored 2026-09-11 from the Ongoing source tree, ADRs, README, AGENTS.md, deployment and website docs; updated 2026-09-11 when Phase 1 of the inventory redesign landed. Every current component cites the files inspected. The catalog repository is modeled as one component rather than per table; the Svelte component tree and the test suites are intentionally shallow. Inside the 'Software inventory' subsystem the entries store, the field registry, the entries API, and the entry CLI verbs are now current and cite code; the query grammar, provider manifests, host adapter, deployment profiles, and the new shell stay proposed, as does the whole 'Tech radar' subsystem, and their evidence paths are plans and ADRs rather than code.",
   "boundaries": [
     {
       "id": "api-parity",
       "title": "Same HTTP contract",
-      "description": "Both clients go through the JSON API. A capability reachable only through the browser would be a design bug. The proposed entries API extends the same contract to fields, relations, and saved views.",
+      "description": "Both clients go through the JSON API. A capability reachable only through the browser would be a design bug. The entries API extends the same contract to fields, relations, and saved views, and every CLI verb over them is the same route the browser calls.",
       "kind": "parity",
       "members": [
         "cli.client",
@@ -164,6 +164,15 @@
       "lens": "structure"
     },
     {
+      "id": "entry-model",
+      "title": "Entries, fields, and relations",
+      "description": "What Phase 1 built: one entries table with a source per provider, a registry that validates every patch, and one API and CLI over both. The project dashboard is a projection of the same rows.",
+      "expanded": ["inventory"],
+      "proposed": false,
+      "lens": "structure",
+      "scope": "inventory"
+    },
+    {
       "id": "outside-the-process",
       "title": "Tools, APIs, and hosts",
       "description": "What Ongoing spawns, calls, or is scheduled by, and how each dependency is allowed to fail.",
@@ -190,7 +199,7 @@
     {
       "id": "proposed-inventory",
       "title": "Proposal: Ongoing as a software inventory",
-      "description": "Settled and unbuilt: one entries table behind a field registry, one query grammar for the CLI, the API and the browser, collectors declared as providers behind a host adapter, and a keyboard-first shell over all of it.",
+      "description": "Phase 1 has landed: entries, the field registry, the entries API, and the CLI verbs over them are current inside this subsystem. What is still drawn as proposed is the rest of the settled design — one query grammar for every surface, collectors declared as providers behind a host adapter, and a keyboard-first shell over all of it.",
       "expanded": ["inventory"],
       "proposed": true,
       "lens": "structure",

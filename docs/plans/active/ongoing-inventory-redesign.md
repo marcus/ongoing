@@ -1,7 +1,9 @@
 # Ongoing as a software inventory
 
 **Status:** active, in implementation. Decisions 1 through 5 and every open question are settled
-(Phase 0, 2026-09-11); nothing below is built yet. Each phase has a td epic, listed in its section.
+(Phase 0, 2026-09-11). Phase 1 is built: the catalog is entries over a field registry, with relations
+and saved views, and an API and CLI over all of it. Phases 2 through 6 are unbuilt. Each phase has a
+td epic, listed in its section.
 
 Inputs: the running dashboard and its Fractal model (`docs/diagrams/fractal/`), the tech radar
 model (`tech-radar.md`, this plan's Phase 3 companion), the project-standards brief
@@ -326,6 +328,50 @@ Evidence: existing Vitest and Playwright suites pass; a user field added by CLI 
 `ongoing show` and `ongoing list --json`; a declared relation round-trips; the production catalog
 migrates on aerie with a verified backup.
 
+**Handoff (2026-09-11).** Built and pushed. The catalog is now `entries`, `entry_sources`, `fields`,
+`relations`, and `saved_views` (migrations 007 and 008); the `projects` table is gone and
+`project_metrics`, `metric_snapshots`, `project_stacks`, and `collection_errors` are keyed by
+`entry_id` with their shape unchanged. Entry ids are the old project ids, so nothing was re-keyed in
+substance. Migration 007 does its row copy in TypeScript (`migrations/007_entries.ts`) because slugs
+have to be generated and de-duplicated; `migrations.ts` grew an optional `migrate` hook for that,
+which runs inside the same transaction as the file's statements.
+
+Proof on real data: a copy of the production catalog migrated losslessly — 144 projects became 144
+entries and 144 filesystem sources, with every favourite, note, manual rank, missing timestamp, and
+website record intact, all 21,352 snapshots, 124 stack rows, 119 collector errors, 165 release rows
+and 4 website pages carried over, identical metric checksums, and no foreign-key violations.
+`tests/fixtures/catalog/v6.sql` is the same schema with rows that exercise each of those columns, and
+`tests/integration/catalog.test.ts` asserts the migration against it.
+
+The shape to build on: `src/lib/domain/entry.ts` (entry types, slugs, tags), `fields.ts` (the
+registry, `validateEntryPatch`, `parseFieldInput`), `provider-fields.ts` (the namespaced projection),
+`relation.ts`, `view.ts`. `CatalogRepository` is the one store interface — `listEntries`, `getEntry`,
+`getEntryBySlug`, `createEntry`, `patchEntry`, `deleteEntry`, sources, `registry()`, user fields,
+relations, saved views — with the project methods kept as a projection over the same rows, so the
+dashboard, the scanner, and the collectors were not touched. `src/lib/server/catalog/entries.ts` is
+the read model: it merges columns, attributes, and provider projections into one flat `fields` map,
+which is what Phase 2's query evaluator should filter and sort over.
+
+Three judgment calls worth knowing. `POST /api/entries` and `DELETE /api/entries/:kind/:slug` (plus
+`ongoing entry add|list|remove`) are not in the list above, but a technology has no discovery to
+create it and Phase 3 seeds technologies through the CLI, so the model needed them. `untag` is its
+own verb because `-tag` parses as a flag. And `website_json` stayed a column on `entries` rather than
+becoming a registered field, because the website document has its own validator and becomes an
+export profile in Phase 5.
+
+Two repairs on the way through. `PRODUCTION_SCAN_PATH` did not resolve `gh`, which is installed
+through mise on this machine rather than Homebrew, so the scheduled scan has been reporting GitHub
+unavailable; the shim directory is on the path now and the probe runs with the HOME launchd actually
+supplies. And the Playwright seed's fixed July timestamps had aged past the attention rules'
+freshness gates, failing three browser tests for reasons unrelated to the code; the seed is now
+anchored to the moment it runs. `playwright.config.ts` takes `E2E_PORT` so a busy 5173 no longer
+silently tests whatever else is listening there.
+
+Not done here, deliberately: `/api/entries` still takes `kind` and `hidden` rather than `q`, `sort`,
+`columns`, and `saved` (Phase 2 owns the grammar), `ongoing list` still reads `/api/projects`, and
+nothing seeds technologies (Phase 3). The production service has not been restarted; Marcus will do
+that once the plan lands, and the migration runs on first open.
+
 ### Phase 2: query model and CLI parity — td-a4b0b6
 
 Depends on Phase 1.
@@ -448,3 +494,7 @@ Settled in Phase 0 on 2026-09-11. Reopen one only with a reason written down her
 - 2026-09-11: Phase 0 — decisions 1–5 and every open question settled, ADRs 0005–0008 written, the
   shipped dashboard plan moved to `implemented/`, the tech radar re-homed here as Phase 3's
   companion, six phase epics filed in td, and the Fractal proposal scene widened to the whole plan.
+- 2026-09-11: Phase 1 — the catalog moved onto entries, a field registry, relations, and saved views;
+  one validated patch path serves the API, the CLI, and the browser; `/api/entries`, `/api/fields`,
+  `/api/relations`, and `/api/views` shipped with the CLI verbs over them; the production catalog
+  migrates losslessly on a real copy; the existing dashboard runs unchanged on the new model.

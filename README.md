@@ -6,6 +6,8 @@ A private, single-user dashboard for deciding which local software projects dese
 
 The complete Bun and SvelteKit application includes the local catalog, scanner, personal organization controls, TD and GitHub enrichment, attention views, LAN authentication, and private-host release tooling.
 
+The catalog stores **entries**, not projects: a project is an entry with `kind = project`, every value it carries is a registered field, and relations between entries are rows. Fields can be added at runtime and are immediately editable and visible on every surface — see [docs/cli.md](docs/cli.md) and [ADR 0005](docs/adr/0005-entry-model-and-field-registry.md).
+
 ## Local setup
 
 1. Install the exact Bun version in `.bun-version`.
@@ -42,6 +44,8 @@ ongoing                                   # every project, dashboard ordering
 ongoing list --view attention --json      # machine-readable attention view
 ongoing show .                            # the repo you are standing in, with attention reasons
 ongoing set td --intent invest            # the same fields the drawer edits
+ongoing get td                            # every field this entry carries, stored and collected
+ongoing field add x.customer --type text  # a new field, no migration, editable everywhere
 ongoing stacks                            # declared toolchains, versions in use, upgrade pressure
 ongoing list --stack go --view upgrade    # Go projects whose toolchain is behind or end-of-life
 ongoing scan --full --wait
