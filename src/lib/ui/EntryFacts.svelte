@@ -44,6 +44,11 @@
 
   let completeness = $derived(entryCompleteness(catalog.registry, entry.kind, entry.fields));
 
+  /** A remote-only entry: discovered by a provider that is not the filesystem, so it has no path. */
+  let remoteSource = $derived(
+    entry.path ? null : (entry.sources.find((source) => source.provider !== 'filesystem') ?? null)
+  );
+
   let activeViews = $derived(
     entry.attention ? attentionViewKeys.filter((key) => entry.attention![key].member) : []
   );
@@ -65,6 +70,13 @@
       {#if entry.path}
         <dt>path</dt>
         <dd class="u-mono" title={entry.path}>{entry.path}</dd>
+      {:else if remoteSource}
+        <!-- No local checkout: name the provider that found it rather than leaving a blank row,
+             so "there is no path" reads as a fact instead of as missing data. -->
+        <dt>source</dt>
+        <dd class="u-mono" title={`${remoteSource.provider}:${remoteSource.locator}`}>
+          {remoteSource.provider} · {remoteSource.locator}
+        </dd>
       {/if}
       <dt>updated</dt>
       <dd>{relativeAge(entry.updatedAt, now)} ago</dd>

@@ -346,6 +346,15 @@ export function stableEntryId(kind: string, slug: string): string {
 }
 
 /**
+ * Ids for entries a non-filesystem provider discovered, keyed by what that provider calls them —
+ * `github:owner/name` — so a remote repository keeps its notes and rank across scans the way a
+ * local checkout keeps them across a path that never changes.
+ */
+export function stableRemoteId(provider: string, locator: string): string {
+  return `project_${createHash('sha256').update(`${provider}:${locator}`).digest('hex').slice(0, 24)}`;
+}
+
+/**
  * The catalog store, expressed in entries.
  *
  * Callers see entries, sources, fields, relations, views, and the project projection of an entry —
@@ -924,6 +933,88 @@ export class CatalogRepository {
       if (!found) throw new Error('Failed to persist discovered project');
       return found;
     });
+  }
+
+  /**
+   * A project entry a hosting provider found that has no local checkout. It is written exactly the
+   * way {@link upsertDiscovered} writes a local one — an entry plus one `entry_sources` row — except
+   * that the source is the provider's own and the locator is `owner/name` rather than a path. The
+   * read model therefore says "no path", the attention rules see no metrics they can trust, and
+   * nothing else in the catalog needs to know this entry is different.
+   */
+  async upsertRemoteProject(
+    input: { provider: string; locator: string; name: string; metadata?: Record<string, unknown> },
+    lease?: ScanLeaseOwnership
+  ): Promise<Entry> {
+    return this.catalog.write((database) => {
+      const timestamp = this.now();
+      const id = stableRemoteId(input.provider, input.locator);
+      const operation = () => {
+        const existing = database
+          .query<Row, [string]>('SELECT * FROM entries WHERE id = ?')
+          .get(id);
+        if (!existing) {
+          const taken = database
+            .query<{ slug: string }, []>("SELECT slug FROM entries WHERE kind = 'project'")
+            .all()
+            .map(({ slug }) => slug);
+          database
+            .query(
+              `INSERT INTO entries (
+                 id, kind, slug, name, note, tags, is_favorite, is_hidden, attributes,
+                 created_at, updated_at
+               ) VALUES (?, 'project', ?, ?, '', '[]', 0, 0, ?, ?, ?)`
+            )
+            .run(
+              id,
+              uniqueSlug(slugify(input.name), taken),
+              input.name,
+              JSON.stringify({ manual_rank: nextManualRank(database) }),
+              timestamp,
+              timestamp
+            );
+        }
+        database
+          .query(
+            `INSERT INTO entry_sources (
+               entry_id, provider, locator, metadata, first_seen_at, last_seen_at, missing_since
+             ) VALUES (?, ?, ?, ?, ?, ?, NULL)
+             ON CONFLICT(entry_id, provider) DO UPDATE SET
+               locator = excluded.locator,
+               metadata = excluded.metadata,
+               last_seen_at = excluded.last_seen_at,
+               missing_since = NULL`
+          )
+          .run(
+            id,
+            input.provider,
+            input.locator,
+            JSON.stringify(input.metadata ?? {}),
+            timestamp,
+            timestamp
+          );
+        const row = database.query<Row, [string]>('SELECT * FROM entries WHERE id = ?').get(id);
+        if (!row) throw new Error('Failed to persist remote project');
+        return entryFromRow(row);
+      };
+      return withLease(database, lease, operation);
+    });
+  }
+
+  /**
+   * Project entries whose only source is `provider` — the remote-only ones. An entry that also has
+   * a filesystem source is a local checkout and belongs to discovery, not here.
+   */
+  listRemoteProjects(provider: string): { entry: Entry; locator: string }[] {
+    const local = new Set(this.listAllSources(FILESYSTEM_PROVIDER).keys());
+    const remote: { entry: Entry; locator: string }[] = [];
+    for (const [entryId, sources] of this.listAllSources(provider)) {
+      if (local.has(entryId)) continue;
+      const entry = this.getEntry(entryId);
+      if (!entry || entry.kind !== 'project') continue;
+      remote.push({ entry, locator: sources[0].locator });
+    }
+    return remote.sort((left, right) => left.locator.localeCompare(right.locator, 'en'));
   }
 
   private readProject(database: Database, id: string): Project | null {

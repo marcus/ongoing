@@ -607,6 +607,18 @@ async function resolveProject(client: ApiClient, token: string): Promise<Project
   );
   if (partial.length === 1) return partial[0];
   if (partial.length > 1) throw ambiguous(token, partial);
+
+  // A remote-only entry is a project with no local checkout, so it has no path to open, scan, or
+  // forget and the project projection does not carry it. Say that, rather than "no such project".
+  const remote = (await fetchEntries(client, 'project')).find(
+    (entry) => entry.slug === needle || entry.name.toLocaleLowerCase('en') === needle
+  );
+  if (remote)
+    throw new CliError(
+      `${entryLabel(remote)} has no local checkout — it was discovered by ` +
+        `${remote.sources.map(({ provider }) => provider).join(', ') || 'no provider'}. ` +
+        `Use \`ongoing get ${remote.slug}\` or \`ongoing set ${remote.slug} …\`.`
+    );
   throw new CliError(`No project matches "${token}". Try \`ongoing list\`.`);
 }
 

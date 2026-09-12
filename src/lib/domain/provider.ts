@@ -123,7 +123,8 @@ export const providerManifests: readonly ProviderManifest[] = [
     requires: { commands: ['gh'], network: true },
     schedule: 'when-changed',
     dependsOn: ['filesystem', 'git'],
-    description: 'Stars, pull requests, issues, CI state, releases, and traffic for GitHub remotes'
+    description:
+      'Stars, pull requests, issues, CI state, releases, and traffic for GitHub remotes; with `discover` set, also the repositories an owner has that nothing local claims'
   }
 ];
 

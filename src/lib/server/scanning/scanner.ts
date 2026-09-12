@@ -16,6 +16,10 @@ import { collectLocMetrics, type LocCollectionResult } from '$lib/server/collect
 import { collectTdMetrics } from '$lib/server/collectors/td';
 import { collectStack, type StackCollection } from '$lib/server/collectors/stack';
 import { discoverAndReconcile, type ReconciledDiscovery } from '$lib/server/collectors/discover';
+import {
+  GITHUB_SOURCE_PROVIDER,
+  type RemoteDiscoveryResult
+} from '$lib/server/collectors/github-discovery';
 import { createConcurrencyLimit } from './limit';
 import { scanProgress, type ScanProgressBus } from './progress';
 
@@ -91,8 +95,21 @@ export interface ScannerDependencies {
   collectHosting?: (
     repository: CatalogRepository,
     projects: readonly Project[],
-    options: { force: boolean; signal: AbortSignal; lease: ScanLeaseOwnership }
+    options: {
+      force: boolean;
+      signal: AbortSignal;
+      lease: ScanLeaseOwnership;
+      remotes?: readonly { id: string; remote: { owner: string; name: string } }[];
+    }
   ) => Promise<{ updatedProjectIds: string[]; errorCount: number }>;
+  /**
+   * Repository discovery on the hosting provider: the repositories an owner has that nothing local
+   * claims. Undefined when no owner is configured, which is the default.
+   */
+  discoverRemote?: (
+    repository: CatalogRepository,
+    options: { signal: AbortSignal; lease: ScanLeaseOwnership }
+  ) => Promise<RemoteDiscoveryResult>;
   /**
    * Which providers this configuration and this machine allow to run. Injected so a test can put a
    * provider out of reach without changing the machine.
@@ -135,6 +152,7 @@ export class Scanner {
   private readonly collectStack: NonNullable<ScannerDependencies['collectStack']>;
   private readonly refreshReleaseBaselines: ScannerDependencies['refreshReleaseBaselines'];
   private readonly collectHosting: ScannerDependencies['collectHosting'];
+  private readonly discoverRemote: ScannerDependencies['discoverRemote'];
   private readonly resolveProviders: NonNullable<ScannerDependencies['resolveProviders']>;
 
   constructor(
@@ -195,6 +213,7 @@ export class Scanner {
       ((path, options) => collectStack(path, { signal: options.signal }));
     this.refreshReleaseBaselines = dependencies.refreshReleaseBaselines;
     this.collectHosting = dependencies.collectHosting;
+    this.discoverRemote = dependencies.discoverRemote;
     this.resolveProviders =
       dependencies.resolveProviders ?? (() => resolveProviderStates(this.config));
   }
@@ -544,12 +563,49 @@ export class Scanner {
         }
       }
 
-      if (active.has('github') && this.collectHosting && projects.length > 0) {
+      /**
+       * Repository discovery on the hosting provider, before enrichment so a repository found this
+       * run is enriched this run. It is a per-catalog pass rather than a per-project one, and a
+       * single-project scan never runs it: that request is about one directory.
+       */
+      if (active.has('github') && this.discoverRemote && !request.projectId) {
+        if (signal.aborted) throw new ScanLeaseLostError(runId);
+        try {
+          const remote = await this.discoverRemote(this.repository, { signal, lease });
+          counts.discoveredCount += remote.created;
+          outcomes.get('github')!.ran += 1;
+          if (remote.failures.length)
+            note(
+              'github',
+              remote.failures.map(({ owner, message }) => `${owner}: ${message}`).join('; ')
+            );
+          await this.repository.updateScanRunProgress(runId, counts, lease);
+        } catch (error) {
+          if (error instanceof ScanLeaseLostError || signal.aborted)
+            throw new ScanLeaseLostError(runId);
+          outcomes.get('github')!.failed += 1;
+          note('github', errorMessage(error));
+        }
+      }
+
+      // Remote-only entries are enriched like any other: their remote came from the discovery pass
+      // rather than from a working copy, and nothing downstream can tell the difference.
+      const remotes = active.has('github')
+        ? this.repository
+            .listRemoteProjects(GITHUB_SOURCE_PROVIDER)
+            .flatMap(({ entry, locator }) => {
+              const [owner, name] = locator.split('/');
+              return owner && name ? [{ id: entry.id, remote: { owner, name } }] : [];
+            })
+        : [];
+
+      if (active.has('github') && this.collectHosting && projects.length + remotes.length > 0) {
         if (signal.aborted) throw new ScanLeaseLostError(runId);
         const enrichment = await this.collectHosting(this.repository, projects, {
           force: policy === 'full',
           signal,
-          lease
+          lease,
+          remotes
         });
         for (const id of enrichment.updatedProjectIds) {
           if (!updatedProjects.has(id)) counts.updatedCount += 1;

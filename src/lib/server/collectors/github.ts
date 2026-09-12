@@ -19,6 +19,12 @@ export type GitHubOriginResult =
 
 export interface GitHubEnrichmentOptions {
   provider: GitHubEnrichmentProvider;
+  /**
+   * Entries with a `github` source and no local checkout. Their remote is what the discovery pass
+   * recorded, so there is no working copy to read `git config remote.origin.url` from; everything
+   * after that is identical to a local project's enrichment.
+   */
+  remotes?: readonly { id: string; remote: GitHubRemote }[];
   now?: () => Date;
   runner?: CommandRunner;
   force?: boolean;
@@ -260,14 +266,16 @@ export async function collectGitHubEnrichment(
     }))
   );
   const mapped: {
-    project: Project;
+    id: string;
     remote: GitHubRemote;
     cached: ReturnType<CatalogRepository['getMetrics']>;
   }[] = [];
+  for (const { id, remote } of options.remotes ?? [])
+    mapped.push({ id, remote, cached: repository.getMetrics(id) });
 
   for (const { project, origin, cached } of originResults) {
     if (origin.status === 'github') {
-      mapped.push({ project, remote: origin.remote, cached });
+      mapped.push({ id: project.id, remote: origin.remote, cached });
       const activeOriginError = repository
         .listCollectionErrors(project.id, true)
         .find(
@@ -317,13 +325,13 @@ export async function collectGitHubEnrichment(
     availability = 'unavailable';
   }
   if (availability !== 'available') {
-    for (const { project } of mapped) {
+    for (const { id } of mapped) {
       await repository.updateMetrics(
-        project.id,
+        id,
         { githubAvailability: availability, githubTrafficAvailability: availability },
         options.lease
       );
-      await repository.resolveCollectionError(project.id, 'hosting', timestamp, options.lease);
+      await repository.resolveCollectionError(id, 'hosting', timestamp, options.lease);
     }
     return { updatedProjectIds: [], errorCount: 0 };
   }
@@ -338,7 +346,7 @@ export async function collectGitHubEnrichment(
         repositoryId: cached?.githubRepoId
       }));
       const results = await options.provider.collectMany(refs, options.signal);
-      for (const { project, remote } of dueHosting) {
+      for (const { id, remote } of dueHosting) {
         const result = results.get(`${remote.owner}/${remote.name}`);
         if (!result || result instanceof Error) {
           const failure = result instanceof GitHubRequestError ? result.failure : 'error';
@@ -347,22 +355,13 @@ export async function collectGitHubEnrichment(
             failure === 'unauthenticated' ||
             failure === 'rate_limited'
           ) {
-            await repository.updateMetrics(
-              project.id,
-              { githubAvailability: failure },
-              options.lease
-            );
-            await repository.resolveCollectionError(
-              project.id,
-              'hosting',
-              timestamp,
-              options.lease
-            );
+            await repository.updateMetrics(id, { githubAvailability: failure }, options.lease);
+            await repository.resolveCollectionError(id, 'hosting', timestamp, options.lease);
           } else {
             errorCount += 1;
             await repository.recordCollectionError(
               {
-                projectId: project.id,
+                projectId: id,
                 collector: 'hosting',
                 message: safeMessage(result),
                 occurredAt: timestamp
@@ -372,10 +371,10 @@ export async function collectGitHubEnrichment(
           }
           continue;
         }
-        await repository.updateMetrics(project.id, hostingUpdate(result, timestamp), options.lease);
+        await repository.updateMetrics(id, hostingUpdate(result, timestamp), options.lease);
         await snapshots(
           repository,
-          project.id,
+          id,
           [
             ['github_stars', result.stars ?? null],
             ['github_open_issues', result.openIssues ?? null],
@@ -384,28 +383,24 @@ export async function collectGitHubEnrichment(
           capturedOn,
           options.lease
         );
-        await repository.resolveCollectionError(project.id, 'hosting', timestamp, options.lease);
-        updated.add(project.id);
+        await repository.resolveCollectionError(id, 'hosting', timestamp, options.lease);
+        updated.add(id);
       }
     } catch (error) {
       const failure = error instanceof GitHubRequestError ? error.failure : 'error';
-      for (const { project } of dueHosting) {
+      for (const { id } of dueHosting) {
         if (
           failure === 'unauthenticated' ||
           failure === 'rate_limited' ||
           failure === 'unavailable'
         ) {
-          await repository.updateMetrics(
-            project.id,
-            { githubAvailability: failure },
-            options.lease
-          );
-          await repository.resolveCollectionError(project.id, 'hosting', timestamp, options.lease);
+          await repository.updateMetrics(id, { githubAvailability: failure }, options.lease);
+          await repository.resolveCollectionError(id, 'hosting', timestamp, options.lease);
         } else {
           errorCount += 1;
           await repository.recordCollectionError(
             {
-              projectId: project.id,
+              projectId: id,
               collector: 'hosting',
               message: safeMessage(error),
               occurredAt: timestamp
@@ -418,7 +413,7 @@ export async function collectGitHubEnrichment(
   }
 
   for (const item of mapped) {
-    const metrics = repository.getMetrics(item.project.id);
+    const metrics = repository.getMetrics(item.id);
     if (!metrics?.githubOwner || !metrics.githubName) continue;
     if (!due(metrics.githubTrafficScannedAt, now, TRAFFIC_INTERVAL_MS, options.force ?? false))
       continue;
@@ -428,15 +423,11 @@ export async function collectGitHubEnrichment(
         metrics.githubName,
         options.signal
       );
-      await repository.updateMetrics(
-        item.project.id,
-        trafficUpdate(traffic, timestamp),
-        options.lease
-      );
+      await repository.updateMetrics(item.id, trafficUpdate(traffic, timestamp), options.lease);
       if (traffic.availability === 'available') {
         await snapshots(
           repository,
-          item.project.id,
+          item.id,
           [
             ['github_traffic_views', traffic.views],
             ['github_traffic_unique_visitors', traffic.uniqueVisitors],
@@ -446,7 +437,7 @@ export async function collectGitHubEnrichment(
           capturedOn,
           options.lease
         );
-        updated.add(item.project.id);
+        updated.add(item.id);
       } else if (
         traffic.views !== null ||
         traffic.uniqueVisitors !== null ||
@@ -455,7 +446,7 @@ export async function collectGitHubEnrichment(
       ) {
         await snapshots(
           repository,
-          item.project.id,
+          item.id,
           [
             ['github_traffic_views', traffic.views],
             ['github_traffic_unique_visitors', traffic.uniqueVisitors],
@@ -465,9 +456,9 @@ export async function collectGitHubEnrichment(
           capturedOn,
           options.lease
         );
-        updated.add(item.project.id);
+        updated.add(item.id);
       }
-      await repository.resolveCollectionError(item.project.id, 'traffic', timestamp, options.lease);
+      await repository.resolveCollectionError(item.id, 'traffic', timestamp, options.lease);
     } catch (error) {
       const failure = error instanceof GitHubRequestError ? error.failure : 'error';
       if (
@@ -476,21 +467,16 @@ export async function collectGitHubEnrichment(
         failure === 'unavailable'
       ) {
         await repository.updateMetrics(
-          item.project.id,
+          item.id,
           { githubTrafficAvailability: failure },
           options.lease
         );
-        await repository.resolveCollectionError(
-          item.project.id,
-          'traffic',
-          timestamp,
-          options.lease
-        );
+        await repository.resolveCollectionError(item.id, 'traffic', timestamp, options.lease);
       } else {
         errorCount += 1;
         await repository.recordCollectionError(
           {
-            projectId: item.project.id,
+            projectId: item.id,
             collector: 'traffic',
             message: safeMessage(error),
             occurredAt: timestamp

@@ -427,6 +427,11 @@ forget_missing_after_days = 7
 
 [providers.github]
 token_env = "GH_TOKEN"
+# Owners — users or organisations — whose repositories are catalogued even when nothing local
+# claims them. Empty by default: a scan does not start listing somebody's account on its own.
+discover = []
+include_forks = false
+include_archived = false
 
 [providers.endoflife]
 api_url = "https://endoflife.date/api/v1"
@@ -446,7 +451,33 @@ profile = "opentangle"
 | `ONGOING_DISABLE_PROVIDERS`             | comma-separated list to switch off                                             |
 | `ONGOING_HOST_ADAPTER`                  | `launchd` or `foreground`                                                      |
 | `ONGOING_TRANSPORT`                     | `auto`, `http`, or `local`                                                     |
+| `ONGOING_GITHUB_DISCOVER`               | comma-separated GitHub owners to catalogue remote-only repositories for        |
 | `ONGOING_ENABLE_RELEASE_BASELINE=false` | still turns the `endoflife` provider off                                       |
+
+### Remote-only entries
+
+An entry is a project because a provider found it, not because it is on this disk. With
+`[providers.github] discover = ["acme"]`, a scan also catalogues the repositories that owner has
+that no local checkout claims: each becomes an entry with a `github` source, a locator of
+`owner/name`, and **no filesystem source** — so it has no `path`, no git, LOC, td, or stack values,
+and nothing in the UI or the CLI pretends otherwise. GitHub's own fields (`github.stars`,
+`github.openIssues`, CI state, releases, traffic) are collected exactly as they are for a local
+project.
+
+Forks and archived repositories are left out unless `include_forks` or `include_archived` says
+otherwise, and a repository a local checkout already claims is never catalogued twice. What this
+provider creates it also owns: a remote-only entry whose repository has been cloned locally or no
+longer exists is dropped on the next scan — unless somebody has written a note or a tag on it, in
+which case it stays. Nothing is dropped on a scan where listing an owner failed.
+
+```sh
+ongoing list 'path:none'                   # everything with no local checkout
+ongoing get acme-atlas                     # the fact sheet: source, not path
+ongoing set acme-atlas intent experiment   # edited like any other entry
+```
+
+`ongoing show` reads the project projection, which is the _local_ view of a project, so it points
+you at `ongoing get` for a remote-only entry rather than inventing a path for it.
 
 ## Providers
 

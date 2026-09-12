@@ -28,6 +28,15 @@ export interface AppConfig {
   automaticScanSchedulerEnabled: boolean;
   forgetMissingProjects: boolean;
   forgetMissingAfterDays: number;
+  /**
+   * GitHub logins — users or organisations — whose repositories the hosting provider catalogues
+   * even when nothing local claims them. Empty by default: listing somebody's account is not
+   * something a scan starts doing on its own (`[providers.github] discover`).
+   */
+  githubDiscoverOwners: string[];
+  /** Whether remote discovery catalogues forks and archived repositories. Both off by default. */
+  githubDiscoverForks: boolean;
+  githubDiscoverArchived: boolean;
   releaseBaselineEnabled: boolean;
   releaseBaselineMaxAgeHours: number;
   releaseBaselineApiUrl: string;
@@ -175,6 +184,7 @@ export function loadConfig(
 ): AppConfig {
   const filesystem = providerSettings(file, 'filesystem');
   const endoflife = providerSettings(file, 'endoflife');
+  const github = providerSettings(file, 'github');
   if (
     env.ONGOING_ENABLE_RELEASE_BASELINE &&
     !['true', 'false'].includes(env.ONGOING_ENABLE_RELEASE_BASELINE)
@@ -259,6 +269,13 @@ export function loadConfig(
         7,
       'ONGOING_FORGET_MISSING_AFTER_DAYS'
     ),
+    githubDiscoverOwners:
+      stringList(env.ONGOING_GITHUB_DISCOVER) ??
+      (Array.isArray(github.discover) ? github.discover : [])
+        .map((owner) => String(owner).trim())
+        .filter(Boolean),
+    githubDiscoverForks: github.include_forks === true,
+    githubDiscoverArchived: github.include_archived === true,
     releaseBaselineEnabled: enabledProviders.includes('endoflife'),
     releaseBaselineMaxAgeHours: positiveInteger(
       env.RELEASE_BASELINE_MAX_AGE_HOURS,
