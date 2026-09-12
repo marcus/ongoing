@@ -1,7 +1,10 @@
 # Tech radar: technologies as catalog entries
 
-**Status:** active — the detailed model for Phase 3 of
-[the inventory redesign](ongoing-inventory-redesign.md) (td-1155ba). Nothing below is built.
+**Status:** implemented — this was the detailed model for Phase 3 of
+[the inventory redesign](../active/ongoing-inventory-redesign.md) (td-1155ba), and Phase 3 shipped
+it on 2026-09-12. The model below is what got built, with three differences recorded in the
+changelog: the seed list is wider than six, `tech seed` and `tech show` joined the CLI surface, and
+the radar web page did not ship (Phase 4 owns it). `docs/cli.md` is the current reference.
 
 This document keeps the radar's own vocabulary, detection rules, and steel thread. The redesign
 owns the shape they land in: a technology is an **entry** with `kind = 'technology'`, its ring and
@@ -152,3 +155,11 @@ Settled in Phase 0 of the redesign on 2026-09-11.
 - 2026-09-07: sketch written from a conversation with Marcus. Nothing built.
 - 2026-09-11: adopted as Phase 3 of the inventory redesign, moved to `active/`, open questions
   settled, and the model re-expressed on entries, fields, and relations.
+- 2026-09-12: built and moved to `implemented/`. Three departures from the sketch above, all
+  deliberate. The seed list is 21 technologies rather than six, because the `project-standards`
+  skill's language and tool tables are generated from this catalog and every row they carry has to
+  exist here. `ongoing tech seed` and `ongoing tech show` are part of the CLI; `tech link` and
+  `tech unlink` are not, because `ongoing link <project> uses <tech>` already existed as the
+  generic verb. The radar web page is the one part that did not ship — the CLI view is what
+  Phase 3 was asked to prove, and Phase 4 draws the page. Signatures stayed manifest-only as
+  resolved, with marker files (`.todos/config.json`, `mise.toml`) counting as manifests.

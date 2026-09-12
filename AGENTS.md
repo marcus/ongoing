@@ -45,6 +45,17 @@ old `view`/`filter`/`stack`/`search`/`sort` parameters survive as clause aliases
 `legacyParamsToQuery`, whose table is printed in [docs/cli.md](docs/cli.md) and asserted in
 `src/lib/domain/query.test.ts`. Saved views ship built-in, declared in `src/lib/domain/view.ts`.
 
+**Phase 3 has landed.** Technologies are entries with `kind = 'technology'`, a ring, and a tool
+surface; a usage is a `uses` relation carrying the detected version. `src/lib/domain/technology.ts`
+holds the seed list, the signature table that is the whole detector, and the deterministic export.
+Detection runs inside the stack collector's parse pass and its edges belong to the `tech-signatures`
+provider — rewritten whole on every scan, never hand-edited — while declared edges survive scans
+untouched. Do not add a technologies table or a `/api/technologies` route: `ongoing tech` reads
+`GET /api/entries?q=kind:technology` like everything else. Adding a technology means adding a seed
+in `technology.ts`, and a signature beside it only if a manifest can see it. The `project-standards`
+skill's language and tool tables are generated from `ongoing tech export` by
+`scripts/render-project-standards.ts`; edit the catalog, then regenerate.
+
 ## Keep the architecture model current
 
 `docs/diagrams/fractal/` holds the Fractal model of this system (`model.c4`, `fractal.json`,

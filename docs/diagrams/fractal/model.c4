@@ -120,7 +120,7 @@ model {
       metadata { uid 'domain.readmodel' fractalColor '#89A579' evidence ['src/lib/server/catalog/entries.ts', 'src/lib/dashboard/catalog.ts', 'src/lib/dashboard/options.ts'] }
     }
     attention = component 'Attention views' {
-      description 'Seven independent classifications with explicit thresholds and a 72-hour freshness gate; every membership carries its reasons. No grand score.'
+      description 'Seven independent classifications with explicit thresholds and a 72-hour freshness gate; every membership carries its reasons. No grand score. The radar adds two: a project using an out technology joins upgrade, and a technology whose ring is past review_after puts its users in attention — ungated, because an edge is a catalog fact rather than a measurement.'
       metadata { uid 'domain.attention' fractalColor '#89A579' evidence ['src/lib/domain/attention.ts', 'src/lib/domain/attention.test.ts'] }
     }
     stack = component 'Stack resolution' {
@@ -279,6 +279,10 @@ model {
       description 'com.marcusvorwaller.ongoing serves aerie.local:7766; com.marcusvorwaller.ongoing.scan fires once daily at 03:00 with no RunAtLoad.'
       metadata { uid 'external.launchd' fractalColor '#A69B8C' evidence ['docs/deployment.md', 'scripts/release-config.ts'] }
     }
+    skills = service 'project-standards skill' {
+      description 'The house rules every agent loads before working in a managed repo. Its language and tool-surface tables are generated from the radar export between markers; the prose around them stays hand-written.'
+      metadata { uid 'external.skills' fractalColor '#A69B8C' evidence ['scripts/render-project-standards.ts', 'docs/plans/implemented/tech-radar.md'] }
+    }
     opentangle = service 'OpenTangle site' {
       description 'The public website build that reads the live website export on its next deployment; private notes and metrics never reach it.'
       metadata { uid 'external.opentangle' fractalColor '#A69B8C' evidence ['docs/website.md'] }
@@ -286,7 +290,7 @@ model {
   }
 
   inventory = subsystem 'Software inventory' {
-    description 'The catalog as typed entries. Phases 1 and 2 are built: the entries store, the field registry, the query grammar, the entries API, and the CLI over them. The provider manifests, the host adapter, and the keyboard-first shell are still the settled design, marked proposed here.'
+    description 'The catalog as typed entries. Phases 1, 2 and 3 are built: the entries store, the field registry, the query grammar, the entries API, the CLI over them, and the tech radar beside them. The provider manifests, the host adapter, and the keyboard-first shell are still the settled design, marked proposed here.'
     metadata { uid 'inventory' fractalColor '#7FA8C9' evidence ['docs/plans/active/ongoing-inventory-redesign.md', 'src/lib/server/catalog/repository.ts'] }
 
     entries = store 'entries, fields, relations' {
@@ -357,19 +361,31 @@ model {
   }
 
   radar = subsystem 'Tech radar' {
-    #proposed
-    description 'Phase 3 of the inventory redesign: technologies as a second entry kind with rings, detected or declared uses relations, and generated project-standards tables.'
-    metadata { uid 'radar' fractalColor '#C4A0B8' evidence ['docs/plans/active/tech-radar.md', 'docs/plans/active/ongoing-inventory-redesign.md'] }
+    description 'Phase 3 of the inventory redesign, built: technologies as a second entry kind with rings, uses relations that are detected or declared, radar attention reasons, and generated project-standards tables. Only the radar page is still proposed.'
+    metadata { uid 'radar' fractalColor '#C4A0B8' evidence ['docs/plans/implemented/tech-radar.md', 'docs/plans/active/ongoing-inventory-redesign.md'] }
 
+    model = component 'Radar model & signatures' {
+      #current
+      description 'The seed list Ongoing ships, the signature table that is the whole detector, the matchers over one manifest, the ring vocabulary and staleness rule, and the deterministic export. Pure data and pure rules; a signature exists only for a technology already in the catalog.'
+      metadata { uid 'radar.model' fractalColor '#89A579' evidence ['src/lib/domain/technology.ts', 'src/lib/domain/technology.test.ts'] }
+    }
     signatures = component 'tech-signatures provider' {
-      description 'Matches manifest dependencies against a signature list inside the stack collector parse pass; languages come from project_stacks. Detected uses relations are rewritten every scan and never hand-edited.'
-      metadata { uid 'radar.signatures' fractalColor '#C4A0B8' evidence ['docs/plans/active/tech-radar.md'] }
+      #current
+      description 'Matches manifest dependencies against the signature list inside the stack collector parse pass — package.json, go.mod, Gemfile, Cargo.toml, composer.json, plus marker files — and takes languages from the toolchains the same pass collected. Detected uses relations are rewritten whole every scan and never hand-edited; declared edges are untouched.'
+      metadata { uid 'radar.signatures' fractalColor '#C4A0B8' evidence ['src/lib/server/collectors/stack.ts', 'src/lib/server/catalog/repository.ts', 'src/lib/server/scanning/scanner.ts'] }
     }
     tech_cli = component 'ongoing tech verbs' {
-      description 'tech list, show, add, set, export: the CLI and JSON surface that regenerates the project-standards language and tool-surface tables.'
-      metadata { uid 'radar.tech_cli' fractalColor '#C4A0B8' evidence ['docs/plans/active/tech-radar.md'] }
+      #current
+      description 'tech list, show, add, set, export, and an idempotent seed that writes the shipped technologies through the API rather than a migration. Every flag is a clause against the same query model, so tech list --ring hot is list kind:technology ring:hot in ring order.'
+      metadata { uid 'radar.tech_cli' fractalColor '#C4A0B8' evidence ['bin/ongoing.ts', 'docs/cli.md'] }
+    }
+    generator = component 'project-standards generator' {
+      #current
+      description 'Renders ongoing tech export into the skill\'s language and tool-surface tables between markers, leaving the prose around them alone. --check fails when the skill has drifted from the catalog.'
+      metadata { uid 'radar.generator' fractalColor '#C4A0B8' evidence ['scripts/render-project-standards.ts'] }
     }
     page = component 'Radar page' {
+      #proposed
       description 'Four rings as rows, each technology a chip with its project count, clicking through to the inventory filtered by that technology. Ring editable on the chip.'
       metadata { uid 'radar.page' fractalColor '#C4A0B8' evidence ['docs/plans/active/tech-radar.md'] }
     }
@@ -506,12 +522,16 @@ model {
   inventory.profile .calls service.website_api 'The opentangle export profile' { #proposed metadata { uid 'profile-export' } }
   catalog.repository .writes inventory.entries 'The one persistence interface; no caller sees SQL or the JSON layout' { metadata { uid 'repo-entries' } }
 
-  // Proposed tech radar, Phase 3 of the inventory redesign
-  radar.signatures .calls scanning.stack 'Reads manifest dependencies alongside toolchains' { #proposed metadata { uid 'radar-stack' } }
-  radar.signatures .writes inventory.entries 'Rewrites detected uses relations every scan' { #proposed metadata { uid 'radar-detected' } }
+  // The tech radar, Phase 3 of the inventory redesign
+  radar.signatures .calls scanning.stack 'Reads manifest dependencies in the same parse pass as the toolchains' { metadata { uid 'radar-stack' } }
+  radar.signatures .writes inventory.entries 'Rewrites detected uses relations every scan' { metadata { uid 'radar-detected' } }
+  radar.signatures .reads radar.model 'Matches against the signature table' { metadata { uid 'radar-signature-table' } }
   radar.signatures .supplies inventory.providers 'Declares its fields and the uses relation kind' { #proposed metadata { uid 'radar-manifest' } }
-  radar.tech_cli .writes inventory.entries 'Rings, notes, declared relations' { #proposed metadata { uid 'radar-cli-tables' } }
-  radar.tech_cli .calls inventory.entries_api 'Through the same HTTP contract as everything else' { #proposed metadata { uid 'radar-cli-client' } }
+  radar.tech_cli .writes inventory.entries 'Rings, notes, seeded technologies, declared relations' { metadata { uid 'radar-cli-tables' } }
+  radar.tech_cli .calls inventory.entries_api 'Through the same HTTP contract as everything else' { metadata { uid 'radar-cli-client' } }
+  radar.model .supplies domain.attention 'Ring and version behind the out-technology and stale-ring reasons' { metadata { uid 'radar-attention' } }
+  radar.generator .calls radar.tech_cli 'Reads the deterministic tech export' { metadata { uid 'radar-generator-export' } }
+  radar.generator .writes external.skills 'Regenerates the language and tool tables between markers' { metadata { uid 'radar-generator-skill' } }
   radar.page .reads inventory.entries 'Rings and project counts' { #proposed metadata { uid 'radar-page-tables' } }
   radar.page .calls inventory.ui_kit 'Chips and badges from the shared design system' { #proposed metadata { uid 'radar-page-uikit' } }
 }

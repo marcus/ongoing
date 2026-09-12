@@ -6,7 +6,7 @@ relations and saved views, and one query grammar reads it from every surface. Ph
 unbuilt. Each phase has a td epic, listed in its section.
 
 Inputs: the running dashboard and its Fractal model (`docs/diagrams/fractal/`), the tech radar
-model (`tech-radar.md`, this plan's Phase 3 companion), the project-standards brief
+model (`implemented/tech-radar.md`, this plan's Phase 3 companion), the project-standards brief
 (`~/code/clara-home/docs/plans/active/agentic-sdlc-project-standards.md`), the `project-standards`
 skill, td-c757bc, td-3a561b, and what LeanIX gets right and wrong.
 
@@ -436,11 +436,11 @@ One repair on the way through: `playwright.config.ts` set `reuseExistingServer` 
 unset, so a stranger already listening on `E2E_PORT` absorbed the whole browser suite (a Fractal
 server on 5199 failed all fifteen tests with 404s). Naming a port now turns reuse off.
 
-### Phase 3: technologies and the radar — td-1155ba
+### Phase 3: technologies and the radar — done (td-1155ba)
 
 Depends on Phase 1. Runs alongside Phase 2 or 4.
 
-Detailed model: [tech-radar.md](tech-radar.md) — ring vocabulary, signature detection, the `uses`
+Detailed model: [tech-radar.md](../implemented/tech-radar.md) — ring vocabulary, signature detection, the `uses`
 edge, the surfaces, and the steel thread. It is this phase's specification, rewritten onto the
 entry model; where the two disagree, this plan wins.
 
@@ -457,6 +457,52 @@ entry model; where the two disagree, this plan wins.
 
 Evidence: `ongoing tech show go` lists every Go project with versions; the skill regenerates from
 the export with no hand edits.
+
+**Handoff (2026-09-12).** Built and pushed. A technology is an entry, a ring is a field, a usage is a
+relation, and nothing in the radar needed a table of its own. The parts to build on:
+
+`src/lib/domain/technology.ts` is the radar — the seed list, the signature table that is the whole
+detector, the matchers the collector runs over one manifest, the ring vocabulary and the staleness
+rule, and the deterministic export. It is pure data and pure rules, imported unchanged by the API,
+the CLI, and the generator. Adding a technology means adding a seed and, if a manifest can see it, a
+signature beside it; a test asserts every signature names a seeded technology and that every manifest
+a signature mentions has a parser, so a signature can never silently never match.
+
+Detection lives in the stack collector's existing pass (`collectStack` now returns
+`{ stacks, technologies }` and shares one read cache), and
+`CatalogRepository.replaceDetectedTechnologyUsage` writes the edges: the `tech-signatures` provider's
+detected rows are replaced whole on every scan, so a dropped dependency loses its edge, while
+declared edges and their notes are never touched. Languages come from the declarations the same pass
+collected rather than a second parse, which is what the radar meant by "languages read from
+`project_stacks`".
+
+Three judgment calls worth knowing. **The seed list is 21 technologies, not the radar's six**, because
+the `project-standards` skill's language and tool tables are generated from this catalog and every row
+they carry has to exist in it — seeding six would have deleted prose rather than reproducing it.
+**`tech seed` fills rather than overwrites**: a missing technology is created, an empty field is
+filled, and a value someone has since changed is left alone unless `--force` says otherwise, so a
+re-seed never undoes `ongoing tech set go --ring warm`. And **the two radar attention reasons are
+ungated** — an edge and a ring are catalog facts, like `isMissing` and collector warnings, not
+measurements with a freshness window, so they do not sit behind `stackScannedAt`. An `out` technology
+in use is an `upgrade` reason; a ring past `review_after` puts its users in `attention`.
+
+Proof on real data: the dev catalog (136 projects) seeded 21 technologies and a scan detected 15 Go
+projects with their declared versions, 46 on JavaScript/TypeScript, 24 carrying `.todos`, 19 on
+SQLite, 10 on SvelteKit. `ongoing tech show go` prints all fifteen with versions and evidence, and
+`scripts/render-project-standards.ts` regenerates the skill's two tables with `--check` clean on a
+second run. The skill itself is committed in `marcus-skills` with the markers around both tables.
+
+Not done, deliberately: the **radar web page** (Phase 4 draws it; the CLI view is what this phase was
+asked to prove), a **`/api/technologies` route** (the export is a pure function over
+`GET /api/entries`, and ADR 0006 makes that the single read endpoint — a second route would be a
+second contract for the same rows), and a **provider manifest** for `tech-signatures`, which is
+Phase 5's shape and stays proposed in the Fractal model.
+
+**Production is not seeded.** The seed ran against the local dev catalog only. After the next deploy,
+run `ongoing tech seed` once against production and then a scan, which is what fills the detected
+edges. The production service is still running the pre-Phase-1 bundle against an already-migrated
+catalog (`ongoing status` reports `no such table: projects`); it needs `bun run build` and a launchd
+bootout/bootstrap, which is Marcus's call rather than a phase agent's.
 
 ### Phase 4: frontend redesign — td-d843f6
 
@@ -538,6 +584,11 @@ Settled in Phase 0 on 2026-09-11. Reopen one only with a reason written down her
 
 ## Changelog
 
+- 2026-09-12: Phase 3 — technologies are entries with rings, `uses` edges are detected inside the
+  stack collector's pass or declared by hand, `ongoing tech list|show|add|set|seed|export` is the
+  radar's surface, an `out` technology in use and a stale ring are attention reasons, and the
+  `project-standards` skill's language and tool tables are generated from `ongoing tech export`.
+  The tech radar companion moved to `implemented/`.
 - 2026-09-11: proposal written from a conversation with Marcus. Nothing built.
 - 2026-09-11: Phase 0 — decisions 1–5 and every open question settled, ADRs 0005–0008 written, the
   shipped dashboard plan moved to `implemented/`, the tech radar re-homed here as Phase 3's

@@ -207,14 +207,14 @@
       "scope": "inventory"
     },
     {
-      "id": "proposed-tech-radar",
-      "title": "Proposal: technologies and the radar",
-      "description": "Phase 3: a second entry kind with rings, uses relations detected by a tech-signatures provider, and ongoing tech verbs that regenerate the project-standards tables. Its links into the entries, the registry, and the scanner are drawn in the inventory proposal scene.",
+      "id": "tech-radar",
+      "title": "The tech radar",
+      "description": "Technologies as a second entry kind with rings, uses relations detected by the tech-signatures provider inside the stack collector pass or declared by hand, ongoing tech verbs over the same query model, and the generator that renders the project-standards tables. Only the radar page is still a proposal.",
       "expanded": ["radar"],
-      "proposed": true,
       "lens": "structure",
       "theme": "graphite",
-      "scope": "radar"
+      "scope": "radar",
+      "proposed": false
     },
     {
       "id": "proposed-seams",
