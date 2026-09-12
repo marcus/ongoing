@@ -83,7 +83,7 @@ model {
 
     edge = component 'Production edge' {
       description 'Committed node:http boundary in front of adapter-node: counts raw mutation bytes, rejects oversized bodies, and forwards to a private loopback listener.'
-      metadata { uid 'service.edge' fractalColor '#739886' evidence ['scripts/production-server.ts', 'docs/deployment.md'] }
+      metadata { uid 'service.edge' fractalColor '#739886' evidence ['src/lib/host/production-server.ts', 'docs/deployment.md'] }
     }
     gate = component 'Request gate' {
       description 'SvelteKit handle: session check for private paths, same-origin check for mutations when auth is on, bounded bodies, security headers, and the development scan scheduler trigger.'
@@ -231,15 +231,15 @@ model {
 
   ops = subsystem 'Release & operations' {
     description 'Private-host tooling for aerie.local: pinned Bun, launchd definitions, backups, and health-gated deploys.'
-    metadata { uid 'ops' fractalColor '#9FA8B3' evidence ['docs/deployment.md', 'scripts/release-config.ts'] }
+    metadata { uid 'ops' fractalColor '#9FA8B3' evidence ['docs/deployment.md', 'deploy/aerie/release-config.ts'] }
 
     scan_job = job 'Daily scan entry' {
       description 'scripts/scan.ts opens the same database with the same collector wiring as the web process and runs one scan; exits nonzero when a run is already leased.'
-      metadata { uid 'ops.scan_job' fractalColor '#9FA8B3' evidence ['scripts/scan.ts', 'docs/deployment.md'] }
+      metadata { uid 'ops.scan_job' fractalColor '#9FA8B3' evidence ['src/lib/host/scan-command.ts', 'docs/deployment.md'] }
     }
     release = component 'Deploy & rollback' {
       description 'Client validates the pinned runtime, then the remote worker fast-forwards main, quiesces both agents, backs up SQLite, builds, migrates once, reinstalls definitions, and waits for health on 7766.'
-      metadata { uid 'ops.release' fractalColor '#9FA8B3' evidence ['scripts/release-client.ts', 'scripts/remote-release.ts', 'scripts/rollback.ts'] }
+      metadata { uid 'ops.release' fractalColor '#9FA8B3' evidence ['scripts/release-client.ts', 'deploy/aerie/remote-release.ts', 'scripts/rollback.ts'] }
     }
     smoke = component 'Smoke & migrate' {
       description 'Authenticated LAN smoke against the configured origin, production-server tests, and the standalone migration runner.'
@@ -261,7 +261,7 @@ model {
     }
     tools = service 'git, cloc, td, gh' {
       description 'Homebrew-resolved command-line tools the collectors spawn; deployment verifies all four before installing the scan agent.'
-      metadata { uid 'external.tools' fractalColor '#A69B8C' evidence ['docs/deployment.md', 'scripts/remote-release.ts'] }
+      metadata { uid 'external.tools' fractalColor '#A69B8C' evidence ['docs/deployment.md', 'deploy/aerie/remote-release.ts'] }
     }
     td_serve = service 'td serve (HTTP)' {
       description 'A project-local TD server, when running, answering /health, /v1/stats, and a stale-issue query.'
@@ -277,7 +277,7 @@ model {
     }
     launchd = service 'launchd agents' {
       description 'com.marcusvorwaller.ongoing serves aerie.local:7766; com.marcusvorwaller.ongoing.scan fires once daily at 03:00 with no RunAtLoad.'
-      metadata { uid 'external.launchd' fractalColor '#A69B8C' evidence ['docs/deployment.md', 'scripts/release-config.ts'] }
+      metadata { uid 'external.launchd' fractalColor '#A69B8C' evidence ['docs/deployment.md', 'deploy/aerie/release-config.ts'] }
     }
     skills = service 'project-standards skill' {
       description 'The house rules every agent loads before working in a managed repo. Its language and tool-surface tables are generated from the radar export between markers; the prose around them stays hand-written.'
@@ -290,7 +290,7 @@ model {
   }
 
   inventory = subsystem 'Software inventory' {
-    description 'The catalog as typed entries. Phases 1, 2 and 3 are built: the entries store, the field registry, the query grammar, the entries API, the CLI over them, and the tech radar beside them. The provider manifests, the host adapter, and the keyboard-first shell are still the settled design, marked proposed here.'
+    description 'The catalog as typed entries. Phases 1, 2, 3 and 5 are built: the entries store, the field registry, the query grammar, the entries API, the CLI over them, the tech radar beside them, and the seams — provider manifests, one TOML configuration, the host adapter, the deployment and export profiles, and the CLI transport. Only the keyboard-first shell is still the settled design, marked proposed here.'
     metadata { uid 'inventory' fractalColor '#7FA8C9' evidence ['docs/plans/active/ongoing-inventory-redesign.md', 'src/lib/server/catalog/repository.ts'] }
 
     entries = store 'entries, fields, relations' {
@@ -315,28 +315,33 @@ model {
     }
     entry_cli = component 'Entry CLI verbs' {
       #current
-      description 'list with a query string, --sort, --columns, --saved and --count; views and stacks over the same endpoint; get, set <entry> <field> <value> with the original decision flags as aliases; entry, field, tag, untag, link, unlink, view. The CLI imports the domain registry and the query parser directly, so a bad value or a bad clause is refused before the round trip, and every flag it shipped with survives as a clause alias. A transport adapter arrives in Phase 5.'
+      description 'list with a query string, --sort, --columns, --saved and --count; views and stacks over the same endpoint; get, set <entry> <field> <value> with the original decision flags as aliases; entry, field, tag, untag, link, unlink, view, providers, export, serve. The CLI imports the domain registry and the query parser directly, so a bad value or a bad clause is refused before the round trip, and every flag it shipped with survives as a clause alias.'
       metadata { uid 'inventory.entry_cli' fractalColor '#82A6B6' evidence ['bin/ongoing.ts', 'docs/cli.md'] }
     }
+    transport = adapter 'CLI transport' {
+      #current
+      description 'The CLI probes /api/health and speaks HTTP to whatever answers; when nothing does it links the core library into its own process and opens the catalog directly, so scan and list work with no daemon. Both transports dispatch to the same library functions rather than a second implementation, which is why the entries read and the prune rule moved out of their routes.'
+      metadata { uid 'inventory.transport' fractalColor '#82A6B6' evidence ['bin/ongoing.ts', 'src/lib/server/api/local.ts', 'src/lib/server/api/entries.ts'] }
+    }
     providers = component 'Provider registry & manifests' {
-      #proposed
-      description 'Each collector declares the kinds it touches, the fields and relation kinds it contributes, what it requires, and when it runs. The scanner iterates enabled providers; a disabled one contributes no fields, so rules reading them stay inert.'
-      metadata { uid 'inventory.providers' fractalColor '#9A91C4' evidence ['docs/adr/0007-provider-manifests-and-host-adapters.md'] }
+      #current
+      description 'Eight manifests — filesystem, git, td, stack, tech-signatures, loc, endoflife, github — each declaring the kinds it touches, the namespaced read-only fields and relation kinds it contributes, the commands and variables it requires, its schedule, and what it depends on. The field registry is built from them, so a disabled or unavailable provider registers nothing and the rules that read it go inert. Availability is one pure function over a probe of the machine; a provider that cannot run records why, and never fails a scan.'
+      metadata { uid 'inventory.providers' fractalColor '#9A91C4' evidence ['src/lib/domain/provider.ts', 'src/lib/domain/provider.test.ts', 'src/lib/server/providers/registry.ts', 'docs/adr/0007-provider-manifests-and-host-adapters.md'] }
     }
     config = component 'Configuration' {
-      #proposed
-      description 'One TOML file with a [providers] section, --config to point elsewhere, environment variables as overrides and secret carriers.'
-      metadata { uid 'inventory.config' fractalColor '#9A91C4' evidence ['docs/adr/0007-provider-manifests-and-host-adapters.md'] }
+      #current
+      description 'One TOML file at ~/.config/ongoing/config.toml with [server], [scan], [providers] and per-provider tables, [host] and [export]; ONGOING_CONFIG points elsewhere. Environment variables stay overrides and secret carriers, so the installed LaunchAgents run unedited, and precedence is environment over file over default. A missing file means defaults; an unknown key is an error at start-up rather than a setting that quietly does nothing.'
+      metadata { uid 'inventory.config' fractalColor '#9A91C4' evidence ['src/lib/server/config-file.ts', 'src/lib/server/config.ts', 'src/lib/server/config-file.test.ts', 'docs/cli.md'] }
     }
     host = adapter 'Host adapter' {
-      #proposed
-      description 'serve, scan, restart, stop, logs behind one interface. launchd first, foreground second, so an install without launchd is a configuration choice rather than a fork.'
-      metadata { uid 'inventory.host' fractalColor '#9FA8B3' evidence ['docs/adr/0007-provider-manifests-and-host-adapters.md'] }
+      #current
+      description 'serve, scan, restart, stop and logs behind one interface. launchd drives the two user LaunchAgents and is tested against captured launchctl output rather than the real agents; foreground supervises nothing and runs the application in the terminal, so an install without launchd is a configuration choice rather than a fork. ongoing serve --data-dir turns an empty directory into a catalog on first open.'
+      metadata { uid 'inventory.host' fractalColor '#9FA8B3' evidence ['src/lib/host/adapter.ts', 'src/lib/host/launchd.ts', 'src/lib/host/foreground.ts', 'src/lib/host/launchd.test.ts'] }
     }
     profile = component 'Deployment & export profiles' {
-      #proposed
-      description 'The aerie constants and release scripts move to deploy/aerie/ and the website export becomes the opentangle profile. The core imports neither; ongoing init, serve, and scan are all a new machine needs.'
-      metadata { uid 'inventory.profile' fractalColor '#9FA8B3' evidence ['docs/adr/0007-provider-manifests-and-host-adapters.md'] }
+      #current
+      description 'The aerie constants, the release client and worker, the provisioning script and both plist definitions live in deploy/aerie/, which the core never imports and a test enforces. Publishing is a profile too: opentangle is the shape OpenTangle reads and json is the generic one beside it. ongoing serve and ongoing scan are all a new machine needs.'
+      metadata { uid 'inventory.profile' fractalColor '#9FA8B3' evidence ['deploy/aerie/README.md', 'src/lib/domain/export.ts', 'src/routes/api/export/+server.ts', 'tests/foundation.test.ts'] }
     }
     shell = component 'Inventory shell' {
       #proposed
@@ -505,7 +510,7 @@ model {
   inventory.entry_page .calls domain.attention 'Re-runs the reasons after an optimistic edit' { #proposed metadata { uid 'entrypage-attention' } }
   inventory.entry_cli .calls inventory.entries_api 'Over HTTP, or the core in-process when no service runs' { metadata { uid 'entrycli-api' } }
   inventory.entry_cli .calls inventory.query 'Builds the query from flags and counts saved views without a round trip' { metadata { uid 'entrycli-query' } }
-  inventory.entry_cli .calls inventory.host 'serve, scan, restart, stop, logs' { #proposed metadata { uid 'entrycli-host' } }
+  inventory.entry_cli .calls inventory.host 'serve, scan, restart, stop, logs' { metadata { uid 'entrycli-host' } }
   inventory.entries_api .calls inventory.registry 'validateEntryPatch before any write' { metadata { uid 'api-registry' } }
   inventory.entries_api .calls inventory.query 'Parses and evaluates q, sort, columns, saved' { metadata { uid 'api-query' } }
   inventory.entries_api .calls domain.readmodel 'Merges stored attributes and projected provider metrics into one field map' { metadata { uid 'api-readmodel' } }
@@ -513,12 +518,12 @@ model {
   inventory.query .reads inventory.registry 'Resolves and type-checks every field key' { metadata { uid 'query-registry' } }
   inventory.registry .reads inventory.entries 'User-defined field rows' { metadata { uid 'registry-entries' } }
   service.projects_api .reads inventory.entries 'The project projection of the same entries, tags and attributes included' { metadata { uid 'projects-entries' } }
-  inventory.providers .supplies inventory.registry 'Namespaced read-only field and relation definitions' { #proposed metadata { uid 'providers-registry' } }
-  inventory.providers .supplies scanning.scanner 'The enabled provider set, replacing the fixed sequence' { #proposed metadata { uid 'providers-scanner' } }
-  inventory.config .supplies inventory.providers 'Which providers are on, and their settings' { #proposed metadata { uid 'config-providers' } }
-  inventory.config .supplies inventory.host 'Which host implementation serves and schedules' { #proposed metadata { uid 'config-host' } }
-  inventory.host .calls external.launchd 'launchd profile; foreground is the second implementation' { #proposed metadata { uid 'host-launchd' } }
-  inventory.profile .calls inventory.host 'aerie deploy and rollback through the adapter' { #proposed metadata { uid 'profile-host' } }
+  inventory.providers .supplies inventory.registry 'Namespaced read-only field and relation definitions, only for providers that can run' { metadata { uid 'providers-registry' } }
+  inventory.providers .supplies scanning.scanner 'The active provider set in dependency order, replacing the fixed sequence' { metadata { uid 'providers-scanner' } }
+  inventory.config .supplies inventory.providers 'Which providers are on, and their settings' { metadata { uid 'config-providers' } }
+  inventory.config .supplies inventory.host 'Which host implementation serves and schedules' { metadata { uid 'config-host' } }
+  inventory.host .calls external.launchd 'The launchd implementation; foreground is the second one' { metadata { uid 'host-launchd' } }
+  inventory.profile .calls inventory.host 'aerie deploy and rollback through the adapter' { metadata { uid 'profile-host' } }
   inventory.profile .calls service.website_api 'The opentangle export profile' { #proposed metadata { uid 'profile-export' } }
   catalog.repository .writes inventory.entries 'The one persistence interface; no caller sees SQL or the JSON layout' { metadata { uid 'repo-entries' } }
 

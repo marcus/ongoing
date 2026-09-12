@@ -730,11 +730,11 @@
       ]
     },
     {
-      "id": "proposed-provider-scan",
+      "id": "provider-scan",
       "title": "A scan on a machine that is not aerie",
-      "description": "No td, no cloc, no GitHub token, no launchd. The scan completes, the missing providers are reported unavailable, and the rules that read their fields stay inert rather than wrong.",
-      "status": "proposed",
-      "provenance": "Authored 2026-09-11 from docs/plans/active/ongoing-inventory-redesign.md and ADR 0007. The manifest, the provider registry, and the host adapter are settled design, not observed behaviour.",
+      "description": "No td, no cloc, no gh, no GitHub token, no launchd. The scan completes, the missing providers are reported unavailable, nothing records a collector warning, and the rules that read their fields stay inert rather than wrong.",
+      "status": "current",
+      "provenance": "Authored 2026-09-11 from ADR 0007; observed 2026-09-12 once Phase 5 built it. tests/integration/providers.test.ts runs exactly this: a real scan in a child process whose PATH holds only git, asserting a completed run, zero collector errors, and provider_runs rows that name the missing command.",
       "participants": [
         {
           "id": "shell",
@@ -790,7 +790,7 @@
               "id": "host-init",
               "from": "shell",
               "to": "host",
-              "title": "ongoing init && ongoing scan",
+              "title": "ongoing scan (no service answering, so the CLI links the core)",
               "kind": "call"
             },
             {
@@ -822,7 +822,7 @@
               "id": "manifest-probe",
               "from": "providers",
               "to": "registry",
-              "title": "Check each manifest's requires: commands, env, network",
+              "title": "Probe each manifest's requires: commands on PATH, variables set",
               "kind": "call"
             },
             {
@@ -839,7 +839,7 @@
               "id": "manifest-set",
               "from": "providers",
               "to": "scanner",
-              "title": "The enabled provider set, in schedule order",
+              "title": "The active provider set, in dependsOn order",
               "kind": "call"
             }
           ]
@@ -870,7 +870,7 @@
               "id": "scan-finish",
               "from": "scanner",
               "to": "repo",
-              "title": "finishScanRun(completed) — a missing tool is never a failed scan",
+              "title": "finishScanRun(completed) + provider_runs rows saying who was skipped, and why",
               "kind": "call"
             }
           ]
@@ -893,7 +893,7 @@
               "id": "providers-report",
               "from": "providers",
               "to": "shell",
-              "title": "Each provider: enabled, available, last run, contributed fields",
+              "title": "Each provider: state, availability, last run, contributed fields, why not",
               "kind": "return"
             }
           ]

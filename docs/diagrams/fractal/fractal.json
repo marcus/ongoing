@@ -26,7 +26,8 @@
         "inventory.entries_api",
         "inventory.shell",
         "inventory.palette",
-        "inventory.entry_page"
+        "inventory.entry_page",
+        "inventory.transport"
       ],
       "color": "#759EB5"
     },
@@ -115,14 +116,15 @@
     },
     {
       "id": "adapter-seams",
-      "title": "Proposed: switchable seams",
-      "description": "Every assumption that is currently baked in — where repositories live, who hosts them, who tracks issues, who counts lines, what runs the service, where it deploys — declared in a manifest or an adapter and switchable in one TOML file. This is what lets Ongoing run on a machine that is not aerie.",
+      "title": "Switchable seams",
+      "description": "Every assumption that used to be baked in — where repositories live, who hosts them, who tracks issues, who counts lines, what runs the service, where it deploys, and who reads the export — is now declared in a manifest or an adapter and switched in one TOML file. A provider that is off or missing its tools registers no fields, so the rules that read them go inert rather than wrong. This is what lets Ongoing run on a machine that is not aerie.",
       "kind": "ownership",
       "members": [
         "inventory.providers",
         "inventory.config",
         "inventory.host",
         "inventory.profile",
+        "inventory.transport",
         "radar.signatures",
         "scanning.wiring"
       ],
@@ -199,7 +201,7 @@
     {
       "id": "proposed-inventory",
       "title": "Proposal: Ongoing as a software inventory",
-      "description": "Phases 1 and 2 have landed: entries, the field registry, the query grammar, the entries API, and the CLI over them are current inside this subsystem. What is still drawn as proposed is the rest of the settled design — collectors declared as providers behind a host adapter, and a keyboard-first shell that builds the same query string the CLI does.",
+      "description": "Phases 1, 2, 3 and 5 have landed: entries, the field registry, the query grammar, the entries API, the CLI over them, the provider manifests, the configuration file, the host adapter, the deployment and export profiles, and the CLI transport are all current inside this subsystem. What is still drawn as proposed is the keyboard-first shell that builds the same query string the CLI does.",
       "expanded": ["inventory"],
       "proposed": true,
       "lens": "structure",
@@ -217,11 +219,11 @@
       "proposed": false
     },
     {
-      "id": "proposed-seams",
-      "title": "Proposal: seams and boundaries",
-      "description": "The same proposed subsystem under the trust lens: which parts share the one HTTP contract, which are pure rules the browser re-runs, what the durable state is, and which pieces exist so that discovery, hosting, issues, the serving host, and the deploy target stop being assumptions.",
+      "id": "switchable-seams",
+      "title": "Seams and boundaries",
+      "description": "The inventory subsystem under the trust lens: which parts share the one API contract, which are pure rules the browser re-runs, what the durable state is, and which pieces exist so that discovery, hosting, issues, lines of code, the serving host, the deploy target and the export stop being assumptions. All of them are built; only the keyboard-first shell is still a proposal.",
       "expanded": ["inventory"],
-      "proposed": true,
+      "proposed": false,
       "lens": "trust",
       "theme": "graphite",
       "scope": "inventory"

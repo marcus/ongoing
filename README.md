@@ -31,13 +31,15 @@ Development and preview bind to loopback by default. Production may set `HOST` a
 | `bun run test`         | Run the Vitest suite                            |
 | `bun run test:e2e`     | Run Playwright browser tests                    |
 | `bun run scan`         | Run one scanner CLI refresh                     |
+| `bun run serve`        | Run the built application in the foreground     |
 
 ## The `ongoing` command
 
 `bin/ongoing` is a terminal client for the dashboard, installed on `PATH` with
-`ln -s "$PWD/bin/ongoing" ~/.local/bin/ongoing`. It reads and writes through the same HTTP API the
+`ln -s "$PWD/bin/ongoing" ~/.local/bin/ongoing`. It reads and writes through the same API contract the
 browser uses, so listing, filtering, favorites, hiding, notes, decision fields, and scans are
-available to a shell or an agent exactly as they are to the UI:
+available to a shell or an agent exactly as they are to the UI. It does not need a running service:
+when nothing answers `/api/health` it opens the catalog in its own process instead.
 
 ```sh
 ongoing                                   # every project, dashboard ordering
@@ -49,6 +51,9 @@ ongoing field add x.customer --type text  # a new field, no migration, editable 
 ongoing stacks                            # declared toolchains, versions in use, upgrade pressure
 ongoing list 'view:upgrade stack.go:*' --sort -git.commits30d --columns name,stack.go
 ongoing scan --full --wait
+ongoing providers                         # what each collector needs, and whether it has it
+ongoing export --profile json             # the whole catalog, deterministically
+ongoing serve --data-dir ./ongoing-data   # run it in the foreground, anywhere
 ```
 
 Filtering, sorting, and column selection are one query grammar — the same string the CLI argument,
@@ -59,6 +64,17 @@ Full reference: [docs/cli.md](docs/cli.md).
 LAN authentication and production operations are documented in [docs/deployment.md](docs/deployment.md). Non-loopback listeners fail closed unless `ONGOING_ACCESS_SECRET` is configured; do not expose this trusted-LAN application to the public internet.
 
 The production source of truth is the private repository `git@github.com:marcus/ongoing.git`. Its tested `main` branch deploys to `/Users/marcus/code/ongoing` on `aerie.local`. The web LaunchAgent `com.marcusvorwaller.ongoing` serves `http://aerie.local:7766`; the separate `com.marcusvorwaller.ongoing.scan` LaunchAgent refreshes the shared catalog once daily at 03:00 local time.
+
+## Configuration, providers, and hosts
+
+Configuration is one TOML file at `~/.config/ongoing/config.toml`, with environment variables as
+overrides; `ongoing` runs with no configuration at all if the defaults suit. Every collector is a
+**provider with a manifest** that declares the fields it contributes and what it needs from the
+machine, so a machine with no `td`, no `cloc`, and no GitHub token runs a clean scan with those
+providers reported unavailable rather than failing. `serve`, `scan`, `restart`, `stop`, and `logs`
+go through a **host adapter** — `launchd` on aerie, `foreground` anywhere else — and deployment is a
+**profile** in [`deploy/aerie/`](deploy/aerie/README.md) that the application never imports. See
+[docs/cli.md](docs/cli.md) and [ADR 0007](docs/adr/0007-provider-manifests-and-host-adapters.md).
 
 ## Architecture
 

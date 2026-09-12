@@ -6,9 +6,15 @@ Operational notes for agents working in this repo. See [README.md](README.md) fo
 
 `bin/ongoing` (symlinked to `~/.local/bin/ongoing`) drives the live dashboard from the shell:
 `ongoing status`, `ongoing list --view attention --json`, `ongoing show <project>`, `ongoing scan --wait`,
-`ongoing logs -f`, `ongoing restart --build`. It is a client of the HTTP API, so anything the UI can do it can
-do — keep that parity when adding features, and add the flag alongside the button. Reference:
-[docs/cli.md](docs/cli.md). It runs from source; there is nothing to rebuild after editing it.
+`ongoing providers`, `ongoing logs -f`, `ongoing restart --build`. It speaks the same HTTP contract the UI
+does, so anything the UI can do it can do — keep that parity when adding features, and add the flag alongside
+the button. Reference: [docs/cli.md](docs/cli.md). It runs from source; there is nothing to rebuild after
+editing it.
+
+**It works with no service running.** The CLI probes `/api/health` and links the core library into its own
+process when nothing answers (`src/lib/server/api/local.ts`), so `ongoing scan` and `ongoing list` work on a
+bare machine. Both transports call the same library functions — add a capability to the library, not to a
+route, or the two paths will drift.
 
 ## Auth is intentionally disabled
 
@@ -56,6 +62,21 @@ in `technology.ts`, and a signature beside it only if a manifest can see it. The
 skill's language and tool tables are generated from `ongoing tech export` by
 `scripts/render-project-standards.ts`; edit the catalog, then regenerate.
 
+**Phase 5 has landed.** Every collector is a provider with a manifest in `src/lib/domain/provider.ts`: it
+declares its kinds, its namespaced read-only fields, the relation kinds it writes, what it needs from the
+machine, and its schedule. The registry is built from the manifests, so a disabled or unavailable provider
+registers no fields and the rules that read them go inert. Do not add a projected field to a hand table — add
+it to the provider's manifest. The scanner iterates `activeProviders(...)` in `dependsOn` order rather than a
+fixed sequence; a provider failure still never fails a scan, and a skipped one records why in `provider_runs`.
+
+Configuration is one TOML file, `~/.config/ongoing/config.toml` (`ONGOING_CONFIG` to move it), read by
+`loadRuntimeConfig`; `loadConfig(env, file)` stays pure so no test touches the real file. Environment
+variables are overrides, and precedence is env > file > default. `serve`, `scan`, `restart`, `stop`, and
+`logs` go through a host adapter in `src/lib/host/` (`launchd`, `foreground`) — the CLI must not learn about
+launchd again. Deployment is a profile in `deploy/aerie/` that the core never imports;
+`tests/foundation.test.ts` fails if it does. `scripts/production-server.ts` and `scripts/scan.ts` are shims
+onto `src/lib/host/` because the installed plists name those paths.
+
 ## Keep the architecture model current
 
 `docs/diagrams/fractal/` holds the Fractal model of this system (`model.c4`, `fractal.json`,
@@ -71,6 +92,12 @@ responsibilities. Authoring guidance: `~/code/fractal/skills/fractal/SKILL.md`.
 Production runs as the launchd agent `com.marcusvorwaller.ongoing`, serving `http://aerie.local:7766` (also
 reachable as `http://localhost:7766` from this machine). **It runs a prebuilt adapter-node bundle in `build/`, not
 source directly** — editing `src/` does nothing to the running service until you rebuild:
+
+```sh
+ongoing restart --build     # the launchd host adapter does the bootout/bootstrap dance
+```
+
+or, by hand:
 
 ```sh
 bun run build

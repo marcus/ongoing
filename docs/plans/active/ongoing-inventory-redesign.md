@@ -519,7 +519,7 @@ Depends on Phase 2 for the table; the design-system spike can start during Phase
 Evidence: every browser mutation has a CLI equivalent test; Lighthouse-style interaction under
 100 ms for list operations at 500 entries; screenshots in `docs/qa/`.
 
-### Phase 5: providers as adapters and the host seam — td-c5dc7d
+### Phase 5: providers as adapters and the host seam — done (td-c5dc7d)
 
 Depends on Phase 1. Independent of Phases 3 and 4.
 
@@ -538,6 +538,89 @@ Depends on Phase 1. Independent of Phases 3 and 4.
 
 Evidence: aerie runs with the same behaviour through the new wiring; a machine with no `td`, no
 `cloc`, and no GitHub token runs a clean scan with those providers reported unavailable.
+
+**Handoff (2026-09-12).** Built. Every collector is a provider with a manifest and every baked-in
+assumption is a named adapter that configuration can switch off. The parts to build on:
+
+`src/lib/domain/provider.ts` is the seam. Eight manifests — `filesystem`, `git`, `td`, `stack`,
+`tech-signatures`, `loc`, `endoflife`, `github` — each declare their kinds, their namespaced
+read-only fields, the relation kinds they write, what they require of the machine, their schedule,
+and what they depend on. `orderProviders` derives the run order from `dependsOn`;
+`resolveProviders(isEnabled, probe)` is one pure function that decides who runs and why not.
+Nothing in it does I/O: `src/lib/server/providers/registry.ts` probes PATH and the environment, and
+`describeProviders` is the payload both `ongoing providers` and `GET /api/providers` render. The
+field registry is **built from the manifests** — `createFieldRegistry(userFields, { providers })` —
+so a disabled or unavailable provider registers nothing and the attention rules reading its fields
+find nothing rather than something wrong. Adding a provider field means adding it to a manifest;
+`provider-fields.ts` keeps only the projection reader and the catalog-derived fields (`views`,
+`warnings`, `tech`, `used_by`, `provided_by`, `ring_stale`), which are catalog facts and stay
+registered whatever is switched off.
+
+The scanner no longer writes its sequence down. `executeAcquired` resolves the active set, narrows
+the repository's registry to it, and iterates an array of steps that each name their provider; a
+missing discovery provider enriches what the catalog already knows rather than doing nothing, and
+`provider_runs` (migration 009) records `ok`, `skipped`, `disabled`, `unavailable`, or `failed` with
+a reason.
+
+Configuration is one TOML file, `~/.config/ongoing/config.toml`, `ONGOING_CONFIG` to move it,
+parsed by `Bun.TOML` and validated key by key so a typo fails at start-up.
+`loadConfig(env, file)` stays pure — no test reads the machine's real file — and
+`loadRuntimeConfig()` is what every entry point calls. Precedence is environment over file over
+default, and `ONGOING_ENABLE_RELEASE_BASELINE=false` still turns `endoflife` off, so the installed
+plists behave exactly as before.
+
+`src/lib/host/` is the host seam: `adapter.ts` (the interface), `launchd.ts`, `foreground.ts`, and
+the two entry points that moved out of `scripts/` — `production-server.ts` and `scan-command.ts`.
+`scripts/production-server.ts` and `scripts/scan.ts` are two-line shims onto them, because the
+plists installed on aerie name those paths; docs/deployment.md records the plist edit the next
+deploy should make. The launchd adapter is unit-tested against captured `launchctl print` output
+and an injected runner — it never touches the real agents.
+
+`deploy/aerie/` is the deployment profile: the constants, the release client and worker, the
+provisioning script, `production-smoke.ts`, and both plist definitions. The core never imports it
+and `tests/foundation.test.ts` fails if it does. Publishing is a profile too
+(`src/lib/domain/export.ts`): `ongoing export --profile opentangle|json` and
+`GET /api/export`, with `/api/website` kept as the `opentangle` profile under the URL OpenTangle
+already calls.
+
+The CLI has a transport adapter. It probes `/api/health`; whatever answers wins, and otherwise
+`src/lib/server/api/local.ts` links the core into the CLI process, so `ongoing scan` and
+`ongoing list` work with no daemon. That is why the entries read (`src/lib/server/api/entries.ts`)
+and the prune rule (`src/lib/server/catalog/prune.ts`) moved out of their routes: both transports
+call the same function rather than two copies of it. `--local`, `--remote`, and
+`ONGOING_TRANSPORT` override the probe; naming `--url` always means HTTP.
+
+Four judgment calls worth knowing. **`dependsOn` is an addition to Decision 4's shape**, recorded in
+ADR 0007: "in dependency order" has to be derived from something, and the alternative was the
+array's own order — the hard-coded sequence the manifest exists to replace. **`network` is declared,
+not probed**: being offline makes a fetch fail and leaves cached data in place, which is not the
+same as a provider being unavailable, so nothing is marked unavailable for it. **A provider whose
+dependency cannot run is reported unavailable for that reason** rather than left to fail, which is
+what stops `tech-signatures` from deleting every detected edge when `stack` is off. And **the
+catalog-derived fields are ungated**, for the same reason Phase 3 left the two radar attention
+reasons outside the freshness gate.
+
+Proof: `tests/integration/providers.test.ts` runs a real scan in a child process whose PATH holds
+only `git`, with no GitHub token, and asserts a completed run, one discovered project with its git
+and stack data intact, zero collector warnings, and `provider_runs` rows naming the missing command
+for `td`, `loc`, and `github`. The `foreground` host was run locally on port 7802 against a fresh
+`--data-dir`: it built, served, answered `/api/health`, `/api/entries`, `/api/providers` and
+`/api/export`, and — with `git` disabled in that run's configuration — served a registry with no
+`git.*` fields in it. The full Vitest and Playwright suites pass.
+
+Not done, deliberately: **`ongoing init`** (Phase 6 owns it; `ongoing serve --data-dir` already
+makes an empty directory into a catalog, which is what the phase needed to prove), a **`manifest`
+discovery provider** (the `foreground` host is the second seam implementation this phase owed, and a
+second discovery provider with no user is the speculative kind of adapter the plan warns against),
+and the **providers page** — Phase 4 draws it against `GET /api/providers`, whose shape is
+`{ providers: [{ name, enabled, available, state, reason, kinds, schedule, description, dependsOn,
+requires, fields, relations, settings, lastRun, lastRunStatus, lastRunDetail }], host, configPath,
+generatedAt }`.
+
+**The installed plists were not touched.** They still run
+`/Users/marcus/.local/share/ongoing/bun` against `scripts/production-server.ts` and
+`scripts/scan.ts`, which are now shims; the next deploy can point them at `src/lib/host/` and delete
+the shims. Production still needs the rebuild and reseed Phase 3's handoff describes.
 
 ### Phase 6: inventory uses and open-source release — td-daa20f
 
@@ -584,6 +667,15 @@ Settled in Phase 0 on 2026-09-11. Reopen one only with a reason written down her
 
 ## Changelog
 
+- 2026-09-12: Phase 5 — every collector is a provider with a manifest and the scanner iterates the
+  enabled ones in dependency order, the field registry is built from those manifests so a disabled
+  or unavailable provider contributes nothing, configuration is one TOML file with environment
+  variables as overrides, `ongoing providers` and `GET /api/providers` report availability and last
+  run, `serve`/`scan`/`restart`/`stop`/`logs` sit behind a host adapter with `launchd` and
+  `foreground` implementations, the aerie constants and release scripts became a profile in
+  `deploy/aerie/` the core never imports, the website export became the `opentangle` export profile
+  with a generic `json` one beside it, and the CLI gained a transport adapter so it works with no
+  daemon.
 - 2026-09-12: Phase 3 — technologies are entries with rings, `uses` edges are detected inside the
   stack collector's pass or declared by hand, `ongoing tech list|show|add|set|seed|export` is the
   radar's surface, an `out` technology in use and a stale ring are attention reasons, and the

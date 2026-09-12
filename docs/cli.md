@@ -1,9 +1,16 @@
 # The `ongoing` command
 
-`bin/ongoing` is a terminal client for the same dashboard the browser talks to. It is a client of
-the HTTP API, not of the SQLite catalog: every read and write goes through `/api/*`, so the CLI and
-the UI can never drift apart or disagree about validation. Only the service commands
-(`build`, `dev`, `restart`, `stop`, `logs`, `repo`) touch the machine directly.
+`bin/ongoing` is a terminal client for the same dashboard the browser talks to. Every read and
+write goes through the same `/api/*` contract the browser uses, so the CLI and the UI can never
+drift apart or disagree about validation. Only the host commands (`build`, `dev`, `serve`,
+`restart`, `stop`, `logs`, `repo`) touch the machine directly.
+
+**It does not need a running service.** `ongoing` picks its transport: if something answers
+`/api/health` it speaks HTTP to it, and otherwise it links the core library into its own process
+and opens the catalog directly, so `ongoing scan` and `ongoing list` work on a machine with no
+daemon (Decision 1). Both transports call the same library functions, so the answer is the same
+either way. `--remote` forces HTTP, `--local` forces the in-process path, and naming `--url` or
+`ONGOING_URL` always means HTTP.
 
 ## Install
 
@@ -19,9 +26,12 @@ is nothing to rebuild after editing the CLI — it runs from source.
 
 | Source         | Value                                               |
 | -------------- | --------------------------------------------------- |
-| `--url <base>` | highest precedence                                  |
+| `--url <base>` | highest precedence; always uses the HTTP transport  |
 | `ONGOING_URL`  | e.g. `http://aerie.local:7766` from another machine |
-| default        | `http://127.0.0.1:7766`                             |
+| default        | `http://127.0.0.1:7766`, then the in-process path   |
+
+`--transport auto|http|local` (or `ONGOING_TRANSPORT`) overrides the probe. `ongoing status`
+prints which transport answered, and shows the catalog path rather than a URL when it was local.
 
 Auth is normally disabled ([docs/auth.md](auth.md)). If it is re-enabled, `ongoing login <secret>`
 (or `ONGOING_ACCESS_SECRET` in the environment) exchanges the access secret for a session cookie
@@ -102,7 +112,14 @@ ongoing tech seed [--file <json>] [--force]
                                       seed the technologies Ongoing ships with; idempotent
 ongoing tech export [--pretty]        technologies and edges as one deterministic document
 
+ongoing providers [name] [--verbose] [--json]
+                                      every provider: availability, last run, contributed
+                                      fields, enable state, and why it cannot run
+ongoing export [--profile opentangle|json] [--drafts] [--kind <kind>] [--compact]
+                                      publish the catalog through an export profile
+
 ongoing open [project] [--terminal|--github]
+ongoing serve [--data-dir <dir>] [--port N] [--bind <host>] [--no-build]
 ongoing logs [-f] [--lines N] [--scan]
 ongoing restart [--build] [--scan]
 ongoing stop [--scan]
@@ -358,6 +375,140 @@ sorted, so a generator that renders it twice produces the same bytes. That is wh
 `scripts/render-project-standards.ts` reads to regenerate the language and tool tables in the
 `project-standards` skill.
 
+## Configuration
+
+Configuration is **one TOML file**, `~/.config/ongoing/config.toml`, with `ONGOING_CONFIG` to point
+elsewhere. Environment variables remain overrides and keep carrying secrets, so the installed
+LaunchAgents run unchanged. Precedence, highest first:
+
+1. an environment variable (`SCAN_ROOTS`, `PORT`, `DATABASE_PATH`, `ONGOING_PROVIDERS`, ...)
+2. the configuration file
+3. the built-in default
+
+A missing file is not an error - it means "all defaults". An unknown section or key **is** an
+error, so a typo fails at start-up instead of silently doing nothing.
+
+```toml
+[server]
+port = 7766
+database = "~/Library/Application Support/Ongoing/ongoing.sqlite"
+
+[scan]
+roots = ["~/code"]
+max_depth = 3
+scheduler = false
+
+# Every shipped provider is on unless configuration turns it off.
+# `enabled` narrows the list; `disabled` subtracts from whatever is left.
+[providers]
+enabled = ["filesystem", "git", "td", "stack", "tech-signatures", "loc", "endoflife", "github"]
+disabled = []
+
+[providers.filesystem]
+roots = ["~/code"]
+max_depth = 3
+forget_missing_after_days = 7
+
+[providers.github]
+token_env = "GH_TOKEN"
+
+[providers.endoflife]
+api_url = "https://endoflife.date/api/v1"
+max_age_hours = 24
+
+[host]
+adapter = "launchd"   # or "foreground"
+
+[export]
+profile = "opentangle"
+```
+
+| Environment override                    | What it does                                              |
+| --------------------------------------- | --------------------------------------------------------- |
+| `ONGOING_CONFIG`                        | read this file instead of `~/.config/ongoing/config.toml` |
+| `ONGOING_PROVIDERS`                     | comma-separated enabled list, replacing the file's        |
+| `ONGOING_DISABLE_PROVIDERS`             | comma-separated list to switch off                        |
+| `ONGOING_HOST_ADAPTER`                  | `launchd` or `foreground`                                 |
+| `ONGOING_TRANSPORT`                     | `auto`, `http`, or `local`                                |
+| `ONGOING_ENABLE_RELEASE_BASELINE=false` | still turns the `endoflife` provider off                  |
+
+## Providers
+
+Every collector is a **provider with a manifest** (ADR 0007): it declares the entry kinds it
+touches, the namespaced read-only fields it owns, the relation kinds it writes, what it needs from
+the machine, and how often it runs. The scanner iterates the enabled providers in dependency order
+rather than running a fixed sequence, and a provider that is switched off or missing its tools
+registers **no fields at all**, so every rule that reads them goes inert rather than wrong.
+
+```
+$ ongoing providers
+PROVIDER         STATE        SCHEDULE      LAST RUN  FIELDS  NOTE
+filesystem       active       every-scan    2h ago         2  Discovers repositories under the configured scan roots
+git              active       every-scan    2h ago        11  Commit history, branch, working-tree state, and tags
+td               unavailable  every-scan    2h ago         6  td is not on PATH
+stack            active       every-scan    2h ago        14  Declared toolchain versions read from committed manifests
+tech-signatures  active       every-scan    2h ago         -  Detected `uses` edges from manifest dependency signatures
+loc              disabled     when-changed  2h ago         4  disabled in configuration
+endoflife        active       daily         2h ago         -  Release cycles and end-of-life dates for declared toolchains
+github           active       when-changed  2h ago        17  Stars, pull requests, issues, CI state, releases, and traffic
+
+host adapter: launchd - configuration: /Users/marcus/.config/ongoing/config.toml
+```
+
+`ongoing providers <name>` prints one manifest in full, and `--json` emits the same payload
+`GET /api/providers` returns:
+
+```
+$ ongoing providers github
+github  active
+  Stars, pull requests, issues, CI state, releases, and traffic for GitHub remotes
+  schedule    when-changed
+  kinds       project
+  depends on  filesystem, git
+  requires    gh, network
+  last run    2h ago - ok
+  fields      github.repoId github.oldestExternalPr github.owner github.name github.visibility
+              github.isArchived github.stars github.forks github.watchers github.openIssues
+              github.openPrs github.externalPrs github.ciState github.latestRelease
+              github.trafficViews github.starsGained30d github.trafficViewsDelta30d
+```
+
+`STATE` is `active`, `disabled` (configuration said so), or `unavailable` (a required command is
+not on `PATH`, a required variable is not set, or something it depends on is not running). An
+unavailable provider records that it was skipped and contributes nothing; it never fails the scan
+and never writes a collector warning.
+
+## Running the application
+
+`serve`, `scan`, `restart`, `stop`, and `logs` go through a **host adapter**. `launchd` drives the
+two user LaunchAgents on aerie; `foreground` supervises nothing and runs the application in the
+terminal. `[host] adapter` chooses it, `ONGOING_HOST_ADAPTER` and `--host` override.
+
+```sh
+ongoing serve --data-dir ~/.local/share/ongoing --port 7766   # foreground, fresh catalog
+ongoing scan --full --wait
+ongoing restart --build            # launchd reloads the plist rather than kickstarting the job
+ongoing logs -f --scan
+```
+
+A `--data-dir` nobody has written to becomes a catalog on first open, which is all a new install
+needs: no launchd, no deployment profile, no configuration file.
+
+## Export profiles
+
+Publishing the catalog is an adapter too. `opentangle` is the shape OpenTangle's site build reads;
+`json` is the generic profile beside it - entries with their field values, relations by
+`kind/slug`, and the field registry, sorted so the same catalog always produces the same bytes.
+
+```sh
+ongoing export --profile opentangle            # what GET /api/website returns
+ongoing export --profile opentangle --drafts   # every configured record, marked draft
+ongoing export --profile json                  # the whole catalog
+ongoing export --profile json --kind technology --compact
+```
+
+`ongoing website export` stays as the `opentangle` profile under its old name.
+
 ## HTTP endpoints behind these verbs
 
 | Verb                        | Endpoint                                               |
@@ -372,6 +523,13 @@ sorted, so a generator that renders it twice produces the same bytes. That is wh
 | `view list/save/delete`     | `GET/POST/PATCH/DELETE /api/views`                     |
 | `tech list/show/export`     | `GET /api/entries?q=kind:technology`                   |
 | `tech add`, `tech seed`     | `POST /api/entries`, `PATCH /api/entries/:kind/:slug`  |
+| `providers`                 | `GET /api/providers`                                   |
+| `export`                    | `GET /api/export?profile=&drafts=&kind=`               |
+| `website export`            | `GET /api/website` (the `opentangle` profile)          |
+| `scan`                      | `POST /api/scan`                                       |
+
+Every one of these is answered identically by the in-process transport when no service is running.
+`serve`, `restart`, `stop`, and `logs` have no endpoint: they are the host adapter, not the API.
 
 ## Website selection and public copy
 

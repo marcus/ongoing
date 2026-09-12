@@ -18,8 +18,18 @@ interface ProviderManifest {
   relations?: RelationKindDefinition[];
   requires?: { commands?: string[]; env?: string[]; network?: boolean };
   schedule: 'every-scan' | 'when-changed' | 'daily';
+  dependsOn?: string[]; // added when Phase 5 built it; see below
+  description: string;
 }
 ```
+
+`dependsOn` was not in the shape this decision first wrote down. It was added when the scanner
+started iterating manifests, because "in dependency order" has to be derived from something: the
+alternative was the array's own order, which is the hard-coded sequence the manifest exists to
+replace. A provider whose dependency cannot run is reported unavailable for that reason rather than
+left to fail — `tech-signatures` without `stack` writes nothing instead of deleting every detected
+edge. `network` is declared rather than probed: being offline makes a fetch fail and leaves cached
+data in place (ADR 0002, ADR 0003), which is not the same as the provider being unavailable.
 
 The scanner iterates the enabled providers rather than running a fixed sequence. A disabled or unavailable provider registers no fields, so rules that read them find nothing and stay inert rather than becoming wrong — the freshness gate the attention views already apply to stale data. `ongoing providers` and `GET /api/providers` report each provider's availability, last run, and contributed fields.
 
