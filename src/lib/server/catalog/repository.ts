@@ -267,6 +267,8 @@ function projectFromEntry(entry: Entry, source: EntrySource): Project {
     isHidden: entry.isHidden,
     manualRank: number('manual_rank') ?? 0,
     note: entry.note,
+    tags: entry.tags,
+    attributes: entry.attributes,
     website: entry.website,
     intent: text('intent') as Project['intent'],
     excitement: number('excitement'),

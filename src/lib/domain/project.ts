@@ -1,3 +1,4 @@
+import type { AttributeValue } from './entry';
 import type { ProjectWebsite } from './website';
 
 export const PROJECT_NOTE_MAX_LENGTH = 500;
@@ -18,6 +19,12 @@ export interface Project {
   isHidden: boolean;
   manualRank: number;
   note: string;
+  tags: string[];
+  /**
+   * Every registered field value the entry carries, including user fields, so a field added at
+   * runtime reaches the dashboard and `ongoing list --json` without a second read.
+   */
+  attributes: Record<string, AttributeValue>;
   website?: ProjectWebsite | null;
   intent: ProjectIntent | null;
   excitement: number | null;

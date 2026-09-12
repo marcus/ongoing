@@ -40,6 +40,8 @@ function item(
     isHidden: false,
     manualRank: values.manualRank ?? 1_000,
     note: '',
+    tags: [],
+    attributes: {},
     intent: null,
     excitement: null,
     strategicImportance: null,

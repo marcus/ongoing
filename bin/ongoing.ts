@@ -13,6 +13,16 @@ import { realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
+// The domain layer is import-safe under bare Bun (no $lib aliases, no SvelteKit), so the CLI runs
+// the same validation the API and the browser run rather than a second copy of the rules.
+import {
+  createFieldRegistry,
+  parseFieldInput,
+  validateEntryPatch,
+  type FieldDefinition,
+  type FieldRegistry
+} from '../src/lib/domain/fields';
+import { relationKinds } from '../src/lib/domain/relation';
 
 const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
 const SERVICE = 'com.marcusvorwaller.ongoing';
@@ -138,6 +148,8 @@ interface Project {
   isHidden: boolean;
   isMissing: boolean;
   note: string;
+  tags: string[];
+  attributes: Record<string, unknown>;
   intent: string | null;
   excitement: number | null;
   strategicImportance: number | null;
@@ -209,7 +221,16 @@ function parseArgs(argv: string[]): Args {
     'lines',
     'stack',
     'grace-days',
-    'file'
+    'file',
+    'kind',
+    'type',
+    'label',
+    'description',
+    'values',
+    'columns',
+    'note',
+    'slug',
+    'evidence'
   ]);
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -630,10 +651,25 @@ async function commandShow(client: Client, args: Args): Promise<void> {
     ['note', project.note || '–']
   ];
 
-  const label = Math.max(...[...facts, ...decisions].map(([key]) => key.length));
+  // Anything else the entry carries: fields registered at runtime, shown the moment they have a
+  // value, so `ongoing field add` needs no change here to become visible.
+  const decided = new Set([
+    'intent',
+    'excitement',
+    'strategic_importance',
+    'next_action',
+    'manual_rank'
+  ]);
+  const extra: [string, string][] = Object.entries(project.attributes ?? {})
+    .filter(([key]) => !decided.has(key))
+    .map(([key, value]) => [key, formatValue(value)]);
+  if (project.tags?.length) extra.unshift(['tags', project.tags.join(', ')]);
+
+  const label = Math.max(...[...facts, ...decisions, ...extra].map(([key]) => key.length));
   for (const [key, value] of facts) out(`${dim(pad(key, label))}  ${value}`);
   out();
   for (const [key, value] of decisions) out(`${dim(pad(key, label))}  ${value}`);
+  for (const [key, value] of extra) out(`${dim(pad(key, label))}  ${value}`);
 
   const active = project.views;
   if (active.length) {
@@ -925,43 +961,59 @@ async function commandWebsite(client: Client, args: Args): Promise<void> {
   printJson(result);
 }
 
+/**
+ * `ongoing set <entry> <field> <value>` — one verb for every registered field, validated by the
+ * same pure function the API and the browser run. The original decision flags stay as aliases.
+ */
 async function commandSet(client: Client, args: Args): Promise<void> {
-  const project = await requireProject(client, args, 'set');
-  const body: Record<string, unknown> = {};
-  const intent = option(args, 'intent');
-  if (intent !== undefined)
-    body.intent = nullable(intent) ? choice(intent, INTENTS, '--intent') : null;
-  for (const [flagName, field] of [
+  const token = args.positional[0];
+  if (!token)
+    throw new CliError('Usage: ongoing set <entry> <field> <value>  (or the --intent style flags)');
+  const entry = await resolveEntry(client, token);
+  const registry = await fetchRegistry(client);
+  const patch: Record<string, unknown> = {};
+
+  const field = args.positional[1];
+  if (field) {
+    const definition = registry.get(field);
+    if (!definition) {
+      const suggestion = registry.suggest(field, entry.kind);
+      throw new CliError(
+        `Unknown field: ${field}${suggestion ? ` — did you mean ${suggestion}?` : ''}`
+      );
+    }
+    const raw = args.positional.slice(2).join(' ');
+    if (!args.positional[2] && !flag(args, 'clear'))
+      throw new CliError(`Usage: ongoing set ${token} ${field} <value>  ("none" clears it)`);
+    patch[field] = flag(args, 'clear') ? null : parseFieldInput(definition, raw);
+  }
+
+  // The flags this command shipped with, mapped onto their registered field keys.
+  for (const [flagName, key] of [
+    ['intent', 'intent'],
     ['excitement', 'excitement'],
-    ['importance', 'strategicImportance']
+    ['importance', 'strategic_importance'],
+    ['next-action', 'next_action'],
+    ['review-after', 'review_after']
   ] as const) {
     const raw = option(args, flagName);
     if (raw === undefined) continue;
-    if (!nullable(raw)) {
-      body[field] = null;
-      continue;
-    }
-    const value = Number(raw);
-    if (!Number.isInteger(value) || value < 1 || value > 5)
-      throw new CliError(`--${flagName} must be an integer from 1 through 5, or none`);
-    body[field] = value;
+    patch[key] = parseFieldInput(registry.get(key)!, raw);
   }
-  const nextAction = option(args, 'next-action');
-  if (nextAction !== undefined) body.nextAction = nullable(nextAction) ? nextAction : null;
-  const reviewAfter = option(args, 'review-after');
-  if (reviewAfter !== undefined) body.reviewAfter = nullable(reviewAfter) ? reviewAfter : null;
 
-  if (!Object.keys(body).length)
+  if (!Object.keys(patch).length)
     throw new CliError(
-      'Nothing to set. Use --intent, --excitement, --importance, --next-action, or --review-after.'
+      'Nothing to set. Name a field, or use --intent, --excitement, --importance, --next-action, or --review-after.'
     );
-  await client.request(`/api/projects/${project.id}`, { method: 'PATCH', body });
-  report(args, { id: project.id, ...body }, `${project.name} updated: ${describe(body)}`);
-}
 
-/** `none`, `null`, and `-` all mean "clear this field". */
-function nullable(value: string): boolean {
-  return value !== 'none' && value !== 'null' && value !== '-' && value !== '';
+  // Validated here first: a bad value fails before the round trip, with the API's own message.
+  validateEntryPatch(registry, entry.kind, patch);
+  const updated = await patchEntry(client, entry, patch);
+  report(
+    args,
+    { entry: entryLabel(updated), ...patch },
+    `${updated.name} updated: ${describe(patch)}`
+  );
 }
 
 function describe(body: Record<string, unknown>): string {
@@ -1155,6 +1207,384 @@ function commandLogs(args: Args): void {
 
 /* -------------------------------------------------------------------- shell */
 
+/* ------------------------------------------------------------------ entries */
+
+interface EntrySourceView {
+  provider: string;
+  locator: string;
+  metadata: Record<string, unknown>;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  missingSince: string | null;
+}
+
+interface RelationView {
+  id: string;
+  kind: string;
+  evidence: string;
+  provider: string | null;
+  note: string | null;
+  other: { id: string; kind: string; slug: string; name: string } | null;
+}
+
+interface EntryView {
+  id: string;
+  kind: string;
+  slug: string;
+  name: string;
+  note: string;
+  tags: string[];
+  isFavorite: boolean;
+  isHidden: boolean;
+  reviewAfter: string | null;
+  attributes: Record<string, unknown>;
+  fields: Record<string, unknown>;
+  sources: EntrySourceView[];
+  relations: { outgoing: RelationView[]; incoming: RelationView[] };
+  updatedAt: string;
+}
+
+async function fetchEntries(client: Client, kind?: string): Promise<EntryView[]> {
+  const page = await client.request<{ entries: EntryView[] }>('/api/entries', {
+    query: { kind }
+  });
+  return page.entries;
+}
+
+/**
+ * The registry as the service knows it, including user fields, rebuilt locally so `ongoing set`
+ * can reject a bad value before it costs a round trip — the same function the API runs.
+ */
+async function fetchRegistry(client: Client): Promise<FieldRegistry> {
+  const { fields } = await client.request<{ fields: FieldDefinition[] }>('/api/fields');
+  return createFieldRegistry(fields.filter((field) => field.owner === 'user'));
+}
+
+function entryPath(entry: EntryView): string | null {
+  const source = entry.sources.find((candidate) => candidate.provider === 'filesystem');
+  return source ? source.locator : null;
+}
+
+function entryLabel(entry: EntryView): string {
+  return `${entry.kind}/${entry.slug}`;
+}
+
+/** Accepts an id, `kind/slug`, a slug, a name, a path, `.`, or a unique substring. */
+async function resolveEntry(client: Client, token: string): Promise<EntryView> {
+  const entries = await fetchEntries(client);
+  if (!entries.length) throw new CliError('The catalog is empty — run `ongoing scan` first.');
+
+  if (token === '.' || token.startsWith('/') || token.startsWith('./') || token.startsWith('~/')) {
+    const target = realpathSafe(token === '.' ? process.cwd() : expandHome(token));
+    const found = entries.find((entry) => {
+      const path = entryPath(entry);
+      return path !== null && realpathSafe(path) === target;
+    });
+    if (!found) throw new CliError(`No entry in the catalog matches ${target}`);
+    return found;
+  }
+
+  const needle = token.toLocaleLowerCase('en');
+  const exact = entries.filter(
+    (entry) =>
+      entry.id === token ||
+      entryLabel(entry) === token ||
+      entry.slug === needle ||
+      entry.name.toLocaleLowerCase('en') === needle ||
+      entryPath(entry) === token
+  );
+  if (exact.length === 1) return exact[0];
+  if (exact.length > 1) throw ambiguousEntries(token, exact);
+
+  const partial = entries.filter((entry) =>
+    `${entry.name} ${entry.slug} ${entryPath(entry) ?? ''}`.toLocaleLowerCase('en').includes(needle)
+  );
+  if (partial.length === 1) return partial[0];
+  if (partial.length > 1) throw ambiguousEntries(token, partial);
+  throw new CliError(`No entry matches "${token}". Try \`ongoing list\`.`);
+}
+
+function ambiguousEntries(token: string, entries: EntryView[]): CliError {
+  const names = entries.slice(0, 10).map((entry) => `  ${entry.name}  ${dim(entryLabel(entry))}`);
+  return new CliError(`"${token}" matches ${entries.length} entries:\n${names.join('\n')}`);
+}
+
+function formatValue(value: unknown): string {
+  if (value === null || value === undefined || value === '') return '–';
+  if (Array.isArray(value)) return value.length ? value.join(', ') : '–';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+/**
+ * `ongoing get <entry> [field]` — every field an entry carries, stored and projected alike, or one
+ * value on stdout for a script to consume.
+ */
+async function commandGet(client: Client, args: Args): Promise<void> {
+  const token = args.positional[0];
+  if (!token) throw new CliError('Usage: ongoing get <entry> [field]');
+  const entry = await resolveEntry(client, token);
+  const key = args.positional[1];
+
+  if (key) {
+    const value = entry.fields[key];
+    if (value === undefined && !(key in entry.fields)) {
+      const registry = await fetchRegistry(client);
+      if (!registry.get(key)) {
+        const suggestion = registry.suggest(key, entry.kind);
+        throw new CliError(
+          `Unknown field: ${key}${suggestion ? ` — did you mean ${suggestion}?` : ''}`
+        );
+      }
+    }
+    if (flag(args, 'json'))
+      return printJson({ entry: entryLabel(entry), field: key, value: value ?? null });
+    return out(value === undefined || value === null ? '' : formatValue(value));
+  }
+
+  if (flag(args, 'json')) return printJson(entry);
+
+  const registry = await fetchRegistry(client);
+  out(
+    `${bold(entry.name)} ${dim(entryLabel(entry))}${entry.isFavorite ? yellow(' ★') : ''}${
+      entry.isHidden ? dim(' (hidden)') : ''
+    }`
+  );
+  const path = entryPath(entry);
+  if (path) out(dim(path));
+  out(dim(`id ${entry.id}`));
+  out();
+
+  const rows: [string, string][] = [];
+  for (const definition of registry.forKind(entry.kind)) {
+    const value = entry.fields[definition.key];
+    if (value === undefined || value === null || value === '') continue;
+    if (Array.isArray(value) && !value.length) continue;
+    rows.push([definition.key, formatValue(value)]);
+  }
+  for (const [attribute, value] of Object.entries(entry.attributes))
+    if (!registry.get(attribute))
+      rows.push([`${attribute} ${dim('(unregistered)')}`, formatValue(value)]);
+  const label = Math.max(8, ...rows.map(([name]) => width(name)));
+  for (const [name, value] of rows) out(`${dim(pad(name, label))}  ${value}`);
+
+  const edges = [
+    ...entry.relations.outgoing.map(
+      (relation) =>
+        `${relation.kind} ${relation.other?.name ?? '?'} ${dim(relation.evidence)}${relation.note ? dim(` — ${relation.note}`) : ''}`
+    ),
+    ...entry.relations.incoming.map(
+      (relation) =>
+        `${dim('←')} ${relation.other?.name ?? '?'} ${relation.kind} this ${dim(relation.evidence)}`
+    )
+  ];
+  if (edges.length) {
+    out();
+    out(bold('relations'));
+    for (const edge of edges) out(`  ${edge}`);
+  }
+}
+
+/** `ongoing entry add <kind> <name> [--slug s] [key=value …]` and `ongoing entry list`. */
+async function commandEntry(client: Client, args: Args): Promise<void> {
+  const action = args.positional[0];
+  if (action === 'list') {
+    const entries = await fetchEntries(client, option(args, 'kind'));
+    if (flag(args, 'json')) return printJson(entries);
+    for (const entry of entries) out(`${pad(entryLabel(entry), 32)} ${entry.name}`);
+    return;
+  }
+  if (action === 'remove') {
+    const token = args.positional[1];
+    if (!token) throw new CliError('Usage: ongoing entry remove <entry> --yes');
+    const entry = await resolveEntry(client, token);
+    if (!flag(args, 'yes'))
+      throw new CliError(
+        `Removing ${entryLabel(entry)} is permanent. Re-run with --yes to confirm.`
+      );
+    const removed = await client.request<{ entry: string }>(
+      `/api/entries/${encodeURIComponent(entry.kind)}/${encodeURIComponent(entry.slug)}`,
+      { method: 'DELETE' }
+    );
+    return report(args, removed, `removed ${entryLabel(entry)}`);
+  }
+  if (action !== 'add') throw new CliError('Usage: ongoing entry add|list|remove');
+
+  const kind = args.positional[1];
+  const name = args.positional[2];
+  if (!kind || !name) throw new CliError('Usage: ongoing entry add <kind> <name> [key=value …]');
+  const registry = await fetchRegistry(client);
+  const body: Record<string, unknown> = { kind, name };
+  const slug = option(args, 'slug');
+  if (slug) body.slug = slug;
+  for (const pair of args.positional.slice(3)) {
+    const [key, raw] = splitOnce(pair, '=');
+    if (raw === null) throw new CliError(`Expected key=value, got ${pair}`);
+    const definition = registry.get(key);
+    if (!definition) throw new CliError(`Unknown field: ${key}`);
+    body[key] = parseFieldInput(definition, raw);
+  }
+  const created = await client.request<EntryView>('/api/entries', { method: 'POST', body });
+  report(args, created, `created ${entryLabel(created)}`);
+}
+
+/** `ongoing field list|add|remove` — the registry as a surface, not a migration. */
+async function commandField(client: Client, args: Args): Promise<void> {
+  const action = args.positional[0] ?? 'list';
+  if (action === 'list') {
+    const { fields } = await client.request<{ fields: FieldDefinition[] }>('/api/fields', {
+      query: { kind: option(args, 'kind') }
+    });
+    if (flag(args, 'json')) return printJson(fields);
+    const width = Math.max(...fields.map((field) => field.key.length));
+    for (const field of fields)
+      out(
+        `${pad(field.key, width)}  ${pad(field.type, 10)} ${pad(field.kinds.join(','), 12)} ${dim(field.owner)}`
+      );
+    return;
+  }
+  if (action === 'add') {
+    const key = args.positional[1];
+    if (!key) throw new CliError('Usage: ongoing field add <key> --type <type> [--label …]');
+    const values = option(args, 'values');
+    const body: Record<string, unknown> = {
+      key,
+      type: option(args, 'type') ?? 'text',
+      label: option(args, 'label') ?? key,
+      description: option(args, 'description'),
+      kinds: option(args, 'kind') ? [option(args, 'kind')] : ['*'],
+      required: flag(args, 'required')
+    };
+    if (values) body.options = { values: values.split(',').map((value) => value.trim()) };
+    const created = await client.request<FieldDefinition>('/api/fields', { method: 'POST', body });
+    return report(args, created, `registered field ${created.key} (${created.type})`);
+  }
+  if (action === 'remove') {
+    const key = args.positional[1];
+    if (!key) throw new CliError('Usage: ongoing field remove <key> --yes');
+    if (!flag(args, 'yes'))
+      throw new CliError(
+        `Removing ${key} deletes its value on every entry. Re-run with --yes to confirm.`
+      );
+    const removed = await client.request<{ key: string }>('/api/fields', {
+      method: 'DELETE',
+      query: { key }
+    });
+    return report(args, removed, `removed field ${key} and its stored values`);
+  }
+  throw new CliError('Usage: ongoing field list|add|remove');
+}
+
+/**
+ * `ongoing tag <entry> [tag …]` adds, `ongoing untag <entry> <tag …>` removes, and a bare
+ * `ongoing tag <entry>` reads. Removal is its own verb because `-tag` would parse as a flag.
+ */
+async function commandTag(client: Client, args: Args, remove: boolean): Promise<void> {
+  const token = args.positional[0];
+  if (!token)
+    throw new CliError(
+      remove
+        ? 'Usage: ongoing untag <entry> <tag …>'
+        : 'Usage: ongoing tag <entry> [tag …] [--clear]'
+    );
+  const entry = await resolveEntry(client, token);
+  const changes = args.positional.slice(1).map((tag) => tag.toLowerCase());
+  if (!changes.length && !flag(args, 'clear')) {
+    if (remove) throw new CliError('Usage: ongoing untag <entry> <tag …>');
+    if (flag(args, 'json')) return printJson({ entry: entryLabel(entry), tags: entry.tags });
+    return out(entry.tags.length ? entry.tags.join(' ') : dim('(no tags)'));
+  }
+  let tags = flag(args, 'clear') ? [] : [...entry.tags];
+  if (remove) tags = tags.filter((tag) => !changes.includes(tag));
+  else for (const tag of changes) if (!tags.includes(tag)) tags.push(tag);
+
+  const updated = await patchEntry(client, entry, { tags });
+  report(
+    args,
+    { entry: entryLabel(entry), tags: updated.tags },
+    `${entry.name} tags: ${updated.tags.join(' ') || '(none)'}`
+  );
+}
+
+async function patchEntry(
+  client: Client,
+  entry: EntryView,
+  patch: Record<string, unknown>
+): Promise<EntryView> {
+  return client.request<EntryView>(
+    `/api/entries/${encodeURIComponent(entry.kind)}/${encodeURIComponent(entry.slug)}`,
+    { method: 'PATCH', body: patch }
+  );
+}
+
+/** `ongoing link <from> <kind> <to>` and `ongoing unlink <from> <kind> <to>`. */
+async function commandLink(client: Client, args: Args, remove: boolean): Promise<void> {
+  const [fromToken, kind, toToken] = args.positional;
+  if (!fromToken || !kind || !toToken)
+    throw new CliError(
+      `Usage: ongoing ${remove ? 'unlink' : 'link'} <from> <${relationKinds.map(({ kind: name }) => name).join('|')}> <to>`
+    );
+  const [from, to] = await Promise.all([
+    resolveEntry(client, fromToken),
+    resolveEntry(client, toToken)
+  ]);
+  const body: Record<string, unknown> = { from: from.id, to: to.id, kind };
+  if (remove) {
+    const result = await client.request<{ id: string }>('/api/relations', {
+      method: 'DELETE',
+      body
+    });
+    return report(args, result, `unlinked ${from.name} ${kind} ${to.name}`);
+  }
+  const note = option(args, 'note');
+  if (note) body.note = note;
+  const relation = await client.request<RelationView>('/api/relations', { method: 'POST', body });
+  report(args, relation, `${from.name} ${kind} ${to.name}`);
+}
+
+/** `ongoing view save|list|delete` — the saved query behind a name. */
+async function commandView(client: Client, args: Args): Promise<void> {
+  const action = args.positional[0] ?? 'list';
+  if (action === 'list') {
+    const { views } = await client.request<{
+      views: { name: string; query: string; kind: string | null; columns: string[] }[];
+    }>('/api/views');
+    if (flag(args, 'json')) return printJson(views);
+    if (!views.length) return out(dim('(no saved views)'));
+    const width = Math.max(...views.map((view) => view.name.length));
+    for (const view of views)
+      out(
+        `${pad(view.name, width)}  ${view.query || dim('(everything)')} ${dim(view.columns.join(','))}`
+      );
+    return;
+  }
+  if (action === 'save') {
+    const name = args.positional[1];
+    if (!name) throw new CliError('Usage: ongoing view save <name> [query] [--columns a,b]');
+    const columns = option(args, 'columns');
+    const saved = await client.request<{ name: string }>('/api/views', {
+      method: 'POST',
+      body: {
+        name,
+        query: args.positional.slice(2).join(' '),
+        kind: option(args, 'kind') ?? null,
+        columns: columns ? columns.split(',').map((column) => column.trim()) : []
+      }
+    });
+    return report(args, saved, `saved view ${name}`);
+  }
+  if (action === 'delete') {
+    const name = args.positional[1];
+    if (!name) throw new CliError('Usage: ongoing view delete <name>');
+    const deleted = await client.request<{ view: string }>('/api/views', {
+      method: 'DELETE',
+      query: { view: name }
+    });
+    return report(args, deleted, `deleted view ${name}`);
+  }
+  throw new CliError('Usage: ongoing view save|list|delete');
+}
+
 async function requireProject(client: Client, args: Args, command: string): Promise<Project> {
   const token = args.positional[0];
   if (!token) throw new CliError(`Usage: ongoing ${command} <project>`);
@@ -1183,6 +1613,7 @@ ${bold('Reading')}
       --hidden                          list the hidden shelf instead
       --paths | --ids | --json          machine-readable output
   show <project>                        one project in full, with attention reasons
+  get <entry> [field]                   every field an entry carries, or one value on stdout
   views                                 attention view counts
   stacks [toolchain] [--outdated]       declared toolchains, versions, and upgrade pressure
   status                                service, scan, and catalog health
@@ -1202,12 +1633,30 @@ ${bold('Changing')}
   website pages                         list managed public pages without local repositories
   website page <slug> [same flags]       create/read/patch a standalone page (draft by default)
   website export [--drafts]              deterministic public JSON (selected projects by default)
+  set <entry> <field> <value>           set any registered field ("none" clears it)
   set <project> [--intent <${INTENTS.join('|')}>]
                 [--excitement 1-5] [--importance 1-5]
                 [--next-action <text>] [--review-after YYYY-MM-DD]
-                                        any value may be "none" to clear it
+                                        the original flags, kept as field aliases
   scan [project] [--full|--cheap] [--wait]
                                         refresh the catalog
+
+${bold('Catalog')}
+  entry list [--kind <kind>]            every entry, projects and technologies alike
+  entry add <kind> <name> [--slug s] [key=value …]
+                                        catalog something no provider discovers
+  entry remove <entry> --yes            drop a hand-made entry (projects use forget)
+  field list [--kind <kind>]            the field registry: built-in, provider, and user fields
+  field add <key> --type <type> [--label …] [--kind …] [--values a,b] [--required]
+  field remove <key> --yes              drop a user field and every value stored under it
+  tag <entry> [tag …] [--clear]         read or add tags
+  untag <entry> <tag …>                 remove tags
+  link <entry> <kind> <entry> [--note …]
+                                        declare a relation (${relationKinds.map(({ kind }) => kind).join(', ')})
+  unlink <entry> <kind> <entry>         remove a declared relation
+  view list                             saved views
+  view save <name> [query] [--columns a,b] [--kind <kind>]
+  view delete <name>
 
 ${bold('Local')}
   open [project] [--terminal|--github]  open the dashboard, or reveal a project
@@ -1219,7 +1668,8 @@ ${bold('Local')}
   repo                                  print the repository directory
   login                                 exchange ONGOING_ACCESS_SECRET for a session
 
-${bold('Projects')} may be named by id, name, path, a unique substring, or "." for the current directory.
+${bold('Entries')} may be named by id, kind/slug, slug, name, path, a unique substring, or "." for
+the current directory. ${bold('Projects')} are entries with kind=project.
 
 ${bold('Options')}
   --url <base>                          dashboard base URL (env ONGOING_URL, default ${DEFAULT_URL})
@@ -1282,6 +1732,23 @@ async function main(argv: string[]): Promise<void> {
       return commandNote(client, args);
     case 'set':
       return commandSet(client, args);
+    case 'get':
+      return commandGet(client, args);
+    case 'entry':
+      return commandEntry(client, args);
+    case 'field':
+    case 'fields':
+      return commandField(client, args);
+    case 'tag':
+      return commandTag(client, args, false);
+    case 'untag':
+      return commandTag(client, args, true);
+    case 'link':
+      return commandLink(client, args, false);
+    case 'unlink':
+      return commandLink(client, args, true);
+    case 'view':
+      return commandView(client, args);
     case 'website':
       return commandWebsite(client, args);
     case 'scan':

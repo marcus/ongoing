@@ -36,6 +36,8 @@ function project(
     isHidden: false,
     manualRank: 1_000,
     note: `${name} note`,
+    tags: [],
+    attributes: {},
     intent: null,
     excitement: null,
     strategicImportance: null,

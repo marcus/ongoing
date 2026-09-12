@@ -11,6 +11,7 @@ import {
   readHiddenCatalog,
   readHiddenProjects
 } from '../../src/lib/dashboard/catalog';
+import { readEntryViews } from '../../src/lib/server/catalog/entries';
 
 const temporaryDirectories: string[] = [];
 
@@ -631,6 +632,153 @@ describe('catalog repository', () => {
     expect(dashboard).toMatchObject({ totalCount: 2, hiddenCount: 1 });
     expect(hidden).toMatchObject({ totalCount: 2, hiddenCount: 1 });
     expect(readHiddenProjects(repository).map((project) => project.id)).toEqual([shelved.id]);
+    catalog.close();
+  });
+});
+
+describe('entries, fields, relations, and views', () => {
+  it('patches any registered field through one validated path', async () => {
+    const { catalog, repository } = openRepository();
+    const project = await addProject(repository, 'ongoing');
+
+    const entry = repository.getEntry(project.id)!;
+    expect(entry).toMatchObject({ kind: 'project', slug: 'ongoing', name: 'ongoing' });
+    expect(repository.listSources(entry.id)).toEqual([
+      expect.objectContaining({
+        provider: 'filesystem',
+        locator: '/code/ongoing',
+        metadata: { relativePath: 'ongoing', scanRoot: '/code' },
+        missingSince: null
+      })
+    ]);
+
+    await repository.patchEntry(entry.id, {
+      intent: 'invest',
+      note: 'the dashboard',
+      tags: ['Infra', 'infra'],
+      is_favorite: true
+    });
+    const patched = repository.getEntry(entry.id)!;
+    expect(patched.attributes.intent).toBe('invest');
+    expect(patched.note).toBe('the dashboard');
+    expect(patched.tags).toEqual(['infra']);
+    expect(patched.isFavorite).toBe(true);
+    // The project projection sees the same values, so the dashboard needs no second read model.
+    expect(repository.getProject(entry.id)).toMatchObject({
+      intent: 'invest',
+      note: 'the dashboard',
+      isFavorite: true,
+      tags: ['infra']
+    });
+
+    await repository.patchEntry(entry.id, { intent: null });
+    expect(repository.getEntry(entry.id)!.attributes).not.toHaveProperty('intent');
+    await expect(repository.patchEntry(entry.id, { intent: 'invent' })).rejects.toThrow(
+      /must be one of/
+    );
+    await expect(repository.patchEntry(entry.id, { 'github.stars': 5 })).rejects.toThrow(
+      /read-only/
+    );
+    catalog.close();
+  });
+
+  it('registers a user field, stores values under it, and removes both together', async () => {
+    const { catalog, repository } = openRepository();
+    const project = await addProject(repository, 'ongoing');
+
+    await repository.addUserField({ key: 'x.customer', type: 'text', label: 'Customer' });
+    expect(repository.registry().get('x.customer')).toMatchObject({ owner: 'user' });
+    await repository.patchEntry(project.id, { 'x.customer': 'acme' });
+    expect(repository.getProject(project.id)?.attributes['x.customer']).toBe('acme');
+
+    await repository.removeUserField('x.customer');
+    expect(repository.registry().get('x.customer')).toBeUndefined();
+    expect(repository.getEntry(project.id)!.attributes).not.toHaveProperty('x.customer');
+    await expect(repository.removeUserField('x.customer')).rejects.toThrow(/Unknown user field/);
+    catalog.close();
+  });
+
+  it('round-trips a declared relation between entries of the kinds it connects', async () => {
+    const { catalog, repository } = openRepository();
+    const project = await addProject(repository, 'ongoing');
+    const technology = await repository.createEntry({
+      kind: 'technology',
+      name: 'SvelteKit',
+      attributes: { ring: 'hot', technology_kind: 'framework' }
+    });
+    expect(technology).toMatchObject({ slug: 'sveltekit', kind: 'technology' });
+
+    const relation = await repository.addRelation({
+      fromId: project.id,
+      toId: technology.id,
+      kind: 'uses',
+      note: 'the app is a SvelteKit app'
+    });
+    expect(relation).toMatchObject({ kind: 'uses', evidence: 'declared', provider: null });
+    expect(repository.listRelations({ entryId: technology.id })).toHaveLength(1);
+    // Re-declaring the same edge updates it rather than duplicating it.
+    await repository.addRelation({ fromId: project.id, toId: technology.id, kind: 'uses' });
+    expect(repository.listRelations()).toHaveLength(1);
+
+    await expect(
+      repository.addRelation({ fromId: technology.id, toId: project.id, kind: 'uses' })
+    ).rejects.toThrow(/uses starts at project entries, not technology/);
+    await expect(
+      repository.addRelation({ fromId: project.id, toId: technology.id, kind: 'invented' })
+    ).rejects.toThrow(/Unknown relation kind/);
+
+    await repository.removeRelation(relation.id);
+    expect(repository.listRelations()).toEqual([]);
+
+    // Forgetting an entry takes its edges with it.
+    const second = await repository.addRelation({
+      fromId: project.id,
+      toId: technology.id,
+      kind: 'uses'
+    });
+    await repository.forgetProject(project.id);
+    expect(repository.listRelations()).toEqual([]);
+    expect(second.id).toBeTruthy();
+    catalog.close();
+  });
+
+  it('saves, updates, and deletes a view by name', async () => {
+    const { catalog, repository } = openRepository();
+    const saved = await repository.saveView({
+      name: 'oss-momentum',
+      query: 'intent:invest github.stars>=100',
+      columns: ['name', 'github.stars']
+    });
+    expect(saved).toMatchObject({ name: 'oss-momentum', position: 1 });
+    const updated = await repository.saveView({ name: 'oss-momentum', query: 'tag:archived' });
+    expect(updated.id).toBe(saved.id);
+    expect(updated.query).toBe('tag:archived');
+    expect(repository.listSavedViews()).toHaveLength(1);
+    await repository.deleteSavedView('oss-momentum');
+    expect(repository.listSavedViews()).toEqual([]);
+    await expect(repository.deleteSavedView('oss-momentum')).rejects.toThrow(/Unknown saved view/);
+    await expect(repository.saveView({ name: '' })).rejects.toThrow(/name is required/);
+    catalog.close();
+  });
+
+  it('merges provider metrics into the read model as namespaced fields', async () => {
+    const { catalog, repository } = openRepository();
+    const project = await addProject(repository, 'ongoing');
+    await repository.updateMetrics(project.id, { commits30d: 12, githubStars: 40 });
+    await repository.replaceProjectStacks(project.id, [
+      { toolchain: 'go', declared: '1.27', raw: 'go 1.27', sourceFile: 'go.mod' }
+    ]);
+    await repository.patchEntry(project.id, { intent: 'invest' });
+
+    const [view] = readEntryViews(repository, { kind: 'project' });
+    expect(view.fields).toMatchObject({
+      name: 'ongoing',
+      intent: 'invest',
+      'git.commits30d': 12,
+      'github.stars': 40,
+      'stack.go': '1.27'
+    });
+    expect(view.sources[0].locator).toBe('/code/ongoing');
     catalog.close();
   });
 });

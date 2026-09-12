@@ -11,7 +11,19 @@ rmSync(`${path}-shm`, { force: true });
 rmSync(`${path}-wal`, { force: true });
 
 const catalog = new CatalogDatabase(path);
-const repository = new CatalogRepository(catalog, () => '2026-07-19T12:00:00.000Z');
+
+// Every timestamp is relative to the moment the fixture is built. Fixed dates rot: the attention
+// rules gate on how fresh a collector's data is, so a seed written in July classifies differently
+// in September and the browser tests start failing for reasons that have nothing to do with the
+// code under test.
+const now = new Date();
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+const ago = (milliseconds: number): string => new Date(now.getTime() - milliseconds).toISOString();
+const agoDate = (days: number): string => ago(days * DAY).slice(0, 10);
+
+const repository = new CatalogRepository(catalog, () => now.toISOString());
 
 const alpha = await repository.upsertDiscovered({
   canonicalPath: '/code/alpha',
@@ -25,7 +37,7 @@ await repository.updateMetrics(alpha.id, {
   branch: 'main',
   headSha: 'a3f19c2',
   latestCommitShortSha: 'a3f19c2',
-  latestCommitAt: '2026-07-19T10:00:00.000Z',
+  latestCommitAt: ago(2 * HOUR),
   latestCommitSubject: 'Tighten parser',
   commitCount: 140,
   commits7d: 8,
@@ -57,12 +69,12 @@ await repository.updateMetrics(alpha.id, {
   githubReadyPrs: 1,
   githubOwnerPrs: 1,
   githubExternalPrs: 1,
-  githubOldestExternalPrAt: '2026-06-12T10:00:00.000Z',
+  githubOldestExternalPrAt: ago(37 * DAY),
   githubMergedPrs30d: 4,
   githubMergedPrs90d: 11,
   githubExternalIssues30d: 2,
   githubExternalIssues90d: 6,
-  githubLatestReleaseAt: '2026-07-01T10:00:00.000Z',
+  githubLatestReleaseAt: ago(18 * DAY),
   githubLatestReleaseTag: 'v2.1.0',
   githubReleaseDownloads: 1400,
   githubCiState: 'success',
@@ -73,27 +85,27 @@ await repository.updateMetrics(alpha.id, {
   githubTrafficUniqueCloners: 37,
   githubAvailability: 'available',
   githubTrafficAvailability: 'available',
-  gitScannedAt: '2026-07-19T11:59:00.000Z',
-  tdScannedAt: '2026-07-19T11:59:00.000Z',
-  githubScannedAt: '2026-07-19T11:59:00.000Z',
-  githubTrafficScannedAt: '2026-07-19T11:59:00.000Z'
+  gitScannedAt: ago(1 * MINUTE),
+  tdScannedAt: ago(1 * MINUTE),
+  githubScannedAt: ago(1 * MINUTE),
+  githubTrafficScannedAt: ago(1 * MINUTE)
 });
 await repository.saveSnapshot({
   projectId: alpha.id,
   metric: 'github_stars',
-  capturedOn: '2026-06-18',
+  capturedOn: agoDate(31),
   value: 110
 });
 await repository.saveSnapshot({
   projectId: alpha.id,
   metric: 'github_traffic_views',
-  capturedOn: '2026-06-18',
+  capturedOn: agoDate(31),
   value: 700
 });
 await repository.saveSnapshot({
   projectId: alpha.id,
   metric: 'github_traffic_clones',
-  capturedOn: '2026-06-18',
+  capturedOn: agoDate(31),
   value: 70
 });
 
@@ -105,7 +117,7 @@ const beta = await repository.upsertDiscovered({
 });
 await repository.updateMetrics(beta.id, {
   branch: 'feat/catalog',
-  latestCommitAt: '2026-07-18T12:00:00.000Z',
+  latestCommitAt: ago(1 * DAY),
   latestCommitSubject: 'Build catalog',
   commitCount: 420,
   commits7d: 3,
@@ -115,13 +127,13 @@ await repository.updateMetrics(beta.id, {
   locCode: 18_200,
   dominantLanguage: 'Go',
   tdTotalNonClosedCount: 2,
-  gitScannedAt: '2026-07-19T11:59:00.000Z'
+  gitScannedAt: ago(1 * MINUTE)
 });
 await repository.recordCollectionError({
   projectId: beta.id,
   collector: 'hosting',
   message: 'GitHub credentials unavailable',
-  occurredAt: '2026-07-19T11:58:00.000Z'
+  occurredAt: ago(2 * MINUTE)
 });
 
 const dormant = await repository.upsertDiscovered({
@@ -132,7 +144,7 @@ const dormant = await repository.upsertDiscovered({
 });
 await repository.updateMetrics(dormant.id, {
   branch: 'main',
-  latestCommitAt: '2026-01-01T00:00:00.000Z',
+  latestCommitAt: ago(200 * DAY),
   commitCount: 12,
   commits7d: 0,
   commits30d: 0,
@@ -145,13 +157,13 @@ await repository.updateMetrics(dormant.id, {
   githubExternalPrs: 0,
   githubExternalIssues30d: 0,
   githubAvailability: 'available',
-  gitScannedAt: '2026-07-19T11:59:00.000Z',
-  githubScannedAt: '2026-07-19T11:59:00.000Z'
+  gitScannedAt: ago(1 * MINUTE),
+  githubScannedAt: ago(1 * MINUTE)
 });
 await repository.saveSnapshot({
   projectId: dormant.id,
   metric: 'github_stars',
-  capturedOn: '2026-06-18',
+  capturedOn: agoDate(31),
   value: 0
 });
 
@@ -164,7 +176,7 @@ const unicode = await repository.upsertDiscovered({
 await repository.updateNote(unicode.id, 'small Unicode-path utility ready for a focused pass');
 await repository.updateMetrics(unicode.id, {
   branch: 'main',
-  latestCommitAt: '2026-07-12T08:00:00.000Z',
+  latestCommitAt: ago(7 * DAY),
   latestCommitSubject: 'Normalize catalog labels',
   commitCount: 38,
   commits7d: 1,
@@ -174,8 +186,8 @@ await repository.updateMetrics(unicode.id, {
   locCode: 3_240,
   dominantLanguage: 'Rust',
   tdTotalNonClosedCount: 3,
-  gitScannedAt: '2026-07-19T11:59:00.000Z',
-  tdScannedAt: '2026-07-19T11:59:00.000Z'
+  gitScannedAt: ago(1 * MINUTE),
+  tdScannedAt: ago(1 * MINUTE)
 });
 
 const hidden = await repository.upsertDiscovered({
@@ -204,7 +216,7 @@ await repository.createScanRun({
   id: 'scan-e2e',
   reason: 'cli',
   status: 'running',
-  startedAt: '2026-07-19T11:55:00.000Z',
+  startedAt: ago(5 * MINUTE),
   finishedAt: null,
   discoveredCount: 3,
   updatedCount: 3,
@@ -214,6 +226,6 @@ await repository.finishScanRun(
   'scan-e2e',
   'completed',
   { discoveredCount: 3, updatedCount: 3, errorCount: 1 },
-  '2026-07-19T12:00:00.000Z'
+  now.toISOString()
 );
 catalog.close();
