@@ -96,6 +96,19 @@ export const builtinFields: readonly FieldDefinition[] = [
     column: 'name'
   }),
   core({
+    key: 'kind',
+    kinds: ['*'],
+    type: 'text',
+    label: 'Kind',
+    description: 'project, technology, …; set when the entry is created and never patched',
+    sortable: true,
+    filterable: true,
+    editable: false,
+    required: true,
+    storage: 'column',
+    column: 'kind'
+  }),
+  core({
     key: 'slug',
     kinds: ['*'],
     type: 'text',

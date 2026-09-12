@@ -107,10 +107,66 @@ test('a declared relation round-trips, and a saved view stores its query', async
   const views = (await (await request.get('/api/views')).json()) as {
     views: { name: string; query: string }[];
   };
-  expect(views.views).toEqual([
-    expect.objectContaining({ name: 'oss-momentum', query: 'intent:invest github.stars>=100' })
-  ]);
+  // Built-in views ship with the app, so the saved one joins them rather than standing alone.
+  expect(views.views).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ name: 'oss-momentum', query: 'intent:invest github.stars>=100' }),
+      expect.objectContaining({ name: 'attention', builtin: true })
+    ])
+  );
   expect((await request.delete('/api/views?view=oss-momentum')).ok()).toBe(true);
   expect((await request.delete('/api/entries/technology/sveltekit')).ok()).toBe(true);
   expect((await request.delete('/api/entries/project/alpha')).status()).toBe(400);
+});
+
+/**
+ * The query model over HTTP. `?q=`, `?sort=`, `?columns=`, and `?saved=` are the whole read
+ * contract; the pre-Phase-2 parameters land on the same clauses (docs/cli.md prints the table).
+ */
+test('filters, sorts, and names its errors through one query grammar', async ({ request }) => {
+  const read = async (search: string) => {
+    const response = await request.get(`/api/entries?${search}`);
+    return {
+      status: response.status(),
+      body: (await response.json()) as {
+        query: string;
+        sort: string;
+        columns: string[];
+        total: number;
+        error?: string;
+        entries: { slug: string; fields: Record<string, unknown> }[];
+      }
+    };
+  };
+
+  const favorites = await read('q=kind:project is_favorite:true');
+  expect(favorites.status).toBe(200);
+  expect(favorites.body.entries.map((entry) => entry.slug)).toContain('alpha');
+  expect(favorites.body.total).toBe(favorites.body.entries.length);
+
+  // The old parameters produce the same clauses as the query that replaces them.
+  const legacy = await read('kind=project&filter=favorites');
+  expect(legacy.body.query).toBe('kind:project is_favorite:true');
+  expect(legacy.body.entries.map((entry) => entry.slug)).toEqual(
+    favorites.body.entries.map((entry) => entry.slug)
+  );
+
+  const sorted = await read('q=kind:project&sort=-github.stars&columns=name,github.stars');
+  expect(sorted.body.sort).toBe('-github.stars');
+  expect(sorted.body.columns).toEqual(['name', 'github.stars']);
+  expect(sorted.body.entries[0].fields['github.stars']).toBe(120);
+
+  const typo = await read('q=intnet:invest');
+  expect(typo.status).toBe(400);
+  expect(typo.body.error).toContain('did you mean intent?');
+
+  const badSort = await read('sort=githb.stars');
+  expect(badSort.status).toBe(400);
+  expect(badSort.body.error).toContain('Unknown sort field');
+
+  // Saved views ship with the app and are addressable by name from every surface.
+  const saved = await read('saved=attention');
+  expect(saved.status).toBe(200);
+  expect(saved.body.query).toBe('kind:project view:attention');
+  expect((await read('saved=nope')).status).toBe(404);
 });

@@ -1,15 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { ProjectMetrics } from '$lib/domain/metrics';
+import { metricDelta30d, type ProjectMetrics } from '$lib/domain/metrics';
 import { classifyAttentionViews } from '$lib/domain/attention';
 import { resolveStack, type ResolvedStack, type Toolchain } from '$lib/domain/stack';
 import type { DashboardProject } from './catalog';
-import {
-  applyDashboardQuery,
-  classifyProject,
-  metricDelta30d,
-  parseDashboardQuery,
-  stackCounts
-} from './catalog';
+import { applyDashboardQuery, classifyProject, parseDashboardQuery, stackCounts } from './catalog';
 
 function declares(toolchain: Toolchain, declared = '1.0'): ResolvedStack {
   return resolveStack({ toolchain, declared, raw: declared, sourceFile: 'manifest' }, []);

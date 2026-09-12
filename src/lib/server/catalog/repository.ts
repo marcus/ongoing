@@ -35,7 +35,14 @@ import {
   type RelationEvidence,
   type RelationInput
 } from '$lib/domain/relation';
-import { validateSavedView, type SavedView, type SavedViewInput } from '$lib/domain/view';
+import {
+  builtinSavedViews,
+  mergeSavedViews,
+  SavedViewValidationError,
+  validateSavedView,
+  type SavedView,
+  type SavedViewInput
+} from '$lib/domain/view';
 import {
   assignManualRanks,
   validateDecisionUpdate,
@@ -241,6 +248,7 @@ function viewFromRow(row: Row): SavedView {
     query: String(row.query ?? ''),
     columns: parseStrings(row.columns),
     position: Number(row.position),
+    builtin: false,
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at)
   };
@@ -654,7 +662,12 @@ export class CatalogRepository {
 
   /* -------------------------------------------------------------- saved views */
 
+  /** Built-in views and stored ones as one list; a stored view shadows a built-in of its name. */
   listSavedViews(): SavedView[] {
+    return mergeSavedViews(this.listStoredViews());
+  }
+
+  listStoredViews(): SavedView[] {
     return this.database
       .query<Row, []>('SELECT * FROM saved_views ORDER BY position, name')
       .all()
@@ -720,7 +733,15 @@ export class CatalogRepository {
       const result = database
         .query('DELETE FROM saved_views WHERE id = ? OR name = ?')
         .run(idOrName, idOrName);
-      if (result.changes === 0) throw new Error(`Unknown saved view: ${idOrName}`);
+      if (result.changes === 0) {
+        // A built-in view is declared in code, so there is no row to delete. Saving over it with
+        // the same name is how a user changes what it selects.
+        if (builtinSavedViews.some((view) => view.id === idOrName || view.name === idOrName))
+          throw new SavedViewValidationError(
+            `${idOrName} is a built-in view — save a view of the same name to change it`
+          );
+        throw new Error(`Unknown saved view: ${idOrName}`);
+      }
     });
   }
 

@@ -1,3 +1,4 @@
+import { attentionViewKeys } from './attention';
 import type { AttributeValue } from './entry';
 import type { FieldDefinition, FieldType } from './fields';
 import type { ProjectMetrics } from './metrics';
@@ -49,6 +50,15 @@ const projectedMetrics: readonly ProjectedField[] = [
   metric('td.review', 'td', 'integer', 'In review', (m) => m.tdReviewCount),
   metric('td.stale', 'td', 'integer', 'Stale', (m) => m.tdStaleCount),
   metric('td.total', 'td', 'integer', 'Not closed', (m) => m.tdTotalNonClosedCount),
+  metric('git.activeDays30d', 'git', 'integer', 'Active days (30d)', (m) => m.activeDays30d),
+  metric('github.repoId', 'github', 'text', 'GitHub repository id', (m) => m.githubRepoId),
+  metric(
+    'github.oldestExternalPr',
+    'github',
+    'text',
+    'Oldest external PR',
+    (m) => m.githubOldestExternalPrAt
+  ),
   metric('github.owner', 'github', 'text', 'GitHub owner', (m) => m.githubOwner),
   metric('github.name', 'github', 'text', 'GitHub name', (m) => m.githubName),
   metric('github.visibility', 'github', 'text', 'Visibility', (m) => m.githubVisibility),
@@ -70,7 +80,13 @@ const projectedMetrics: readonly ProjectedField[] = [
   metric('github.trafficViews', 'github', 'integer', 'Traffic views', (m) => m.githubTrafficViews)
 ];
 
-function projected(key: string, provider: string, type: FieldType, label: string): FieldDefinition {
+function projected(
+  key: string,
+  provider: string,
+  type: FieldType,
+  label: string,
+  extra: Partial<FieldDefinition> = {}
+): FieldDefinition {
   return {
     key,
     kinds: ['project'],
@@ -81,9 +97,43 @@ function projected(key: string, provider: string, type: FieldType, label: string
     filterable: true,
     editable: false,
     required: false,
-    storage: 'projected'
+    storage: 'projected',
+    ...extra
   };
 }
+
+/**
+ * Fields the read model derives rather than reads: a filesystem source's path, the attention
+ * classification, a relation roll-up. They are projected like any other provider field so the
+ * query grammar cannot tell them apart from stored ones, and so `--filter missing`, `--view`,
+ * `--stack`, and `tech:` all become ordinary clauses rather than special cases in the evaluator.
+ */
+export const derivedFieldDefinitions: readonly FieldDefinition[] = [
+  projected('path', 'filesystem', 'text', 'Path', {
+    description: 'Where the filesystem provider found this entry'
+  }),
+  projected('is_missing', 'filesystem', 'boolean', 'Missing', {
+    description: 'The directory this entry was discovered in is gone'
+  }),
+  projected('views', 'attention', 'multi_enum', 'Attention views', {
+    options: { values: attentionViewKeys },
+    sortable: false,
+    description: 'Attention views this entry currently belongs to; `view:` is its alias'
+  }),
+  projected('warnings', 'collector', 'integer', 'Collector warnings', {
+    description: 'Unresolved collection errors on this entry'
+  }),
+  projected('tech', 'relations', 'multi_enum', 'Technologies', {
+    kinds: ['*'],
+    sortable: false,
+    description: 'Slugs of the technologies this entry uses or provides'
+  }),
+  projected('stack.lag', 'stack', 'integer', 'Stack lag', {
+    description: 'Largest number of release cycles any declared toolchain is behind'
+  }),
+  projected('github.starsGained30d', 'github', 'integer', 'Stars gained (30d)'),
+  projected('github.trafficViewsDelta30d', 'github', 'integer', 'Traffic change (30d)')
+];
 
 /** `stack.go`, `stack.bun`, … — the declared version of each toolchain a project uses. */
 const stackFields: readonly FieldDefinition[] = toolchainKeys.map((toolchain) =>
@@ -92,7 +142,8 @@ const stackFields: readonly FieldDefinition[] = toolchainKeys.map((toolchain) =>
 
 export const providerFieldDefinitions: readonly FieldDefinition[] = [
   ...projectedMetrics.map((field) => projected(field.key, field.provider, field.type, field.label)),
-  ...stackFields
+  ...stackFields,
+  ...derivedFieldDefinitions
 ];
 
 /**

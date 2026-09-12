@@ -129,3 +129,22 @@ export interface ScanRun {
   updatedCount: number;
   errorCount: number;
 }
+
+/**
+ * The change in a snapshot metric over the last 30 days: the current value minus the newest
+ * snapshot at or before the cutoff. Pure, so the read model, the dashboard, and the browser all
+ * compute the same delta from the same rows.
+ */
+export function metricDelta30d(
+  snapshots: readonly MetricSnapshot[],
+  metric: SnapshotMetric,
+  current: number | null,
+  now: number
+): number | null {
+  if (current === null) return null;
+  const cutoff = now - 30 * 86_400_000;
+  const candidates = snapshots
+    .filter((snapshot) => snapshot.metric === metric && Date.parse(snapshot.capturedOn) <= cutoff)
+    .sort((left, right) => Date.parse(right.capturedOn) - Date.parse(left.capturedOn));
+  return candidates[0] ? current - candidates[0].value : null;
+}

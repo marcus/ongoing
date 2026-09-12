@@ -753,11 +753,19 @@ describe('entries, fields, relations, and views', () => {
     const updated = await repository.saveView({ name: 'oss-momentum', query: 'tag:archived' });
     expect(updated.id).toBe(saved.id);
     expect(updated.query).toBe('tag:archived');
-    expect(repository.listSavedViews()).toHaveLength(1);
+    expect(repository.listStoredViews()).toHaveLength(1);
     await repository.deleteSavedView('oss-momentum');
-    expect(repository.listSavedViews()).toEqual([]);
+    expect(repository.listStoredViews()).toEqual([]);
     await expect(repository.deleteSavedView('oss-momentum')).rejects.toThrow(/Unknown saved view/);
     await expect(repository.saveView({ name: '' })).rejects.toThrow(/name is required/);
+
+    // Built-in views are declared in code, always listed, and refuse deletion; saving over the
+    // name is how a user changes what one selects.
+    expect(repository.listSavedViews().some((view) => view.name === 'attention')).toBe(true);
+    await expect(repository.deleteSavedView('attention')).rejects.toThrow(/built-in view/);
+    const shadowed = await repository.saveView({ name: 'attention', query: 'intent:invest' });
+    expect(shadowed.builtin).toBe(false);
+    expect(repository.getSavedView('attention')?.query).toBe('intent:invest');
     catalog.close();
   });
 

@@ -1,4 +1,9 @@
-import type { CollectionError, MetricSnapshot, ScanRun } from '$lib/domain/metrics';
+import {
+  metricDelta30d,
+  type CollectionError,
+  type MetricSnapshot,
+  type ScanRun
+} from '$lib/domain/metrics';
 import {
   attentionViewKeys,
   classifyAttentionViews,
@@ -142,20 +147,6 @@ export function stackCounts(
   return [...counts]
     .map(([key, count]) => ({ key, count }))
     .sort((left, right) => right.count - left.count || left.key.localeCompare(right.key, 'en'));
-}
-
-export function metricDelta30d(
-  snapshots: readonly MetricSnapshot[],
-  metric: MetricSnapshot['metric'],
-  current: number | null,
-  now: number
-): number | null {
-  if (current === null) return null;
-  const cutoff = now - 30 * 86_400_000;
-  const candidates = snapshots
-    .filter((snapshot) => snapshot.metric === metric && Date.parse(snapshot.capturedOn) <= cutoff)
-    .sort((left, right) => Date.parse(right.capturedOn) - Date.parse(left.capturedOn));
-  return candidates[0] ? current - candidates[0].value : null;
 }
 
 export function classifyProject(
