@@ -4,7 +4,13 @@ import { defineConfig } from '@playwright/test';
 // `reuseExistingServer` will happily talk to whatever answers there. `E2E_PORT` moves the whole
 // run — server and baseURL together — to a port that is free, and --strictPort makes a collision
 // fail loudly instead of silently testing a stranger's app.
+//
+// `--strictPort` only binds this run's server, though: when something is already listening,
+// `reuseExistingServer` never starts one and the whole suite tests the stranger anyway (it did,
+// against a Fractal server squatting on the chosen port). Naming a port is an explicit statement
+// about where this run belongs, so it turns reuse off and the collision fails loudly as intended.
 const port = Number(process.env.E2E_PORT ?? 5173);
+const reuseExistingServer = !process.env.CI && !process.env.E2E_PORT;
 const environment = `DATABASE_PATH=.data/ongoing-e2e.sqlite SCAN_ROOTS=/private/tmp/ongoing-e2e-unscanned`;
 
 export default defineConfig({
@@ -15,6 +21,6 @@ export default defineConfig({
   webServer: {
     command: `${environment} bun run tests/e2e/seed.ts && ${environment} bun run dev -- --port ${port} --strictPort`,
     url: `http://127.0.0.1:${port}`,
-    reuseExistingServer: !process.env.CI
+    reuseExistingServer
   }
 });
