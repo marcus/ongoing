@@ -165,6 +165,7 @@ interface AttentionReason {
 
 interface Project {
   id: string;
+  slug: string;
   name: string;
   canonicalPath: string;
   relativePath: string;
@@ -568,6 +569,8 @@ function matches(project: Project, token: string): boolean {
   const needle = token.toLocaleLowerCase('en');
   return (
     project.id === token ||
+    project.slug === needle ||
+    `project/${project.slug}` === needle ||
     project.name.toLocaleLowerCase('en') === needle ||
     project.relativePath.toLocaleLowerCase('en') === needle ||
     project.canonicalPath === token

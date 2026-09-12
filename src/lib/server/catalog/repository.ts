@@ -272,6 +272,7 @@ function projectFromEntry(entry: Entry, source: EntrySource): Project {
   };
   return {
     id: entry.id,
+    slug: entry.slug,
     canonicalPath: source.locator,
     relativePath: metadata.relativePath ?? source.locator,
     name: entry.name,

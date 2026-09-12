@@ -23,6 +23,7 @@ function project(
   const base = {
     id,
     name,
+    slug: id,
     canonicalPath: `/code/${id}`,
     relativePath: id,
     scanRoot: '/code',

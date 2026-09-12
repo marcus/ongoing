@@ -97,7 +97,9 @@ onto `src/lib/host/` because the installed plists name those paths.
 `sequences.json`) and its exported scenes under `artifacts/`. When a change alters the design — a new
 subsystem, route, collector, provider, store, boundary, or journey, or a proposal that lands — update the
 affected elements, scenes, and journeys in the same change, keep stable `uid` values, cite the source files
-you touched as evidence, and re-run `~/code/fractal/bin/fractal validate --directory docs/diagrams/fractal --json`
+you touched as evidence, and re-run `fractal validate --directory "$PWD/docs/diagrams/fractal" --json`
+(an **absolute** `--directory`: a relative one resolves against Fractal's own checkout, which validates
+Fractal's model and reports a much smaller element count that looks like data loss but is not)
 before committing. Re-export scenes you changed with `bin/fractal export`. Do not model every file; model
 responsibilities. Authoring guidance: `~/code/fractal/skills/fractal/SKILL.md`.
 

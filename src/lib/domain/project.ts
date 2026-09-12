@@ -11,6 +11,8 @@ export type ProjectIntent = (typeof projectIntents)[number];
 
 export interface Project {
   id: string;
+  /** The entry's slug, so every surface can name a project the way `ongoing set` does. */
+  slug: string;
   canonicalPath: string;
   relativePath: string;
   name: string;

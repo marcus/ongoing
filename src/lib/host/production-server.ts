@@ -130,8 +130,12 @@ export async function startProductionServer(): Promise<void> {
   });
   external.on('clientError', (_error, socket) => socket.end('HTTP/1.1 400 Bad Request\r\n\r\n'));
 
-  const host = process.env.HOST || '0.0.0.0';
-  const port = Number(process.env.PORT || '3000');
+  // These defaults are `loadConfig`'s defaults, deliberately: the application decides whether
+  // authentication is required from the same HOST value, so a listener that bound every interface
+  // while the configuration still read "127.0.0.1" would serve an unauthenticated app to the LAN.
+  // A deployment that means to be reachable says so — aerie's plist sets HOST and PORT explicitly.
+  const host = process.env.HOST || '127.0.0.1';
+  const port = Number(process.env.PORT || '4173');
   if (!Number.isSafeInteger(port) || port < 1 || port > 65_535)
     throw new Error('PORT must be a valid TCP port');
   await new Promise<void>((resolve, reject) => {

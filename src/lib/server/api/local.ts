@@ -409,6 +409,36 @@ const routes: { method: string; pattern: RegExp; handle: Handler }[] = [
     }
   },
   {
+    method: 'POST',
+    pattern: /^\/api\/projects\/([^/]+)\/favorite$/,
+    handle: async ({ repository, params, body }) => {
+      if (typeof body.favorite !== 'boolean')
+        return json({ error: 'favorite must be a boolean' }, { status: 400 });
+      try {
+        await repository.setFavorite(params[0], body.favorite);
+        return json({ id: params[0], favorite: body.favorite });
+      } catch (error) {
+        return failure(error, 'Unable to update favorite');
+      }
+    }
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/projects\/([^/]+)\/hide$/,
+    handle: async ({ repository, params, body }) => {
+      if (typeof body.hidden !== 'boolean')
+        return json({ error: 'hidden must be a boolean' }, { status: 400 });
+      try {
+        // Unhiding schedules enrichment in the service; with no daemon there is nothing to
+        // schedule it onto, so the next `ongoing scan` is what refreshes the row.
+        await repository.setHidden(params[0], body.hidden);
+        return json({ id: params[0], hidden: body.hidden });
+      } catch (error) {
+        return failure(error, 'Unable to update hidden state');
+      }
+    }
+  },
+  {
     method: 'GET',
     pattern: /^\/api\/projects\/([^/]+)\/website$/,
     handle: ({ repository, params }) => {
