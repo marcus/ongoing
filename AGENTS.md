@@ -83,7 +83,7 @@ registers no fields and the rules that read them go inert. Do not add a projecte
 it to the provider's manifest. The scanner iterates `activeProviders(...)` in `dependsOn` order rather than a
 fixed sequence; a provider failure still never fails a scan, and a skipped one records why in `provider_runs`.
 
-Configuration is one TOML file, `~/.config/ongoing/config.toml` (`ONGOING_CONFIG` to move it), read by
+Configuration is one TOML file, `~/.config/ongoing/config.toml` (`--config` or `ONGOING_CONFIG` to move it), read by
 `loadRuntimeConfig`; `loadConfig(env, file)` stays pure so no test touches the real file. Environment
 variables are overrides, and precedence is env > file > default. `serve`, `scan`, `restart`, `stop`, and
 `logs` go through a host adapter in `src/lib/host/` (`launchd`, `foreground`) — the CLI must not learn about

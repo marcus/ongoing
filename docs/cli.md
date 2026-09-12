@@ -379,9 +379,10 @@ sorted, so a generator that renders it twice produces the same bytes. That is wh
 
 ## Configuration
 
-Configuration is **one TOML file**, `~/.config/ongoing/config.toml`, with `ONGOING_CONFIG` to point
-elsewhere. Environment variables remain overrides and keep carrying secrets, so the installed
-LaunchAgents run unchanged. Precedence, highest first:
+Configuration is **one TOML file**, `~/.config/ongoing/config.toml`, with `--config <file>` or
+`ONGOING_CONFIG` to point elsewhere. `--config` is a global flag: it applies to every command,
+including `serve`, which passes it on to the server it starts. Environment variables remain
+overrides and keep carrying secrets, so the installed LaunchAgents run unchanged. Precedence, highest first:
 
 1. an environment variable (`SCAN_ROOTS`, `PORT`, `DATABASE_PATH`, `ONGOING_PROVIDERS`, ...)
 2. the configuration file
@@ -425,14 +426,14 @@ adapter = "launchd"   # or "foreground"
 profile = "opentangle"
 ```
 
-| Environment override                    | What it does                                              |
-| --------------------------------------- | --------------------------------------------------------- |
-| `ONGOING_CONFIG`                        | read this file instead of `~/.config/ongoing/config.toml` |
-| `ONGOING_PROVIDERS`                     | comma-separated enabled list, replacing the file's        |
-| `ONGOING_DISABLE_PROVIDERS`             | comma-separated list to switch off                        |
-| `ONGOING_HOST_ADAPTER`                  | `launchd` or `foreground`                                 |
-| `ONGOING_TRANSPORT`                     | `auto`, `http`, or `local`                                |
-| `ONGOING_ENABLE_RELEASE_BASELINE=false` | still turns the `endoflife` provider off                  |
+| Environment override                    | What it does                                                                   |
+| --------------------------------------- | ------------------------------------------------------------------------------ |
+| `ONGOING_CONFIG`                        | read this file instead of `~/.config/ongoing/config.toml` (same as `--config`) |
+| `ONGOING_PROVIDERS`                     | comma-separated enabled list, replacing the file's                             |
+| `ONGOING_DISABLE_PROVIDERS`             | comma-separated list to switch off                                             |
+| `ONGOING_HOST_ADAPTER`                  | `launchd` or `foreground`                                                      |
+| `ONGOING_TRANSPORT`                     | `auto`, `http`, or `local`                                                     |
+| `ONGOING_ENABLE_RELEASE_BASELINE=false` | still turns the `endoflife` provider off                                       |
 
 ## Providers
 

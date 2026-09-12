@@ -265,7 +265,8 @@ function parseArgs(argv: string[]): Args {
     'bind',
     'host',
     'transport',
-    'profile'
+    'profile',
+    'config'
   ]);
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -2474,10 +2475,11 @@ the current directory. ${bold('Projects')} are entries with kind=project.
 ${bold('Transport')} is chosen for you: a service answering ${dim('/api/health')} wins, and otherwise the
 catalog is opened in this process, so ${dim('scan')} and ${dim('list')} work with no daemon. ${dim('--local')} and
 ${dim('--remote')} say it outright. ${bold('Configuration')} is ${dim('~/.config/ongoing/config.toml')}
-(${dim('ONGOING_CONFIG')} to point elsewhere), overridden by environment variables.
+(${dim('--config')} or ${dim('ONGOING_CONFIG')} to point elsewhere), overridden by environment variables.
 
 ${bold('Options')}
   --url <base>                          dashboard base URL (env ONGOING_URL, default ${DEFAULT_URL})
+  --config <file>                       read this TOML instead of ~/.config/ongoing/config.toml
   --local | --remote                    force the in-process or HTTP transport
   --host <launchd|foreground>           force the host adapter for serve/restart/stop/logs
   --json                                JSON output
@@ -2522,6 +2524,13 @@ async function serviceAnswers(base: string): Promise<boolean> {
 async function main(argv: string[]): Promise<void> {
   const args = parseArgs(argv);
   const command = args.positional.shift() ?? 'list';
+
+  // `--config` is the flag ADR 0007 promises beside `ONGOING_CONFIG`. It is set on the environment
+  // rather than threaded through, because every reader — the local transport, the host adapters,
+  // and the server this process may spawn — already calls `loadRuntimeConfig`, and a child process
+  // has to inherit the choice or `ongoing --config x serve` would serve a different catalog.
+  const configPath = option(args, 'config');
+  if (configPath) process.env.ONGOING_CONFIG = resolvePath(configPath);
 
   if (flag(args, 'h', 'help') || command === 'help') return out(HELP);
   if (flag(args, 'version') || command === 'version') return out(VERSION);
