@@ -49,7 +49,7 @@ function seedFixture(path: string, fixture: string): void {
 }
 
 describe('catalog migrations', () => {
-  it.each(['empty', 'v0', 'v2'])(
+  it.each(['empty', 'v0', 'v2', 'v6'])(
     'migrates an %s database idempotently and transactionally',
     (fixture) => {
       const path = databasePath();
@@ -64,7 +64,11 @@ describe('catalog migrations', () => {
         first.sqlite.query("SELECT name FROM sqlite_master WHERE type = 'table'").all()
       ).toEqual(
         expect.arrayContaining([
-          { name: 'projects' },
+          { name: 'entries' },
+          { name: 'entry_sources' },
+          { name: 'fields' },
+          { name: 'relations' },
+          { name: 'saved_views' },
           { name: 'project_metrics' },
           { name: 'metric_snapshots' },
           { name: 'collection_errors' },
@@ -74,12 +78,18 @@ describe('catalog migrations', () => {
           { name: 'toolchain_baseline_status' }
         ])
       );
+      // The projects table is gone: its rows live in entries, its discovery columns in entry_sources.
+      expect(
+        first.sqlite
+          .query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'projects'")
+          .all()
+      ).toEqual([]);
       expect(first.sqlite.query('PRAGMA foreign_keys').get()).toEqual({ foreign_keys: 1 });
       expect(first.sqlite.query('PRAGMA journal_mode').get()).toEqual({ journal_mode: 'wal' });
       expect(() =>
         first.sqlite
           .query(
-            "INSERT INTO metric_snapshots (project_id, metric, captured_on, value) VALUES ('missing', 'github_stars', '2026-01-01', 1)"
+            "INSERT INTO metric_snapshots (entry_id, metric, captured_on, value) VALUES ('missing', 'github_stars', '2026-01-01', 1)"
           )
           .run()
       ).toThrow();
@@ -128,6 +138,106 @@ describe('catalog migrations', () => {
     ]);
   });
 
+  it('moves a real projects catalog into entries without losing anything', () => {
+    const path = databasePath();
+    seedFixture(path, 'v6');
+    const before = new Database(path);
+    const projects = before
+      .query<Record<string, string | number | null>, []>('SELECT * FROM projects ORDER BY id')
+      .all();
+    const counts = Object.fromEntries(
+      ['project_metrics', 'metric_snapshots', 'project_stacks', 'collection_errors'].map(
+        (table) => [
+          table,
+          Number(
+            before.query<{ count: number }, []>(`SELECT COUNT(*) AS count FROM ${table}`).get()
+              ?.count
+          )
+        ]
+      )
+    );
+    before.close();
+
+    const catalog = new CatalogDatabase(path);
+    const repository = new CatalogRepository(catalog);
+
+    // Every project is an entry, keyed by the same id, with a filesystem source and a slug.
+    expect(repository.listEntries({ includeHidden: true }).map((entry) => entry.kind)).toEqual([
+      'project',
+      'project',
+      'project'
+    ]);
+    const migrated = repository.listProjects({ includeHidden: true });
+    expect(migrated.map(({ id }) => id).sort()).toEqual(projects.map((row) => String(row.id)));
+    for (const row of projects) {
+      const project = migrated.find(({ id }) => id === row.id);
+      expect(project).toMatchObject({
+        canonicalPath: row.canonical_path,
+        relativePath: row.relative_path,
+        name: row.name,
+        scanRoot: row.scan_root,
+        isFavorite: row.is_favorite === 1,
+        isHidden: row.is_hidden === 1,
+        manualRank: row.manual_rank,
+        note: row.note,
+        intent: row.intent,
+        excitement: row.excitement,
+        strategicImportance: row.strategic_importance,
+        nextAction: row.next_action,
+        reviewAfter: row.review_after,
+        isMissing: row.is_missing === 1,
+        firstSeenAt: row.first_seen_at,
+        lastSeenAt: row.last_seen_at
+      });
+      expect(project?.website?.slug ?? null).toEqual(
+        row.website_json ? (JSON.parse(String(row.website_json)) as { slug: string }).slug : null
+      );
+    }
+
+    // A project that was missing keeps when it went missing, so the forget grace period survives.
+    const beta = migrated.find(({ id }) => id === 'project_beta');
+    expect(beta?.missingSince).toBe('2026-01-06T00:00:00.000Z');
+    // A row marked missing before migration 004 stamped it falls back to updated_at rather than
+    // becoming instantly eligible to be forgotten.
+    expect(migrated.find(({ id }) => id === 'project_gamma')?.missingSince).toBe(
+      '2026-01-03T00:00:00.000Z'
+    );
+
+    // Slugs are generated and de-duplicated: two projects share the name "Ongoing Dashboard".
+    expect(
+      repository
+        .listEntries({ includeHidden: true })
+        .map((entry) => entry.slug)
+        .sort()
+    ).toEqual(['beta', 'ongoing-dashboard', 'ongoing-dashboard-2']);
+
+    // Metric tables re-key to the entry id with their rows and shape intact.
+    for (const [table, count] of Object.entries(counts))
+      expect(
+        catalog.sqlite.query<{ count: number }, []>(`SELECT COUNT(*) AS count FROM ${table}`).get()
+          ?.count,
+        table
+      ).toBe(count);
+    expect(repository.getMetrics('project_alpha')).toMatchObject({
+      projectId: 'project_alpha',
+      branch: 'main',
+      commits30d: 42,
+      locCode: 12000,
+      githubStars: 7,
+      tdOpenCount: 3,
+      stackScannedAt: '2026-02-01T00:00:00.000Z'
+    });
+    expect(repository.listSnapshots('project_alpha')).toHaveLength(3);
+    expect(repository.listProjectStacks('project_alpha').map(({ toolchain }) => toolchain)).toEqual(
+      ['bun', 'go']
+    );
+    expect(repository.listCollectionErrors('project_alpha', true)).toHaveLength(1);
+    expect(repository.listWebsitePages().map((page) => page.slug)).toEqual(['about']);
+    expect(repository.getLatestScanRun()?.id).toBe('scan_1');
+    expect(repository.listBaselineStatus().map(({ toolchain }) => toolchain)).toEqual(['go']);
+    catalog.close();
+  });
+
   it('preserves recorded collection errors while widening the collector constraint', () => {
     const path = databasePath();
     seedFixture(path, 'v2');
@@ -135,7 +245,7 @@ describe('catalog migrations', () => {
 
     expect(catalog.sqlite.query('SELECT * FROM collection_errors').all()).toEqual([
       {
-        project_id: 'project_legacy',
+        entry_id: 'project_legacy',
         collector: 'git',
         message: 'git failed',
         occurred_at: '2026-01-02T00:00:00.000Z',
@@ -145,14 +255,14 @@ describe('catalog migrations', () => {
     expect(() =>
       catalog.sqlite
         .query(
-          "INSERT INTO collection_errors (project_id, collector, message, occurred_at) VALUES ('project_legacy', 'stack', 'go.mod unreadable', '2026-01-03T00:00:00.000Z')"
+          "INSERT INTO collection_errors (entry_id, collector, message, occurred_at) VALUES ('project_legacy', 'stack', 'go.mod unreadable', '2026-01-03T00:00:00.000Z')"
         )
         .run()
     ).not.toThrow();
     expect(() =>
       catalog.sqlite
         .query(
-          "INSERT INTO collection_errors (project_id, collector, message, occurred_at) VALUES ('project_legacy', 'invented', 'nope', '2026-01-03T00:00:00.000Z')"
+          "INSERT INTO collection_errors (entry_id, collector, message, occurred_at) VALUES ('project_legacy', 'invented', 'nope', '2026-01-03T00:00:00.000Z')"
         )
         .run()
     ).toThrow();
@@ -464,10 +574,11 @@ describe('catalog repository', () => {
     expect(repository.listCollectionErrors(project.id)).toEqual([]);
     const orphans = catalog.sqlite
       .query<{ count: number }, []>(
-        `SELECT (SELECT COUNT(*) FROM project_metrics WHERE project_id NOT IN (SELECT id FROM projects))
-              + (SELECT COUNT(*) FROM metric_snapshots WHERE project_id NOT IN (SELECT id FROM projects))
-              + (SELECT COUNT(*) FROM collection_errors WHERE project_id NOT IN (SELECT id FROM projects))
-              + (SELECT COUNT(*) FROM project_stacks WHERE project_id NOT IN (SELECT id FROM projects))
+        `SELECT (SELECT COUNT(*) FROM project_metrics WHERE entry_id NOT IN (SELECT id FROM entries))
+              + (SELECT COUNT(*) FROM metric_snapshots WHERE entry_id NOT IN (SELECT id FROM entries))
+              + (SELECT COUNT(*) FROM collection_errors WHERE entry_id NOT IN (SELECT id FROM entries))
+              + (SELECT COUNT(*) FROM project_stacks WHERE entry_id NOT IN (SELECT id FROM entries))
+              + (SELECT COUNT(*) FROM entry_sources WHERE entry_id NOT IN (SELECT id FROM entries))
            AS count`
       )
       .get();

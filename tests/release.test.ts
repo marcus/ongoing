@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { homedir } from 'node:os';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   decodeReleaseConfig,
@@ -187,13 +186,14 @@ describe('production LaunchAgent definitions', () => {
     expect(scan).toContain('/Users/marcus/code/ongoing/scripts/scan.ts');
     expect(scan).toContain(`<key>PATH</key><string>${PRODUCTION_SCAN_PATH}</string>`);
     expect(PRODUCTION_SCAN_PATH.split(':')).toEqual([
+      '/Users/marcus/.local/share/mise/shims',
       '/opt/homebrew/bin',
       '/usr/bin',
       '/bin',
       '/usr/sbin',
       '/sbin'
     ]);
-    expect(PRODUCTION_SCAN_PATH).not.toMatch(/~|\.bun|Users\/marcus\/(bin|go)|mise/);
+    expect(PRODUCTION_SCAN_PATH).not.toMatch(/~|\.bun|Users\/marcus\/(bin|go)\b/);
     for (const shared of [
       '<key>SCAN_ROOTS</key><string>/Users/marcus/code</string>',
       '<key>DATABASE_PATH</key><string>/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite</string>'
@@ -205,7 +205,10 @@ describe('production LaunchAgent definitions', () => {
   });
 
   it('resolves every scheduled tool with only the launchd PATH', async () => {
-    const home = await mkdtemp(join(tmpdir(), 'ongoing-launchd-home-'));
+    // launchd gives the agent this PATH and nothing else from a shell — but it does set HOME, and
+    // `gh` is a mise shim that reads the user's mise config to resolve its version. So the probe
+    // runs with the real HOME and no other inherited environment: that is exactly what the
+    // scheduled scan gets.
     const probes = [
       [process.execPath, '--version'],
       ['gh', '--version'],
@@ -214,23 +217,18 @@ describe('production LaunchAgent definitions', () => {
       ['cloc', '--version'],
       ['git', '--version']
     ];
-    try {
-      for (const probe of probes) {
-        const child = Bun.spawn(probe, {
-          cwd: process.cwd(),
-          env: { HOME: home, PATH: PRODUCTION_SCAN_PATH },
-          stdout: 'pipe',
-          stderr: 'pipe'
-        });
-        const [status, stderr] = await Promise.all([
-          child.exited,
-          new Response(child.stderr).text()
-        ]);
-        if (probe[1] === 'auth') expect([0, 1]).toContain(status);
-        else expect(status, `${probe[0]} was not available: ${stderr}`).toBe(0);
-      }
-    } finally {
-      await rm(home, { recursive: true, force: true });
+    for (const probe of probes) {
+      const child = Bun.spawn(probe, {
+        cwd: process.cwd(),
+        env: { HOME: homedir(), PATH: PRODUCTION_SCAN_PATH },
+        stdout: 'pipe',
+        stderr: 'pipe'
+      });
+      const [status, stderr] = await Promise.all([child.exited, new Response(child.stderr).text()]);
+      // A logged-out or rate-limited `gh auth status` exits 1; the collector treats that as
+      // "unavailable" rather than a failure, so it must not fail this test either.
+      if (probe[1] === 'auth') expect([0, 1]).toContain(status);
+      else expect(status, `${probe[0]} was not available: ${stderr}`).toBe(0);
     }
     expect(Bun.version).toBe(readFileSync(resolve('.bun-version'), 'utf8').trim());
   });

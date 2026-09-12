@@ -12,8 +12,8 @@
   <key>WorkingDirectory</key><string>/Users/marcus/code/ongoing</string>
   <key>EnvironmentVariables</key>
   <dict>
-    <!-- Collectors shell out to cloc and td; launchd's default PATH has neither. Keep in sync with ongoing.plist.example. -->
-    <key>PATH</key><string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <!-- Collectors shell out to cloc, td, and gh; launchd's default PATH has none of them, and gh is a mise shim. Keep in sync with ongoing.plist.example. -->
+    <key>PATH</key><string>/Users/marcus/.local/share/mise/shims:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     <key>SCAN_ROOTS</key><string>/Users/marcus/code</string>
     <key>DATABASE_PATH</key><string>/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite</string>
   </dict>

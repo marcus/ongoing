@@ -5,10 +5,18 @@ import stacks from './migrations/003_stacks.sql?raw';
 import missingSince from './migrations/004_missing_since.sql?raw';
 import website from './migrations/005_website.sql?raw';
 import websitePages from './migrations/006_website_pages.sql?raw';
+import entries from './migrations/007_entries.sql?raw';
+import rekeyMetrics from './migrations/008_rekey_metrics.sql?raw';
+import { migrateProjectsIntoEntries } from './migrations/007_entries';
 
 interface Migration {
   version: number;
   sql: string;
+  /**
+   * Runs inside the migration's transaction, after its statements. Data moves that need real logic
+   * — generating and de-duplicating slugs, say — live here instead of being forced into SQL.
+   */
+  migrate?: (database: Database) => void;
 }
 
 const migrations: readonly Migration[] = [
@@ -17,7 +25,9 @@ const migrations: readonly Migration[] = [
   { version: 3, sql: stacks },
   { version: 4, sql: missingSince },
   { version: 5, sql: website },
-  { version: 6, sql: websitePages }
+  { version: 6, sql: websitePages },
+  { version: 7, sql: entries, migrate: migrateProjectsIntoEntries },
+  { version: 8, sql: rekeyMetrics }
 ];
 
 /**
@@ -79,6 +89,7 @@ export function migrateDatabase(database: Database): void {
 
     const apply = database.transaction(() => {
       for (const statement of splitStatements(migration.sql)) database.run(statement);
+      migration.migrate?.(database);
       database
         .query('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
         .run(migration.version, new Date().toISOString());

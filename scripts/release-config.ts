@@ -12,7 +12,13 @@ export const PRODUCTION_SCAN_PLIST =
   '/Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.scan.plist';
 // Stable, version-free path. scripts/provision-runtime.sh points it at the release named in .bun-version.
 export const PRODUCTION_BUN = '/Users/marcus/.local/share/ongoing/bun';
-export const PRODUCTION_SCAN_PATH = '/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin';
+// The scanner's own PATH, with no shell configuration behind it. `gh` is installed through mise on
+// this machine rather than Homebrew, so its shim directory has to be on the list or the hosting
+// collector reports GitHub unavailable on every scheduled scan. A mise shim resolves the tool from
+// the user's own config, which launchd supplies (it always sets HOME), so the dependency is real
+// but bounded. Phase 5 of the inventory redesign moves this constant into a deploy profile.
+export const PRODUCTION_SCAN_PATH =
+  '/Users/marcus/.local/share/mise/shims:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin';
 
 export interface ReleaseConfig {
   host: string;
