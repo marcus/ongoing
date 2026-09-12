@@ -130,6 +130,12 @@ const derivedProviderFields: readonly FieldDefinition[] = [
  * same reasoning that keeps the two radar attention reasons outside the freshness gate (Phase 3).
  */
 export const catalogDerivedFields: readonly FieldDefinition[] = [
+  projected('complete', 'catalog', 'integer', 'Complete', {
+    kinds: ['*'],
+    options: { min: 0, max: 100 },
+    description:
+      'Percentage of this kind’s required fields that carry a value; `complete<100` finds the gaps'
+  }),
   projected('views', 'attention', 'multi_enum', 'Attention views', {
     options: { values: attentionViewKeys },
     sortable: false,

@@ -3,8 +3,10 @@ import {
   classifyAttentionViews,
   type AttentionClassifications
 } from '$lib/domain/attention';
+import { entryCompleteness, storedFields } from '$lib/domain/completeness';
 import type { AttributeValue, Entry, EntrySource } from '$lib/domain/entry';
 import type { EntryView, RelationView } from '$lib/domain/entry-view';
+import type { FieldRegistry } from '$lib/domain/fields';
 import { metricDelta30d, type CollectionError, type ProjectMetrics } from '$lib/domain/metrics';
 import type { ProjectIntent } from '$lib/domain/project';
 import { projectProviderFields } from '$lib/domain/provider-fields';
@@ -38,18 +40,7 @@ const FILESYSTEM_PROVIDER = 'filesystem';
 /** Relation kinds that put a technology into an entry's `tech` field. */
 const TECH_RELATION_KINDS = ['uses', 'provides'];
 
-function columnFields(entry: Entry): Record<string, AttributeValue> {
-  return {
-    kind: entry.kind,
-    name: entry.name,
-    slug: entry.slug,
-    note: entry.note,
-    tags: entry.tags,
-    is_favorite: entry.isFavorite,
-    is_hidden: entry.isHidden,
-    review_after: entry.reviewAfter
-  };
-}
+const columnFields = storedFields;
 
 interface Derived {
   path: string | null;
@@ -105,6 +96,7 @@ function technologyFields(
  */
 function derive(
   repository: CatalogRepository,
+  registry: FieldRegistry,
   entry: Entry,
   sources: EntrySource[],
   declarations: readonly DeclaredStack[],
@@ -124,7 +116,13 @@ function derive(
         .filter((slug): slug is string => Boolean(slug))
     )
   ];
-  const fields: Record<string, AttributeValue> = {};
+  // Every required field is stored — a column or an attribute — so completeness is decided before
+  // anything is projected, and the browser can recompute it from the same two sources after an edit.
+  const completeness = entryCompleteness(registry, entry.kind, {
+    ...columnFields(entry),
+    ...entry.attributes
+  });
+  const fields: Record<string, AttributeValue> = { complete: completeness.complete };
   if (filesystem) {
     fields.path = filesystem.locator;
     fields.is_missing = isMissing;
@@ -176,6 +174,7 @@ function derive(
       stacks,
       errors,
       technologies,
+      completeness,
       githubStarsGained30d,
       githubTrafficViewsDelta30d,
       githubTrafficClonesDelta30d: metricDelta30d(
@@ -275,6 +274,7 @@ export function readEntryViews(
   const stacks = repository.listAllProjectStacks();
   const relations = repository.listRelations();
   const releases = repository.listToolchainReleases();
+  const registry = repository.registry();
   const byId = new Map(
     repository.listEntries({ includeHidden: true }).map((entry) => [entry.id, entry])
   );
@@ -286,6 +286,7 @@ export function readEntryViews(
       entrySources,
       derive(
         repository,
+        registry,
         entry,
         entrySources,
         stacks.get(entry.id) ?? [],
@@ -314,6 +315,7 @@ export function readEntryView(
     sources,
     derive(
       repository,
+      repository.registry(),
       entry,
       sources,
       repository.listProjectStacks(entry.id),

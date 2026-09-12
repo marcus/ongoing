@@ -1,4 +1,5 @@
 import { attentionViewKeys, classifyAttentionViews } from './attention';
+import { entryCompleteness } from './completeness';
 import type { AttributeValue } from './entry';
 import type { EntryView } from './entry-view';
 import { validateEntryPatch, type FieldRegistry } from './fields';
@@ -38,8 +39,15 @@ const COLUMN_EMPTY: Readonly<Record<string, AttributeValue>> = {
  * resolved stacks, the collector errors, the technologies behind its `uses` edges — already
  * travels on the entry, so this needs no I/O and gives the same answer the server will.
  */
-export function reclassify(entry: EntryView, now = Date.now()): EntryView {
-  if (entry.kind !== 'project') return entry;
+export function reclassify(entry: EntryView, registry: FieldRegistry, now = Date.now()): EntryView {
+  // Completeness is a property of every kind, so it is recomputed before the project-only rules.
+  const completeness = entryCompleteness(registry, entry.kind, entry.fields);
+  const fields: Record<string, AttributeValue> = {
+    ...entry.fields,
+    complete: completeness.complete
+  };
+  if (entry.kind !== 'project') return { ...entry, fields };
+
   const attention = classifyAttentionViews(
     {
       id: entry.id,
@@ -49,6 +57,7 @@ export function reclassify(entry: EntryView, now = Date.now()): EntryView {
       stacks: entry.stacks,
       errors: entry.errors,
       technologies: entry.technologies,
+      completeness,
       githubStarsGained30d: numberField(entry, 'github.starsGained30d'),
       githubTrafficViewsDelta30d: numberField(entry, 'github.trafficViewsDelta30d'),
       githubTrafficClonesDelta30d: null
@@ -56,7 +65,6 @@ export function reclassify(entry: EntryView, now = Date.now()): EntryView {
     now
   );
   const views = attentionViewKeys.filter((key) => attention[key].member);
-  const fields = { ...entry.fields };
   if (views.length) fields.views = [...views];
   else delete fields.views;
   return { ...entry, attention, views: [...views], fields };
@@ -100,7 +108,7 @@ export function applyPatch(
       next.fields[key] = value;
     }
   }
-  return reclassify(next, now);
+  return reclassify(next, registry, now);
 }
 
 /**

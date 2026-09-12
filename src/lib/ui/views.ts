@@ -65,6 +65,7 @@ export function viewIcon(name: string): IconName {
  */
 const PROVIDER_LABELS: Readonly<Record<string, string>> = {
   attention: 'derived · attention',
+  catalog: 'derived · completeness',
   collector: 'derived · collector warnings',
   filesystem: 'derived · discovery',
   radar: 'derived · radar',

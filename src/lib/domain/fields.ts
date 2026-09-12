@@ -227,10 +227,14 @@ export const builtinFields: readonly FieldDefinition[] = [
     type: 'text',
     options: { maxLength: 500 },
     label: 'Next action',
+    description:
+      'The one thing this project is waiting on; required, so `invest` with none is a gap',
     sortable: false,
     filterable: true,
     editable: true,
-    required: false,
+    // Required, with `intent`, is what makes completeness say something on a catalog nobody has
+    // configured: a project is complete when someone has said what it is for and what is next.
+    required: true,
     storage: 'attribute'
   }),
   core({

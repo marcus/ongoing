@@ -96,7 +96,7 @@ Attention views are separate, transparent classifications implemented in `src/li
 
 Current thresholds:
 
-- Needs attention: a missing repository, unresolved collector warning, fresh failing CI, one or more fresh blocked/stale TD items, or an external PR at least 30 days old.
+- Needs attention: a missing repository, unresolved collector warning, fresh failing CI, one or more fresh blocked/stale TD items, an external PR at least 30 days old, or a project marked `invest` whose required fields are not filled in.
 - Rising: at least 5 stars gained, 2 external issues, 25 additional traffic views, or 10 additional clones over 30 days.
 - Opportunity: at most 5 commits in 30 days plus known external demand (100 stars, an external PR, or a recent external issue).
 - Momentum: at least 10 commits or 5 active days in 30 days, a merged PR, or a release in the last 30 days.

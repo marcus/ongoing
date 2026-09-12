@@ -29,7 +29,9 @@ describe('readInventoryState', () => {
 
   it('takes columns from the URL, then the view, then the kind’s defaults', () => {
     expect(read('columns=name,ring').columns).toEqual(['name', 'ring']);
-    expect(read('saved=attention').columns).toEqual(builtinSavedViews[5].columns);
+    expect(read('saved=attention').columns).toEqual(
+      builtinSavedViews.find((view) => view.name === 'attention')!.columns
+    );
     expect(read('q=kind%3Atechnology').columns).toContain('ring');
     expect(read('q=kind%3Aproject').columns).toContain('intent');
   });

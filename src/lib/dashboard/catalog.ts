@@ -1,3 +1,4 @@
+import { entryCompleteness, storedFields } from '$lib/domain/completeness';
 import {
   metricDelta30d,
   type CollectionError,
@@ -97,6 +98,12 @@ function dashboardProject(
       resolveStack(stack, releases.get(stack.toolchain) ?? [], now.getTime())
     ),
     errors: repository.listCollectionErrors(project.id, true),
+    // The project projection classifies through the same rules the entry read model does, so
+    // `ongoing show` and `ongoing list` cannot disagree about why a project wants attention.
+    completeness: entryCompleteness(repository.registry(), 'project', {
+      ...storedFields({ ...project, kind: 'project' }),
+      ...project.attributes
+    }),
     githubStarsGained30d: metricDelta30d(
       snapshots,
       'github_stars',

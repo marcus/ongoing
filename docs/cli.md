@@ -227,10 +227,23 @@ first half and `view:attention` is the second. Everything else behaves as it did
 ### Derived fields the query model added
 
 These are computed by the read model rather than stored, and are filterable and sortable like any
-other field: `path`, `is_missing`, `views` (the attention views an entry is in — `view:` is its
-alias), `warnings` (unresolved collector errors), `tech` (technologies linked by `uses`/`provides`),
-`stack.lag`, `github.starsGained30d`, and `github.trafficViewsDelta30d`. `kind` is a field too, and
-technology entries add `used_by`, `provided_by`, and `ring_stale`.
+other field: `complete`, `path`, `is_missing`, `views` (the attention views an entry is in —
+`view:` is its alias), `warnings` (unresolved collector errors), `tech` (technologies linked by
+`uses`/`provides`), `stack.lag`, `github.starsGained30d`, and `github.trafficViewsDelta30d`. `kind`
+is a field too, and technology entries add `used_by`, `provided_by`, and `ring_stale`.
+
+**`complete`** is the share of a kind's `required` fields that carry a value, from 0 to 100. Which
+fields those are is the registry's answer, not a hard-coded list: a project requires `kind`, `name`,
+`slug`, `intent`, and `next_action`, a technology requires `ring` and `technology_kind`, and
+`ongoing field add x.owner --type text --required` adds one of your own. A project marked
+`intent:invest` that is not complete is a reason in `view:attention`, with the missing keys named.
+
+```sh
+ongoing list 'complete<100'                        # what the inventory does not know yet
+ongoing list --saved incomplete                    # the same query, with the columns to fix it
+ongoing list 'intent:invest complete<100' --json   # commitments with a gap
+ongoing get td complete
+```
 
 `--json` works on every command that reads or changes catalog data, and colour is dropped when
 stdout is not a TTY or `NO_COLOR` is set, so the CLI composes:
@@ -318,7 +331,7 @@ ongoing unlink ongoing uses sveltekit
 
 A saved view is a name for a query plus the columns to show — a bookmark, not a second query
 language. Ongoing ships a set of built-in views declared in code (`all`, `favorites`, `hidden`,
-`missing`, `warnings`, one per attention view, one per toolchain as `stack-<toolchain>`, and
+`missing`, `warnings`, `incomplete`, one per attention view, one per toolchain as `stack-<toolchain>`, and
 `technologies`), so a fresh database and an upgraded one agree without a migration. Saving a view
 with a built-in's name shadows it; deleting a built-in is refused.
 

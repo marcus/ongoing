@@ -95,7 +95,7 @@ describe('reclassify', () => {
     });
 
   it('puts a missing project into the attention view without asking the server', () => {
-    const next = reclassify(missing(), NOW);
+    const next = reclassify(missing(), registry, NOW);
     expect(next.views).toContain('attention');
     expect(next.attention?.attention.reasons[0]).toMatchObject({
       input: 'isMissing',
@@ -120,7 +120,7 @@ describe('reclassify', () => {
       } as EntryView['metrics'],
       fields: { ...entry().fields, intent: 'maintain', 'github.starsGained30d': 0 }
     });
-    const classified = reclassify(dormant, NOW);
+    const classified = reclassify(dormant, registry, NOW);
     expect(classified.views).toContain('dormant');
 
     // Marking it `invest` says the quiet is deliberate, and the view drops it immediately —
@@ -130,7 +130,7 @@ describe('reclassify', () => {
   });
 
   it('says nothing about kinds the attention rules do not classify', () => {
-    const technology = reclassify(entry({ kind: 'technology' }), NOW);
+    const technology = reclassify(entry({ kind: 'technology' }), registry, NOW);
     expect(technology.attention).toBeNull();
     expect(technology.views).toEqual([]);
   });

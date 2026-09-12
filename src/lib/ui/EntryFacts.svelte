@@ -1,5 +1,6 @@
 <script lang="ts">
   import { attentionViewKeys } from '$lib/domain/attention';
+  import { describeMissing, entryCompleteness } from '$lib/domain/completeness';
   import type { EntryView } from '$lib/domain/entry-view';
   import type { FieldDefinition } from '$lib/domain/fields';
   import Badge from './Badge.svelte';
@@ -41,6 +42,8 @@
       )
   );
 
+  let completeness = $derived(entryCompleteness(catalog.registry, entry.kind, entry.fields));
+
   let activeViews = $derived(
     entry.attention ? attentionViewKeys.filter((key) => entry.attention![key].member) : []
   );
@@ -65,6 +68,15 @@
       {/if}
       <dt>updated</dt>
       <dd>{relativeAge(entry.updatedAt, now)} ago</dd>
+      <dt title="Share of this kind’s required fields that carry a value">complete</dt>
+      <dd data-complete={completeness.complete}>
+        {completeness.complete}%
+        {#if completeness.missing.length}
+          <span class="u-dim"
+            >· missing {describeMissing(catalog.registry, completeness.missing)}</span
+          >
+        {/if}
+      </dd>
     </dl>
     {#if entry.isMissing || entry.isHidden || entry.isFavorite}
       <div class="badges">

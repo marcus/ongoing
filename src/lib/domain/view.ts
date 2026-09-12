@@ -111,6 +111,12 @@ export const builtinSavedViews: readonly SavedView[] = [
   builtin('hidden', 'kind:project is_hidden:true', ['name', 'intent'], 2),
   builtin('missing', 'kind:project is_missing:true', ['name', 'path'], 3),
   builtin('warnings', 'kind:project warnings>0', ['name', 'warnings'], 4),
+  builtin(
+    'incomplete',
+    'kind:project complete<100',
+    ['name', 'complete', 'intent', 'next_action'],
+    5
+  ),
   ...attentionViewKeys.map((view, index) =>
     builtin(
       view,

@@ -1,3 +1,4 @@
+import type { Completeness } from './completeness';
 import type { CollectionError, ProjectMetrics } from './metrics';
 import type { ProjectIntent } from './project';
 import type { ResolvedStack } from './stack';
@@ -47,6 +48,11 @@ export interface AttentionInput {
    * which is how a catalog with no technologies in it stays silent rather than wrong.
    */
   technologies?: readonly UsedTechnology[];
+  /**
+   * How many of this kind's required fields carry a value. Absent means "the registry was not in
+   * hand", which keeps the rule silent rather than claiming an entry is incomplete.
+   */
+  completeness?: Completeness | null;
   githubStarsGained30d: number | null;
   githubTrafficViewsDelta30d: number | null;
   githubTrafficClonesDelta30d: number | null;
@@ -170,6 +176,24 @@ export function classifyAttentionViews(
         0
       )
     );
+  /**
+   * An incomplete entry the owner has committed to. Completeness on its own is not a reason to
+   * look at something — most of the catalog is deliberately sparse — but a project marked `invest`
+   * with no decision recorded is a gap in the inventory the inventory can see. It is ungated: a
+   * required field with no value is a catalog fact, not a measurement.
+   */
+  if (project.intent === 'invest' && project.completeness && project.completeness.complete < 100)
+    attention.push(
+      reason(
+        'decision',
+        `Marked invest, but ${project.completeness.missing.join(', ')} ${project.completeness.missing.length === 1 ? 'is' : 'are'} not filled in`,
+        'complete',
+        project.completeness.complete,
+        '<',
+        100
+      )
+    );
+
   const externalPrAge = githubFresh ? age(metrics?.githubOldestExternalPrAt, now) : null;
   if (externalPrAge !== null && externalPrAge >= ATTENTION_THRESHOLDS.oldExternalPrDays)
     attention.push(

@@ -1,3 +1,4 @@
+import { fieldHasValue } from '$lib/domain/completeness';
 import type { EntryView } from '$lib/domain/entry-view';
 import { fieldAppliesTo, type FieldDefinition, type FieldRegistry } from '$lib/domain/fields';
 
@@ -12,9 +13,7 @@ import { fieldAppliesTo, type FieldDefinition, type FieldRegistry } from '$lib/d
 const IDENTITY_KEYS = new Set(['kind', 'name', 'slug']);
 
 export function hasValue(entry: EntryView, key: string): boolean {
-  const value = entry.fields[key];
-  if (value === null || value === undefined || value === '') return false;
-  return !Array.isArray(value) || value.length > 0;
+  return fieldHasValue(entry.fields[key]);
 }
 
 /** The fields a person decides: core and user-defined, editable, stored rather than projected. */
