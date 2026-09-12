@@ -274,7 +274,7 @@ model {
   }
 
   inventory = subsystem 'Software inventory' {
-    description 'The catalog as typed entries. Phases 1 through 5 are built: the entries store, the field registry, the query grammar, the entries API, the CLI over them, the keyboard-first browser shell that builds the same query string, and the seams — provider manifests, one TOML configuration, the host adapter, the deployment and export profiles, and the CLI transport. Phase 6 (completeness, remote-only entries, the open-source release) is not modelled yet.'
+    description 'The catalog as typed entries. The whole redesign is built: the entries store, the field registry, the query grammar, the entries API, the CLI over them, the keyboard-first browser shell that builds the same query string, the seams — provider manifests, one TOML configuration, the host adapter, the deployment and export profiles, and the CLI transport — and Phase 6: completeness from the registry, repositories with no local checkout, and an install that is two commands on a machine nobody has configured.'
     metadata { uid 'inventory' fractalColor '#7FA8C9' evidence ['docs/plans/active/ongoing-inventory-redesign.md', 'src/lib/server/catalog/repository.ts'] }
 
     entries = store 'entries, fields, relations' {
@@ -356,6 +356,21 @@ model {
       #current
       description 'What contributes to the catalog, whether it can run here, when it last did, and which fields it owns. It reads GET /api/providers when that route exists (Phase 5) and falls back to what the field registry already knows, rendering availability and last run as unknown rather than guessing them.'
       metadata { uid 'inventory.providers_page' fractalColor '#759EB5' evidence ['src/routes/(inventory)/providers/+page.svelte', 'src/lib/ui/providers.ts'] }
+    }
+    completeness = component 'Completeness' {
+      #current
+      description 'A count, not a concept: entryCompleteness divides the required fields an entry carries by the required fields its kind declares and projects the result as `complete`, 0 to 100. A field marked required — built in, or added by ongoing field add --required — starts counting the moment it is registered, so `ongoing list \'complete<100\'` is an ordinary query and `incomplete` is an ordinary saved view. A project marked invest that is not complete is an attention reason naming the missing keys. Pure, and reading only stored values, so the read model, the project projection and the browser after an optimistic edit all get the same number.'
+      metadata { uid 'inventory.completeness' fractalColor '#89A579' evidence ['src/lib/domain/completeness.ts', 'src/lib/domain/completeness.test.ts', 'src/lib/domain/provider-fields.ts', 'src/lib/domain/attention.ts'] }
+    }
+    remote_discovery = component 'Remote repository discovery' {
+      #current
+      description 'An entry is a project because a provider found it, not because it is on this disk. With [providers.github] discover naming owners — empty by default — a scan catalogues the repositories those owners have that no local checkout claims: an entry with a github source, a locator of owner/name, and no filesystem source, so the read model gives it no path and no local metrics. What this provider creates it owns: a repository since cloned locally, or gone, loses its entry on the next pass unless somebody wrote a note or a tag on it, and a pass whose listing failed removes nothing.'
+      metadata { uid 'inventory.remote_discovery' fractalColor '#9A91C4' evidence ['src/lib/server/github/discovery.ts', 'src/lib/server/collectors/github-discovery.ts', 'tests/integration/remote-discovery.test.ts'] }
+    }
+    install = component 'Install (init and serve)' {
+      #current
+      description 'ongoing init writes one commented TOML file from a pure template, makes the data directory, and opens the catalog once so the migrations run; it refuses to overwrite a configuration file that already exists. ongoing serve then runs the application in the terminal on the port that file names. Those two commands plus a scan are the whole installation on a machine with no service manager, no deployment profile, and nobody else\'s configuration — which is what tests/integration/fresh-install.test.ts executes against a temporary HOME.'
+      metadata { uid 'inventory.install' fractalColor '#9FA8B3' evidence ['bin/ongoing.ts', 'src/lib/server/config-file.ts', 'tests/integration/fresh-install.test.ts', 'docs/deployment.md'] }
     }
     ui_kit = component 'Design system' {
       #current
@@ -529,6 +544,21 @@ model {
   inventory.profile .calls inventory.host 'aerie deploy and rollback through the adapter' { metadata { uid 'profile-host' } }
   inventory.profile .calls service.website_api 'The opentangle export profile' { metadata { uid 'profile-export' } }
   catalog.repository .writes inventory.entries 'The one persistence interface; no caller sees SQL or the JSON layout' { metadata { uid 'repo-entries' } }
+
+  // Phase 6: completeness, repositories with no checkout, and installing it somewhere else
+  inventory.completeness .reads inventory.registry 'Which fields this kind declares required' { metadata { uid 'completeness-registry' } }
+  domain.readmodel .calls inventory.completeness 'Projects `complete` onto every entry it builds' { metadata { uid 'readmodel-completeness' } }
+  inventory.optimistic .calls inventory.completeness 'Recomputes the score in the browser after an edit' { metadata { uid 'optimistic-completeness' } }
+  inventory.completeness .supplies domain.attention 'The gap behind the incomplete-invest reason' { metadata { uid 'completeness-attention' } }
+  scanning.scanner .calls inventory.remote_discovery 'Before hosting enrichment, when an owner is configured' { metadata { uid 'scanner-remote-discovery' } }
+  inventory.remote_discovery .calls scanning.github_client 'Lists an owner\'s repositories over GraphQL' { metadata { uid 'remote-discovery-client' } }
+  inventory.remote_discovery .writes inventory.entries 'Entries with a github source and no filesystem source' { metadata { uid 'remote-discovery-entries' } }
+  inventory.config .supplies inventory.remote_discovery 'The owners to catalogue, and whether forks and archives count' { metadata { uid 'config-remote-discovery' } }
+  scanning.github .reads inventory.remote_discovery 'Enriches remote-only entries from the source row rather than a working copy' { metadata { uid 'github-remote-entries' } }
+  user .calls inventory.install 'ongoing init, then scan, then serve' { metadata { uid 'user-install' } }
+  inventory.install .writes inventory.config 'The commented configuration file a first install starts from' { metadata { uid 'install-config' } }
+  inventory.install .calls inventory.host 'serve, through the foreground adapter it writes' { metadata { uid 'install-host' } }
+  inventory.entry_cli .calls inventory.install 'init and serve are CLI verbs like any other' { metadata { uid 'entrycli-install' } }
 
   // The tech radar, Phase 3 of the inventory redesign
   radar.signatures .calls scanning.stack 'Reads manifest dependencies in the same parse pass as the toolchains' { metadata { uid 'radar-stack' } }

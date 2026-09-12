@@ -3,7 +3,7 @@
   "id": "ongoing",
   "title": "Ongoing",
   "description": "Which local projects deserve attention: one API, two clients, a cache-first scanner, and an app-owned catalog.",
-  "provenance": "Authored 2026-09-11 from the Ongoing source tree, ADRs, README, AGENTS.md, deployment and website docs; updated 2026-09-11 when Phase 1 of the inventory redesign landed. Every current component cites the files inspected. The catalog repository is modeled as one component rather than per table; the Svelte component tree and the test suites are intentionally shallow. Inside the 'Software inventory' subsystem the entries store, the field registry, the entries API, and the entry CLI verbs are now current and cite code; the query grammar, provider manifests, host adapter, deployment profiles, and the new shell stay proposed, as does the whole 'Tech radar' subsystem, and their evidence paths are plans and ADRs rather than code.",
+  "provenance": "Authored 2026-09-11 from the Ongoing source tree, ADRs, README, AGENTS.md, deployment and website docs; updated as each phase of the inventory redesign landed, through Phase 6 on 2026-09-12. Every current component cites the files inspected. The catalog repository is modeled as one component rather than per table; the Svelte component tree and the test suites are intentionally shallow. Nothing in the 'Software inventory' or 'Tech radar' subsystems is proposed any more: the whole plan is implemented, and every element cites code.",
   "boundaries": [
     {
       "id": "api-parity",
@@ -53,7 +53,8 @@
         "inventory.registry",
         "inventory.query",
         "inventory.optimistic",
-        "inventory.url_state"
+        "inventory.url_state",
+        "inventory.completeness"
       ],
       "color": "#89A579"
     },
@@ -89,7 +90,8 @@
         "external.tools",
         "external.td_serve",
         "external.github",
-        "external.endoflife"
+        "external.endoflife",
+        "inventory.remote_discovery"
       ],
       "color": "#C48282"
     },
@@ -128,7 +130,9 @@
         "inventory.profile",
         "inventory.transport",
         "radar.signatures",
-        "scanning.wiring"
+        "scanning.wiring",
+        "inventory.remote_discovery",
+        "inventory.install"
       ],
       "color": "#9A91C4"
     }
@@ -203,7 +207,7 @@
     {
       "id": "inventory",
       "title": "Ongoing as a software inventory",
-      "description": "The whole redesign in one frame. Phases 1 through 5 have landed: entries, the field registry, the query grammar, the entries API, the CLI and its transport, the keyboard-first browser shell that builds the same query string, the provider manifests, one configuration file, the host adapter, and the deployment and export profiles. Phase 6 \u2014 completeness, remote-only entries, and the open-source release \u2014 is not modelled yet.",
+      "description": "The whole redesign in one frame, and it has all landed: entries, the field registry, the query grammar, the entries API, the CLI and its transport, the keyboard-first browser shell that builds the same query string, the provider manifests, one configuration file, the host adapter, the deployment and export profiles, and Phase 6 — completeness from the registry, repositories with no local checkout, and an install that is two commands.",
       "expanded": ["inventory"],
       "proposed": false,
       "lens": "structure",
@@ -233,7 +237,7 @@
     {
       "id": "switchable-seams",
       "title": "Seams and boundaries",
-      "description": "The inventory subsystem under the trust lens: which parts share the one API contract, which are pure rules the browser re-runs, what the durable state is, and which pieces exist so that discovery, hosting, issues, lines of code, the serving host, the deploy target and the export stop being assumptions. All of them are built; only the keyboard-first shell is still a proposal.",
+      "description": "The inventory subsystem under the trust lens: which parts share the one API contract, which are pure rules the browser re-runs, what the durable state is, and which pieces exist so that discovery, hosting, issues, lines of code, the serving host, the deploy target and the export stop being assumptions. All of them are built, including the two that arrived last: a repository does not have to be on this disk to be an entry, and installing it somewhere else is `ongoing init`.",
       "expanded": ["inventory"],
       "proposed": false,
       "lens": "trust",
