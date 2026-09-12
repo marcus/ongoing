@@ -26,6 +26,7 @@ import {
   filterRows,
   formatSort,
   legacyParamsToQuery,
+  listDefaultClauses,
   parseColumns,
   parseQuery,
   parseSortInput,
@@ -644,15 +645,9 @@ function buildListQuery(args: Args): string {
       search: option(args, 'search', 'q')
     })
   ].filter(Boolean);
-  const spoken = new Set(
-    parseQuery(parts.join(' '))
-      .clauses.filter((clause) => clause.type === 'field')
-      .map((clause) => clause.field)
-  );
-  const defaults: string[] = [];
-  if (!spoken.has('kind')) defaults.push('kind:project');
-  if (!spoken.has('is_hidden'))
-    defaults.push(flag(args, 'hidden') ? 'is_hidden:true' : 'is_hidden:false');
+  const defaults = listDefaultClauses(parseQuery(parts.join(' ')), {
+    hidden: flag(args, 'hidden')
+  });
   return [...defaults, ...parts].join(' ');
 }
 

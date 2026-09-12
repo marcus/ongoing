@@ -1,6 +1,11 @@
-import { attentionViewKeys, classifyAttentionViews } from '$lib/domain/attention';
+import {
+  attentionViewKeys,
+  classifyAttentionViews,
+  type AttentionClassifications
+} from '$lib/domain/attention';
 import type { AttributeValue, Entry, EntrySource } from '$lib/domain/entry';
-import { metricDelta30d, type CollectionError } from '$lib/domain/metrics';
+import type { EntryView, RelationView } from '$lib/domain/entry-view';
+import { metricDelta30d, type CollectionError, type ProjectMetrics } from '$lib/domain/metrics';
 import type { ProjectIntent } from '$lib/domain/project';
 import { projectProviderFields } from '$lib/domain/provider-fields';
 import type { Relation } from '$lib/domain/relation';
@@ -26,37 +31,7 @@ import type { CatalogRepository } from './repository';
  * `fields` map, so a caller — the API, the CLI, and the query evaluator — cannot tell a projected
  * provider value from a stored one, and nothing outside this file knows the storage layout.
  */
-export interface RelationView extends Relation {
-  /** The entry at the other end, so a caller can render an edge without a second lookup. */
-  other: { id: string; kind: string; slug: string; name: string } | null;
-}
-
-export interface EntryView {
-  id: string;
-  kind: string;
-  slug: string;
-  name: string;
-  note: string;
-  tags: string[];
-  isFavorite: boolean;
-  isHidden: boolean;
-  reviewAfter: string | null;
-  /** Where the filesystem provider found it, when it found it anywhere. */
-  path: string | null;
-  isMissing: boolean;
-  attributes: Record<string, AttributeValue>;
-  fields: Record<string, AttributeValue>;
-  /** Attention views this entry is currently in; the reasons live on the single-entry read. */
-  views: string[];
-  stacks: ResolvedStack[];
-  errors: CollectionError[];
-  /** Technologies a project uses, resolved through its `uses` edges. Empty for other kinds. */
-  technologies: UsedTechnology[];
-  sources: EntrySource[];
-  relations: { outgoing: RelationView[]; incoming: RelationView[] };
-  createdAt: string;
-  updatedAt: string;
-}
+export type { EntryView, RelationView } from '$lib/domain/entry-view';
 
 const FILESYSTEM_PROVIDER = 'filesystem';
 
@@ -80,6 +55,8 @@ interface Derived {
   path: string | null;
   isMissing: boolean;
   views: string[];
+  attention: AttentionClassifications | null;
+  metrics: ProjectMetrics | null;
   stacks: ResolvedStack[];
   errors: CollectionError[];
   technologies: UsedTechnology[];
@@ -158,7 +135,17 @@ function derive(
     Object.assign(fields, technologyFields(entry, relations, now));
 
   if (entry.kind !== 'project')
-    return { path, isMissing, views: [], stacks: [], errors: [], technologies: [], fields };
+    return {
+      path,
+      isMissing,
+      views: [],
+      attention: null,
+      metrics: null,
+      stacks: [],
+      errors: [],
+      technologies: [],
+      fields
+    };
 
   const technologies = usedTechnologies(relations, entries);
 
@@ -214,6 +201,8 @@ function derive(
     path,
     isMissing,
     views: [...views],
+    attention,
+    metrics,
     stacks,
     errors,
     technologies,
@@ -242,6 +231,8 @@ function entryView(
     attributes: entry.attributes,
     fields: { ...columnFields(entry), ...entry.attributes, ...derived.fields },
     views: derived.views,
+    attention: derived.attention,
+    metrics: derived.metrics,
     stacks: derived.stacks,
     errors: derived.errors,
     technologies: derived.technologies,

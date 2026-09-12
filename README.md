@@ -2,9 +2,16 @@
 
 Always check if you are running in Sidecar: run `sidecar --agents` for capabilities.
 
-A private, single-user dashboard for deciding which local software projects deserve attention. Ongoing discovers Git repositories, caches local and provider metrics in an app-owned SQLite catalog, and presents them using the interaction and visual direction in `docs/mockups/dashboard.html`.
+A private, single-user software inventory: what exists, what it is built with, how it relates to
+everything else, and which of it deserves attention this week. Ongoing discovers Git repositories,
+caches local and provider metrics in an app-owned SQLite catalog, and presents them as a dense,
+keyboard-first inventory — a rail of views, a table with inline editing, a fact sheet per entry, a
+technology radar, and a `Cmd+K` palette. The design system is [DESIGN.md](DESIGN.md); every screen
+is recorded in [docs/qa/screens/](docs/qa/screens/), dark and light.
 
-The complete Bun and SvelteKit application includes the local catalog, scanner, personal organization controls, TD and GitHub enrichment, attention views, LAN authentication, and private-host release tooling.
+![The inventory, with an entry's detail panel open](docs/qa/screens/inventory-panel-dark.png)
+
+The complete Bun and SvelteKit application includes the local catalog, scanner, personal organization controls, TD and GitHub enrichment, attention views, the technology radar, LAN authentication, and private-host release tooling.
 
 The catalog stores **entries**, not projects: a project is an entry with `kind = project`, every value it carries is a registered field, and relations between entries are rows. Fields can be added at runtime and are immediately editable and visible on every surface — see [docs/cli.md](docs/cli.md) and [ADR 0005](docs/adr/0005-entry-model-and-field-registry.md).
 
@@ -35,7 +42,7 @@ Development and preview bind to loopback by default. Production may set `HOST` a
 
 ## The `ongoing` command
 
-`bin/ongoing` is a terminal client for the dashboard, installed on `PATH` with
+`bin/ongoing` is a terminal client for the inventory, installed on `PATH` with
 `ln -s "$PWD/bin/ongoing" ~/.local/bin/ongoing`. It reads and writes through the same API contract the
 browser uses, so listing, filtering, favorites, hiding, notes, decision fields, and scans are
 available to a shell or an agent exactly as they are to the UI. It does not need a running service:
@@ -45,7 +52,7 @@ when nothing answers `/api/health` it opens the catalog in its own process inste
 ongoing                                   # every project, dashboard ordering
 ongoing list 'view:attention' --json      # machine-readable attention view
 ongoing show .                            # the repo you are standing in, with attention reasons
-ongoing set td --intent invest            # the same fields the drawer edits
+ongoing set td --intent invest            # the same fields the browser edits inline
 ongoing get td                            # every field this entry carries, stored and collected
 ongoing field add x.customer --type text  # a new field, no migration, editable everywhere
 ongoing stacks                            # declared toolchains, versions in use, upgrade pressure
@@ -57,7 +64,10 @@ ongoing serve --data-dir ./ongoing-data   # run it in the foreground, anywhere
 ```
 
 Filtering, sorting, and column selection are one query grammar — the same string the CLI argument,
-the `?q=` parameter, and a saved view all carry, over every registered field.
+the `?q=` parameter, and a saved view all carry, over every registered field. The browser's URL _is_
+that command: `?q=&sort=&columns=` holds what `ongoing list` would send, so a link someone pastes
+into a terminal is a query someone else can run, and every browser mutation has a CLI verb behind
+the same endpoint.
 
 Full reference: [docs/cli.md](docs/cli.md).
 
@@ -82,7 +92,7 @@ The plan for the shipped product lives in `docs/plans/implemented/ongoing-projec
 
 ## Attention views
 
-Attention views are separate, transparent classifications implemented in `src/lib/domain/attention.ts`; Ongoing does not calculate a grand priority score. The drawer shows every matching reason with its input, value, comparison, and threshold. Git, LOC, TD, stack, GitHub, and traffic measurements must have been collected successfully within 72 hours. Null, invalid, stale, rate-limited, unauthenticated, or unavailable inputs do not satisfy metric rules.
+Attention views are separate, transparent classifications implemented in `src/lib/domain/attention.ts`; Ongoing does not calculate a grand priority score. An entry's fact sheet shows every matching reason with its input, value, comparison, and threshold, and the browser re-runs the same classification locally after an edit, so a decision moves a row immediately rather than a round trip later. Git, LOC, TD, stack, GitHub, and traffic measurements must have been collected successfully within 72 hours. Null, invalid, stale, rate-limited, unauthenticated, or unavailable inputs do not satisfy metric rules.
 
 Current thresholds:
 
@@ -98,4 +108,4 @@ These values are product policy rather than score weights. Tune the exported `AT
 
 ## Public website catalog
 
-Projects can carry explicit public website copy and an opt-in inclusion flag through `ongoing website` and the HTTP API. OpenTangle exports selected projects on its next deployment; dashboard notes and scanned metadata stay private. See [the website catalog contract](docs/website.md).
+Projects can carry explicit public website copy and an opt-in inclusion flag through `ongoing website` and the HTTP API. OpenTangle exports selected projects on its next deployment; private notes and scanned metadata stay private. See [the website catalog contract](docs/website.md).

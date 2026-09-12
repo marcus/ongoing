@@ -82,10 +82,16 @@ test('a declared relation round-trips, and a saved view stores its query', async
   const entry = (await (await request.get('/api/entries/project/alpha')).json()) as {
     relations: { outgoing: { kind: string; evidence: string; other: { slug: string } }[] };
   };
-  expect(entry.relations.outgoing).toEqual([
-    expect.objectContaining({ kind: 'uses', evidence: 'declared' })
-  ]);
-  expect(entry.relations.outgoing[0].other.slug).toBe('sveltekit');
+  // The seed already gives alpha a `uses` edge, so this asserts the new edge joined the others.
+  expect(entry.relations.outgoing).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'uses',
+        evidence: 'declared',
+        other: expect.objectContaining({ slug: 'sveltekit' })
+      })
+    ])
+  );
 
   const wrongWayRound = await request.post('/api/relations', {
     data: { from: 'technology/sveltekit', to: 'project/alpha', kind: 'uses' }

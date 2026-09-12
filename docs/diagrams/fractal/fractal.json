@@ -8,17 +8,13 @@
     {
       "id": "api-parity",
       "title": "Same HTTP contract",
-      "description": "Both clients go through the JSON API. A capability reachable only through the browser would be a design bug. The entries API extends the same contract to fields, relations, and saved views, and every CLI verb over them is the same route the browser calls.",
+      "description": "Both clients go through the JSON API. A capability reachable only through the browser would be a design bug, and since Phase 4 a Playwright test drives bin/ongoing against the same server for every mutation the browser makes. The entries API extends the same contract to fields, relations, and saved views, and the URL the shell writes is the query ongoing list sends.",
       "kind": "parity",
       "members": [
         "cli.client",
         "cli.read_cmds",
         "cli.edit_cmds",
         "cli.scan_cmd",
-        "web.list",
-        "web.drawer",
-        "web.scan_client",
-        "web.hidden",
         "service.projects_api",
         "service.scan_api",
         "service.website_api",
@@ -27,7 +23,11 @@
         "inventory.shell",
         "inventory.palette",
         "inventory.entry_page",
-        "inventory.transport"
+        "inventory.transport",
+        "inventory.url_state",
+        "inventory.optimistic",
+        "inventory.providers_page",
+        "radar.page"
       ],
       "color": "#759EB5"
     },
@@ -42,7 +42,7 @@
     {
       "id": "pure-domain",
       "title": "Pure rules, no I/O",
-      "description": "Functions of normalized data only. The browser re-runs attention classification after an optimistic edit, and will validate a patch and parse a query with the same code the server runs.",
+      "description": "Functions of normalized data only. The browser validates a patch, re-runs attention classification, and parses, filters and sorts a query with exactly the code the server runs, which is what makes an optimistic edit correct and a list operation free of a round trip.",
       "kind": "ownership",
       "members": [
         "domain.attention",
@@ -51,7 +51,9 @@
         "domain.website",
         "domain.contracts",
         "inventory.registry",
-        "inventory.query"
+        "inventory.query",
+        "inventory.optimistic",
+        "inventory.url_state"
       ],
       "color": "#89A579"
     },
@@ -143,7 +145,7 @@
     {
       "id": "one-api-two-clients",
       "title": "One API, two clients",
-      "description": "The CLI and the browser are peers: both read page models and send mutations through the same routes, behind the same gate.",
+      "description": "The CLI and the browser are peers: both read the same entries endpoint and send the same validated patches through the same routes, behind the same gate. Since Phase 4 the browser builds the query string the CLI builds, out of the same shared functions.",
       "expanded": ["cli", "web", "service"],
       "proposed": false,
       "lens": "structure"
@@ -199,11 +201,21 @@
       "lens": "trust"
     },
     {
-      "id": "proposed-inventory",
-      "title": "Proposal: Ongoing as a software inventory",
-      "description": "Phases 1, 2, 3 and 5 have landed: entries, the field registry, the query grammar, the entries API, the CLI over them, the provider manifests, the configuration file, the host adapter, the deployment and export profiles, and the CLI transport are all current inside this subsystem. What is still drawn as proposed is the keyboard-first shell that builds the same query string the CLI does.",
+      "id": "inventory",
+      "title": "Ongoing as a software inventory",
+      "description": "The whole redesign in one frame. Phases 1 through 5 have landed: entries, the field registry, the query grammar, the entries API, the CLI and its transport, the keyboard-first browser shell that builds the same query string, the provider manifests, one configuration file, the host adapter, and the deployment and export profiles. Phase 6 \u2014 completeness, remote-only entries, and the open-source release \u2014 is not modelled yet.",
       "expanded": ["inventory"],
-      "proposed": true,
+      "proposed": false,
+      "lens": "structure",
+      "theme": "graphite",
+      "scope": "inventory"
+    },
+    {
+      "id": "inventory-shell",
+      "title": "The inventory shell",
+      "description": "What the browser is since Phase 4: one layout load of the whole catalog, a table filtered and sorted in the browser by the same pure functions the API runs, the URL carrying the query a CLI invocation would carry, and edits applied locally against the registry and the attention rules before the server answers. Every mutation here has an ongoing verb behind the same endpoint.",
+      "expanded": ["inventory"],
+      "proposed": false,
       "lens": "structure",
       "theme": "graphite",
       "scope": "inventory"
@@ -211,7 +223,7 @@
     {
       "id": "tech-radar",
       "title": "The tech radar",
-      "description": "Technologies as a second entry kind with rings, uses relations detected by the tech-signatures provider inside the stack collector pass or declared by hand, ongoing tech verbs over the same query model, and the generator that renders the project-standards tables. Only the radar page is still a proposal.",
+      "description": "Technologies as a second entry kind with rings, uses relations detected by the tech-signatures provider inside the stack collector pass or declared by hand, ongoing tech verbs over the same query model, the generator that renders the project-standards tables, and the radar page where a ring is editable on the chip.",
       "expanded": ["radar"],
       "lens": "structure",
       "theme": "graphite",

@@ -266,7 +266,7 @@
               "id": "report",
               "from": "cli",
               "to": "shell",
-              "title": "discovered · updated · errors (exit 1 unless completed)",
+              "title": "discovered \u00b7 updated \u00b7 errors (exit 1 unless completed)",
               "kind": "return"
             }
           ]
@@ -427,10 +427,10 @@
     },
     {
       "id": "decision-edit",
-      "title": "Setting intent from the drawer",
-      "description": "An optimistic edit: the browser re-classifies the project locally with the same pure rules the server uses, then persists through the API.",
+      "title": "Editing a field in the table",
+      "description": "An optimistic edit. The browser validates the patch and re-runs the attention rules with exactly the functions the server runs, so the row moves before the request is sent; the server's answer replaces it, and a refusal puts the kept entry back with the API's own message. Undo is the inverse patch through the same endpoint, which is why `ongoing set` can do everything this does.",
       "status": "current",
-      "provenance": "Authored 2026-09-11 from src/routes/+page.svelte, src/lib/components/dashboard/ProjectDrawer.svelte, src/routes/api/projects/[id]/+server.ts, and src/lib/domain/attention.ts.",
+      "provenance": "Authored 2026-09-12 from src/routes/(inventory)/+page.svelte, src/lib/ui/catalog.svelte.ts, src/lib/domain/optimistic.ts, src/routes/api/entries/[kind]/[slug]/+server.ts, and src/lib/domain/fields.ts.",
       "participants": [
         {
           "id": "person",
@@ -438,24 +438,29 @@
           "color": "#759EB5"
         },
         {
-          "id": "drawer",
-          "element": "web.drawer",
-          "title": "Project drawer"
+          "id": "shell",
+          "element": "inventory.shell",
+          "title": "Inventory shell"
+        },
+        {
+          "id": "optimistic",
+          "element": "inventory.optimistic",
+          "title": "Optimistic edit"
+        },
+        {
+          "id": "registry",
+          "element": "inventory.registry",
+          "title": "Field registry"
         },
         {
           "id": "attention",
           "element": "domain.attention",
-          "title": "Attention rules (browser)"
+          "title": "Attention rules"
         },
         {
           "id": "api",
-          "element": "service.projects_api",
-          "title": "Projects API"
-        },
-        {
-          "id": "rules",
-          "element": "domain.project",
-          "title": "Decision rules"
+          "element": "inventory.entries_api",
+          "title": "Entries API"
         },
         {
           "id": "repo",
@@ -467,43 +472,66 @@
         {
           "id": "browser",
           "title": "Browser",
-          "participants": ["drawer", "attention"]
+          "participants": ["shell", "optimistic"]
+        },
+        {
+          "id": "rules",
+          "title": "Pure rules (run on both sides)",
+          "participants": ["registry", "attention"]
         },
         {
           "id": "server",
           "title": "Web process",
-          "participants": ["api", "rules", "repo"]
+          "participants": ["api", "repo"]
         }
       ],
       "steps": [
         {
           "type": "phase",
-          "id": "optimistic",
-          "title": "1. Reflect the change immediately",
+          "id": "apply-locally",
+          "title": "1. Move the row before anything is sent",
           "steps": [
             {
               "type": "message",
               "id": "choose",
               "from": "person",
-              "to": "drawer",
-              "title": "Set intent to invest",
+              "to": "shell",
+              "title": "e, then set intent to invest",
+              "kind": "call",
+              "description": "The cell opens the editor the field's registered type asks for."
+            },
+            {
+              "type": "message",
+              "id": "apply",
+              "from": "shell",
+              "to": "optimistic",
+              "title": "applyPatch(entry, { intent: 'invest' })",
               "kind": "call"
             },
             {
               "type": "message",
-              "id": "reclassify",
-              "from": "drawer",
-              "to": "attention",
-              "title": "classifyAttentionViews(project with new intent)",
+              "id": "validate-local",
+              "from": "optimistic",
+              "to": "registry",
+              "title": "validateEntryPatch(registry, kind, patch)",
               "kind": "call",
-              "description": "Dormant requires intent other than invest, so the row can leave that view before the server answers."
+              "description": "A refusal here never leaves the browser, and it is the message the CLI would print."
             },
             {
               "type": "message",
-              "id": "views",
-              "from": "attention",
-              "to": "drawer",
-              "title": "Updated memberships and reasons",
+              "id": "reclassify",
+              "from": "optimistic",
+              "to": "attention",
+              "title": "classifyAttentionViews(entry with the new intent)",
+              "kind": "call",
+              "description": "Dormant requires an intent other than invest, so the row can leave that view before the server answers."
+            },
+            {
+              "type": "message",
+              "id": "moved",
+              "from": "optimistic",
+              "to": "shell",
+              "title": "A new entry, re-classified; the old one is kept for a rollback",
               "kind": "return"
             }
           ]
@@ -511,22 +539,23 @@
         {
           "type": "phase",
           "id": "persist",
-          "title": "2. Persist through the same API the CLI uses",
+          "title": "2. Persist through the endpoint the CLI uses",
           "steps": [
             {
               "type": "message",
               "id": "patch",
-              "from": "drawer",
+              "from": "shell",
               "to": "api",
-              "title": "PATCH /api/projects/:id { intent: invest }",
-              "kind": "call"
+              "title": "PATCH /api/entries/project/<slug> { intent: 'invest' }",
+              "kind": "call",
+              "description": "`ongoing set <entry> intent invest` sends the same body to the same route."
             },
             {
               "type": "message",
-              "id": "validate",
+              "id": "validate-server",
               "from": "api",
-              "to": "rules",
-              "title": "validateDecisionUpdate",
+              "to": "registry",
+              "title": "validateEntryPatch \u2014 the one path from an untrusted patch to stored values",
               "kind": "call"
             },
             {
@@ -534,23 +563,55 @@
               "id": "write",
               "from": "api",
               "to": "repo",
-              "title": "updateDecision(id, { intent })",
+              "title": "patchEntry(id, patch)",
               "kind": "call"
             },
             {
               "type": "message",
               "id": "ok",
               "from": "api",
-              "to": "drawer",
-              "title": "200 { id, intent }",
+              "to": "shell",
+              "title": "200 \u2014 the whole re-read entry, which replaces the optimistic row",
               "kind": "return"
             },
             {
               "type": "message",
-              "id": "reload",
-              "from": "drawer",
+              "id": "refused",
+              "from": "api",
+              "to": "shell",
+              "title": "400 \u2014 the kept entry goes back and the reason is shown beside the cell",
+              "kind": "return",
+              "description": "No toast, no spinner: quiet recovery, inline, where the edit happened."
+            }
+          ]
+        },
+        {
+          "type": "phase",
+          "id": "undo",
+          "title": "3. Undo is a patch like any other",
+          "steps": [
+            {
+              "type": "message",
+              "id": "press-u",
+              "from": "person",
+              "to": "shell",
+              "title": "u",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "inverse",
+              "from": "shell",
+              "to": "optimistic",
+              "title": "inversePatch(entry before the edit, patch)",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "undo-patch",
+              "from": "shell",
               "to": "api",
-              "title": "invalidateAll → GET page model",
+              "title": "PATCH the previous value \u2014 validated and re-classified the same way",
               "kind": "call"
             }
           ]
@@ -560,7 +621,7 @@
     {
       "id": "proposed-field-add",
       "title": "Adding a field is a row, not a migration",
-      "description": "A user field registered from the shell is immediately valid to set on an entry and visible everywhere the catalog is read — no schema change, no frontend change. Filtering on it by name arrives with the query grammar in Phase 2.",
+      "description": "A user field registered from the shell is immediately valid to set on an entry and visible everywhere the catalog is read \u2014 no schema change, no frontend change. Filtering on it by name arrives with the query grammar in Phase 2.",
       "status": "current",
       "provenance": "Authored 2026-09-11 from docs/plans/active/ongoing-inventory-redesign.md and ADRs 0005 and 0006; rewritten the same day against the shipped Phase 1 code (bin/ongoing.ts, src/routes/api/fields/+server.ts, src/routes/api/entries, src/lib/domain/fields.ts) and exercised end to end in tests/e2e/entries.test.ts.",
       "participants": [

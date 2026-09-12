@@ -51,26 +51,10 @@ model {
     }
   }
 
-  web = subsystem 'Browser dashboard' {
-    description 'SvelteKit pages rendered from the cached catalog; every mutation goes through the same HTTP API the CLI uses.'
-    metadata { uid 'web' fractalColor '#759EB5' evidence ['src/routes/+page.svelte', 'src/routes/+page.server.ts'] }
+  web = subsystem 'Browser' {
+    description 'The SvelteKit pages. Since Phase 4 the browser is the inventory shell — see the Software inventory subsystem for what it is made of — and this subsystem holds what is not part of it.'
+    metadata { uid 'web' fractalColor '#759EB5' evidence ['src/routes/(inventory)/+layout.svelte', 'src/routes/(inventory)/+page.svelte'] }
 
-    list = component 'Project list & filters' {
-      description 'Sortable, searchable list with attention views, stack filters, favorites grouping, drag reordering, and keyboard navigation.'
-      metadata { uid 'web.list' fractalColor '#759EB5' evidence ['src/routes/+page.svelte', 'src/lib/components/dashboard/ProjectList.svelte', 'src/lib/components/dashboard/FilterFlyout.svelte'] }
-    }
-    drawer = component 'Project drawer' {
-      description 'Per-project detail: note, intent and decision fields, every matching attention reason with its input and threshold, and open-in-Finder/Terminal.'
-      metadata { uid 'web.drawer' fractalColor '#759EB5' evidence ['src/lib/components/dashboard/ProjectDrawer.svelte'] }
-    }
-    scan_client = component 'Scan progress client' {
-      description 'Posts to /api/scan, subscribes to the run over EventSource, and reloads the page model on the terminal event.'
-      metadata { uid 'web.scan_client' fractalColor '#759EB5' evidence ['src/routes/+page.svelte', 'src/lib/components/dashboard/CatalogTicker.svelte'] }
-    }
-    hidden = component 'Hidden shelf' {
-      description 'Lists hidden projects and restores them; the same shelf is reachable to non-browser clients through ?hidden=true.'
-      metadata { uid 'web.hidden' fractalColor '#759EB5' evidence ['src/routes/hidden/+page.svelte', 'src/routes/hidden/+page.server.ts'] }
-    }
     login = component 'Login form' {
       description 'Form action that checks the access secret in constant time, rate-limits attempts per address, and sets the session cookie.'
       metadata { uid 'web.login' fractalColor '#759EB5' evidence ['src/routes/login/+page.server.ts', 'src/routes/login/+page.svelte', 'docs/auth.md'] }
@@ -290,7 +274,7 @@ model {
   }
 
   inventory = subsystem 'Software inventory' {
-    description 'The catalog as typed entries. Phases 1, 2, 3 and 5 are built: the entries store, the field registry, the query grammar, the entries API, the CLI over them, the tech radar beside them, and the seams — provider manifests, one TOML configuration, the host adapter, the deployment and export profiles, and the CLI transport. Only the keyboard-first shell is still the settled design, marked proposed here.'
+    description 'The catalog as typed entries. Phases 1 through 5 are built: the entries store, the field registry, the query grammar, the entries API, the CLI over them, the keyboard-first browser shell that builds the same query string, and the seams — provider manifests, one TOML configuration, the host adapter, the deployment and export profiles, and the CLI transport. Phase 6 (completeness, remote-only entries, the open-source release) is not modelled yet.'
     metadata { uid 'inventory' fractalColor '#7FA8C9' evidence ['docs/plans/active/ongoing-inventory-redesign.md', 'src/lib/server/catalog/repository.ts'] }
 
     entries = store 'entries, fields, relations' {
@@ -310,7 +294,7 @@ model {
     }
     entries_api = component 'Entries API' {
       #current
-      description 'GET /api/entries?q=&sort=&columns=&saved= is the one read endpoint; GET/PATCH/DELETE /api/entries/:kind/:slug, POST /api/entries, /api/fields, /api/relations and /api/views are the rest. One flat patch of field keys per write, validated by the registry; one query string per read, parsed by the grammar. /api/projects survives as the project projection of the same entries until the new shell ships.'
+      description 'GET /api/entries?q=&sort=&columns=&saved= is the one read endpoint; GET/PATCH/DELETE /api/entries/:kind/:slug, POST /api/entries, /api/fields, /api/relations and /api/views are the rest. One flat patch of field keys per write, validated by the registry; one query string per read, parsed by the grammar. /api/projects survives as the project projection the ongoing show and status commands read for their attention reasons; the browser no longer uses it.'
       metadata { uid 'inventory.entries_api' fractalColor '#739886' evidence ['src/routes/api/entries/+server.ts', 'src/routes/api/fields/+server.ts', 'src/routes/api/relations/+server.ts', 'src/routes/api/views/+server.ts'] }
     }
     entry_cli = component 'Entry CLI verbs' {
@@ -344,29 +328,44 @@ model {
       metadata { uid 'inventory.profile' fractalColor '#9FA8B3' evidence ['deploy/aerie/README.md', 'src/lib/domain/export.ts', 'src/routes/api/export/+server.ts', 'tests/foundation.test.ts'] }
     }
     shell = component 'Inventory shell' {
-      #proposed
-      description 'Rail of kinds, attention views, saved views, radar and providers; a table with chosen columns, inline editors per field type, j/k, / to filter, , to sort, c for columns; a detail panel on Enter.'
-      metadata { uid 'inventory.shell' fractalColor '#759EB5' evidence ['docs/adr/0008-frontend-design-system.md'] }
+      #current
+      description 'One route group over one layout load that reads the whole catalog: a rail of kinds, attention views with counts, saved views, radar and providers; a table with chosen columns and an inline editor per field type; j/k, / to filter, , to sort, c for columns, e to edit, f and x for favourite and hidden; a detail panel on Enter that does not take focus off the list. Filtering and sorting run in the browser over the loaded rows with the same pure functions the API runs, so a list operation costs no round trip.'
+      metadata { uid 'inventory.shell' fractalColor '#759EB5' evidence ['src/routes/(inventory)/+layout.svelte', 'src/routes/(inventory)/+page.svelte', 'src/routes/(inventory)/+layout.server.ts', 'DESIGN.md'] }
+    }
+    url_state = component 'URL as the query' {
+      #current
+      description '?q=, ?sort=, ?columns= and ?saved= carry exactly the strings the CLI flags and the API parameters carry, built with formatQuery and formatSort; ?entry=kind/slug is the open row. listDefaultClauses is shared with ongoing list, so a URL and a CLI invocation return the same rows rather than mostly agreeing, and the filter box shows the effective query rather than keeping defaults as hidden state.'
+      metadata { uid 'inventory.url_state' fractalColor '#89A579' evidence ['src/lib/ui/query-state.ts', 'src/lib/ui/query-state.test.ts', 'src/lib/domain/query.ts'] }
+    }
+    optimistic = component 'Optimistic edits & undo' {
+      #current
+      description 'A patch is validated by validateEntryPatch and applied to a copy of the entry in the browser, the attention views are re-classified locally, and the server answer replaces the row — or the kept entry goes back with the API error shown inline. Undo is the inverse patch through the same endpoint, so it validates and re-classifies like any other edit.'
+      metadata { uid 'inventory.optimistic' fractalColor '#89A579' evidence ['src/lib/domain/optimistic.ts', 'src/lib/domain/optimistic.test.ts', 'src/lib/ui/catalog.svelte.ts'] }
     }
     palette = component 'Command palette' {
-      #proposed
-      description 'Cmd+K jump to any entry by fuzzy name and run commands against it: set intent, favorite, hide, reorder, open in terminal, switch view.'
-      metadata { uid 'inventory.palette' fractalColor '#759EB5' evidence ['docs/adr/0008-frontend-design-system.md'] }
+      #current
+      description 'Cmd+K: fuzzy jump to any entry by name, slug or path, and run commands against whatever the list or the fact sheet is focused on — set intent, favourite, hide, reorder by manual rank, open in Terminal, open on GitHub — plus switch view and g p / g t / g r navigation. Every command prints its ongoing equivalent as its hint, which is what keeps the two surfaces honest.'
+      metadata { uid 'inventory.palette' fractalColor '#759EB5' evidence ['src/lib/ui/Palette.svelte', 'src/lib/ui/palette.ts', 'src/routes/(inventory)/+layout.svelte'] }
     }
     entry_page = component 'Entry fact sheet' {
-      #proposed
-      description '/p/<slug> and /t/<slug>: identity, decision fields, provider panels that have data, relations, and every attention reason with its input, comparison, and threshold. Edit in place.'
-      metadata { uid 'inventory.entry_page' fractalColor '#759EB5' evidence ['docs/adr/0008-frontend-design-system.md'] }
+      #current
+      description '/p/<slug> and /t/<slug>, and the same body inside the detail panel: identity, the decision fields that have values behind one empty-fields toggle, every attention reason with its input, comparison and threshold, relations with their versions and rings, a commit-trend sparkline, and one panel per provider that left data. Every field is editable in place through the registry editor for its type.'
+      metadata { uid 'inventory.entry_page' fractalColor '#759EB5' evidence ['src/lib/ui/EntryPage.svelte', 'src/lib/ui/EntryFacts.svelte', 'src/lib/ui/facts.ts', 'src/routes/(inventory)/p/[slug]/+page.svelte'] }
+    }
+    providers_page = component 'Providers screen' {
+      #current
+      description 'What contributes to the catalog, whether it can run here, when it last did, and which fields it owns. It reads GET /api/providers when that route exists (Phase 5) and falls back to what the field registry already knows, rendering availability and last run as unknown rather than guessing them.'
+      metadata { uid 'inventory.providers_page' fractalColor '#759EB5' evidence ['src/routes/(inventory)/providers/+page.svelte', 'src/lib/ui/providers.ts'] }
     }
     ui_kit = component 'Design system' {
-      #proposed
-      description 'src/lib/ui: Table, a cell editor per field type, Palette, Panel, Rail, Badge, Sparkline, over dark-first LCH tokens on a 4px grid. Replaces dashboard.css, the ticker, the flyout, and drag reorder.'
-      metadata { uid 'inventory.ui_kit' fractalColor '#759EB5' evidence ['docs/adr/0008-frontend-design-system.md'] }
+      #current
+      description 'src/lib/ui: Table, one editor per registered field type, Palette, Panel, Rail, Badge, Sparkline and roc icons over dark-first LCH tokens on a 4px grid, with no per-component font size or colour literal anywhere. Table columns and fact-sheet sections are driven by field definitions, so a field added by ongoing field add renders and edits with no frontend change. The house style and its deliberate drift from the Linear patterns are written down in DESIGN.md. Replaced dashboard.css, the catalog ticker, the header flyout, the project drawer, and drag reorder.'
+      metadata { uid 'inventory.ui_kit' fractalColor '#759EB5' evidence ['src/lib/ui/tokens.css', 'src/lib/ui/Table.svelte', 'src/lib/ui/FieldEditor.svelte', 'DESIGN.md', 'docs/adr/0008-frontend-design-system.md'] }
     }
   }
 
   radar = subsystem 'Tech radar' {
-    description 'Phase 3 of the inventory redesign, built: technologies as a second entry kind with rings, uses relations that are detected or declared, radar attention reasons, and generated project-standards tables. Only the radar page is still proposed.'
+    description 'Phases 3 and 4 of the inventory redesign, built: technologies as a second entry kind with rings, uses relations that are detected or declared, radar attention reasons, generated project-standards tables, and the radar page that edits a ring on the chip.'
     metadata { uid 'radar' fractalColor '#C4A0B8' evidence ['docs/plans/implemented/tech-radar.md', 'docs/plans/active/ongoing-inventory-redesign.md'] }
 
     model = component 'Radar model & signatures' {
@@ -390,14 +389,13 @@ model {
       metadata { uid 'radar.generator' fractalColor '#C4A0B8' evidence ['scripts/render-project-standards.ts'] }
     }
     page = component 'Radar page' {
-      #proposed
-      description 'Four rings as rows, each technology a chip with its project count, clicking through to the inventory filtered by that technology. Ring editable on the chip.'
-      metadata { uid 'radar.page' fractalColor '#C4A0B8' evidence ['docs/plans/active/tech-radar.md'] }
+      #current
+      description 'Four rings as rows, each technology a chip carrying how many projects use it and whether its ring is stale, clicking through to the inventory filtered by tech:<slug>. The ring is an enum editor on the chip itself, which is PATCH /api/entries/technology/<slug> — the same write ongoing tech set makes.'
+      metadata { uid 'radar.page' fractalColor '#C4A0B8' evidence ['src/routes/(inventory)/radar/+page.svelte', 'src/lib/ui/views.ts'] }
     }
   }
 
   // People and clients
-  user .calls web.list 'Browses and edits in the dashboard' { metadata { uid 'user-web' } }
   user .calls cli.read_cmds 'Runs ongoing from a shell' { metadata { uid 'user-cli' } }
 
   // CLI is a pure API client
@@ -410,12 +408,6 @@ model {
   cli.service_cmds .calls external.launchd 'bootout / bootstrap the web and scan agents' { metadata { uid 'cli-launchd' } }
 
   // Browser is the same kind of client
-  web.list .calls service.projects_api 'favorite, hide, reorder, open' { metadata { uid 'web-list-api' } }
-  web.drawer .calls service.projects_api 'PATCH note and decision fields' { metadata { uid 'web-drawer-api' } }
-  web.drawer .calls domain.attention 'Re-classifies after an optimistic edit' { metadata { uid 'web-drawer-attention' } }
-  web.scan_client .calls service.scan_api 'POST /api/scan' { metadata { uid 'web-scan-post' } }
-  service.scan_api .streams web.scan_client 'Server-Sent Events per run' { metadata { uid 'scan-sse' } }
-  web.hidden .calls service.projects_api 'Unhide' { metadata { uid 'web-hidden-api' } }
   web.login .calls service.security 'Verifies the secret and sets the cookie' { metadata { uid 'login-security' } }
 
   // Request path
@@ -499,15 +491,26 @@ model {
   // Website consumer
   external.opentangle .calls service.website_api 'GET /api/website on deployment' { metadata { uid 'opentangle-export' } }
 
-  // The software inventory: built in Phases 1 and 2, proposed beyond them
-  user .calls inventory.shell 'Browses, filters, and edits in the table' { #proposed metadata { uid 'user-inventory' } }
+  // The software inventory: Phases 1 through 5
+  user .calls inventory.shell 'Browses, filters, and edits in the table' { metadata { uid 'user-inventory' } }
   user .calls inventory.entry_cli 'Runs the same verbs and the same queries from a shell' { metadata { uid 'user-entry-cli' } }
-  inventory.shell .calls inventory.entries_api 'GET /api/entries?q=&sort=&columns=' { #proposed metadata { uid 'shell-api' } }
-  inventory.shell .calls inventory.ui_kit 'Table, cell editors, rail, panel' { #proposed metadata { uid 'shell-uikit' } }
-  inventory.shell .calls inventory.query 'Builds and validates the filter string in the browser' { #proposed metadata { uid 'shell-query' } }
-  inventory.palette .calls inventory.entries_api 'Jump to an entry, run a command against it' { #proposed metadata { uid 'palette-api' } }
-  inventory.entry_page .calls inventory.entries_api 'PATCH one field in place' { #proposed metadata { uid 'entrypage-api' } }
-  inventory.entry_page .calls domain.attention 'Re-runs the reasons after an optimistic edit' { #proposed metadata { uid 'entrypage-attention' } }
+  inventory.shell .reads inventory.entries_api 'The whole catalog once per load, then PATCH per edit' { metadata { uid 'shell-api' } }
+  inventory.shell .calls inventory.ui_kit 'Table, cell editors, rail, panel, badges' { metadata { uid 'shell-uikit' } }
+  inventory.shell .calls inventory.query 'Filters and sorts the loaded rows in the browser, and validates as you type' { metadata { uid 'shell-query' } }
+  inventory.palette .calls inventory.entries_api 'Jump to an entry, run a command against it' { metadata { uid 'palette-api' } }
+  inventory.entry_page .calls inventory.entries_api 'PATCH one field in place' { metadata { uid 'entrypage-api' } }
+  inventory.entry_page .calls domain.attention 'Shows every reason with its input, comparison, and threshold' { metadata { uid 'entrypage-attention' } }
+  inventory.shell .calls inventory.url_state 'Reads and writes the query, the sort, the columns, and the open row' { metadata { uid 'shell-url' } }
+  inventory.url_state .calls inventory.query 'formatQuery, formatSort, and the list defaults the CLI shares' { metadata { uid 'url-query' } }
+  inventory.shell .calls inventory.optimistic 'Applies the patch locally before the server answers' { metadata { uid 'shell-optimistic' } }
+  inventory.optimistic .calls inventory.registry 'validateEntryPatch, the same path the API and the CLI run' { metadata { uid 'optimistic-registry' } }
+  inventory.optimistic .calls domain.attention 'Re-classifies the entry so a decision moves a row immediately' { metadata { uid 'optimistic-attention' } }
+  inventory.optimistic .calls inventory.entries_api 'PATCH, and the inverse patch for undo' { metadata { uid 'optimistic-api' } }
+  inventory.shell .calls service.scan_api 'POST /api/scan from the rail; ongoing scan --wait follows a run' { metadata { uid 'shell-scan' } }
+  inventory.providers_page .reads inventory.providers 'GET /api/providers: availability, last run, and what each one contributes' { metadata { uid 'providerspage-providers' } }
+  inventory.providers_page .reads inventory.registry 'Which providers own which fields' { metadata { uid 'providerspage-registry' } }
+  radar.page .calls inventory.entries_api 'Lists technologies, PATCHes a ring on a chip' { metadata { uid 'radarpage-api' } }
+  radar.page .calls inventory.shell 'A chip links through to the inventory filtered by tech:<slug>' { metadata { uid 'radarpage-shell' } }
   inventory.entry_cli .calls inventory.entries_api 'Over HTTP, or the core in-process when no service runs' { metadata { uid 'entrycli-api' } }
   inventory.entry_cli .calls inventory.query 'Builds the query from flags and counts saved views without a round trip' { metadata { uid 'entrycli-query' } }
   inventory.entry_cli .calls inventory.host 'serve, scan, restart, stop, logs' { metadata { uid 'entrycli-host' } }
@@ -524,21 +527,21 @@ model {
   inventory.config .supplies inventory.host 'Which host implementation serves and schedules' { metadata { uid 'config-host' } }
   inventory.host .calls external.launchd 'The launchd implementation; foreground is the second one' { metadata { uid 'host-launchd' } }
   inventory.profile .calls inventory.host 'aerie deploy and rollback through the adapter' { metadata { uid 'profile-host' } }
-  inventory.profile .calls service.website_api 'The opentangle export profile' { #proposed metadata { uid 'profile-export' } }
+  inventory.profile .calls service.website_api 'The opentangle export profile' { metadata { uid 'profile-export' } }
   catalog.repository .writes inventory.entries 'The one persistence interface; no caller sees SQL or the JSON layout' { metadata { uid 'repo-entries' } }
 
   // The tech radar, Phase 3 of the inventory redesign
   radar.signatures .calls scanning.stack 'Reads manifest dependencies in the same parse pass as the toolchains' { metadata { uid 'radar-stack' } }
   radar.signatures .writes inventory.entries 'Rewrites detected uses relations every scan' { metadata { uid 'radar-detected' } }
   radar.signatures .reads radar.model 'Matches against the signature table' { metadata { uid 'radar-signature-table' } }
-  radar.signatures .supplies inventory.providers 'Declares its fields and the uses relation kind' { #proposed metadata { uid 'radar-manifest' } }
+  radar.signatures .supplies inventory.providers 'Declares its fields and the uses relation kind' { metadata { uid 'radar-manifest' } }
   radar.tech_cli .writes inventory.entries 'Rings, notes, seeded technologies, declared relations' { metadata { uid 'radar-cli-tables' } }
   radar.tech_cli .calls inventory.entries_api 'Through the same HTTP contract as everything else' { metadata { uid 'radar-cli-client' } }
   radar.model .supplies domain.attention 'Ring and version behind the out-technology and stale-ring reasons' { metadata { uid 'radar-attention' } }
   radar.generator .calls radar.tech_cli 'Reads the deterministic tech export' { metadata { uid 'radar-generator-export' } }
   radar.generator .writes external.skills 'Regenerates the language and tool tables between markers' { metadata { uid 'radar-generator-skill' } }
-  radar.page .reads inventory.entries 'Rings and project counts' { #proposed metadata { uid 'radar-page-tables' } }
-  radar.page .calls inventory.ui_kit 'Chips and badges from the shared design system' { #proposed metadata { uid 'radar-page-uikit' } }
+  radar.page .reads inventory.entries 'Rings and project counts' { metadata { uid 'radar-page-tables' } }
+  radar.page .calls inventory.ui_kit 'Chips and badges from the shared design system' { metadata { uid 'radar-page-uikit' } }
 }
 
 views {

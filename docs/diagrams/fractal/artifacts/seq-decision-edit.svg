@@ -1,93 +1,127 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" role="img" aria-labelledby="sequence-title sequence-description" data-theme="graphite" data-theme-appearance="light">
-  <title id="sequence-title">Setting intent from the drawer</title><desc id="sequence-description">An optimistic edit: the browser re-classifies the project locally with the same pure rules the server uses, then persists through the API.</desc><metadata>{&quot;journeyId&quot;:&quot;decision-edit&quot;,&quot;provenance&quot;:&quot;Authored 2026-09-11 from src/routes/+page.svelte, src/lib/components/dashboard/ProjectDrawer.svelte, src/routes/api/projects/[id]/+server.ts, and src/lib/domain/attention.ts.&quot;,&quot;hiddenLanes&quot;:[],&quot;rows&quot;:[{&quot;id&quot;:&quot;optimistic&quot;,&quot;type&quot;:&quot;phase&quot;,&quot;messageIds&quot;:[&quot;choose&quot;,&quot;reclassify&quot;,&quot;views&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;person&quot;,&quot;drawer&quot;,&quot;attention&quot;]},{&quot;id&quot;:&quot;choose&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;choose&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;person&quot;,&quot;drawer&quot;]},{&quot;id&quot;:&quot;reclassify&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;reclassify&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;drawer&quot;,&quot;attention&quot;]},{&quot;id&quot;:&quot;views&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;views&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;attention&quot;,&quot;drawer&quot;]},{&quot;id&quot;:&quot;persist&quot;,&quot;type&quot;:&quot;phase&quot;,&quot;messageIds&quot;:[&quot;patch&quot;,&quot;validate&quot;,&quot;write&quot;,&quot;ok&quot;,&quot;reload&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;drawer&quot;,&quot;api&quot;,&quot;rules&quot;,&quot;repo&quot;]},{&quot;id&quot;:&quot;patch&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;patch&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;drawer&quot;,&quot;api&quot;]},{&quot;id&quot;:&quot;validate&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;validate&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;api&quot;,&quot;rules&quot;]},{&quot;id&quot;:&quot;write&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;write&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;api&quot;,&quot;repo&quot;]},{&quot;id&quot;:&quot;ok&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;ok&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;api&quot;,&quot;drawer&quot;]},{&quot;id&quot;:&quot;reload&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;reload&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;drawer&quot;,&quot;api&quot;]}]}</metadata>
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" role="img" aria-labelledby="sequence-title sequence-description" data-theme="grove" data-theme-appearance="light">
+  <title id="sequence-title">Editing a field in the table</title><desc id="sequence-description">An optimistic edit. The browser validates the patch and re-runs the attention rules with exactly the functions the server runs, so the row moves before the request is sent; the server&apos;s answer replaces it, and a refusal puts the kept entry back with the API&apos;s own message. Undo is the inverse patch through the same endpoint, which is why `ongoing set` can do everything this does.</desc><metadata>{&quot;journeyId&quot;:&quot;decision-edit&quot;,&quot;provenance&quot;:&quot;Authored 2026-09-12 from src/routes/(inventory)/+page.svelte, src/lib/ui/catalog.svelte.ts, src/lib/domain/optimistic.ts, src/routes/api/entries/[kind]/[slug]/+server.ts, and src/lib/domain/fields.ts.&quot;,&quot;hiddenLanes&quot;:[],&quot;rows&quot;:[{&quot;id&quot;:&quot;apply-locally&quot;,&quot;type&quot;:&quot;phase&quot;,&quot;messageIds&quot;:[&quot;choose&quot;,&quot;apply&quot;,&quot;validate-local&quot;,&quot;reclassify&quot;,&quot;moved&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;person&quot;,&quot;shell&quot;,&quot;optimistic&quot;,&quot;registry&quot;,&quot;attention&quot;]},{&quot;id&quot;:&quot;choose&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;choose&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;person&quot;,&quot;shell&quot;]},{&quot;id&quot;:&quot;apply&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;apply&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;shell&quot;,&quot;optimistic&quot;]},{&quot;id&quot;:&quot;validate-local&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;validate-local&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;optimistic&quot;,&quot;registry&quot;]},{&quot;id&quot;:&quot;reclassify&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;reclassify&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;optimistic&quot;,&quot;attention&quot;]},{&quot;id&quot;:&quot;moved&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;moved&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;optimistic&quot;,&quot;shell&quot;]},{&quot;id&quot;:&quot;persist&quot;,&quot;type&quot;:&quot;phase&quot;,&quot;messageIds&quot;:[&quot;patch&quot;,&quot;validate-server&quot;,&quot;write&quot;,&quot;ok&quot;,&quot;refused&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;shell&quot;,&quot;api&quot;,&quot;registry&quot;,&quot;repo&quot;]},{&quot;id&quot;:&quot;patch&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;patch&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;shell&quot;,&quot;api&quot;]},{&quot;id&quot;:&quot;validate-server&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;validate-server&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;api&quot;,&quot;registry&quot;]},{&quot;id&quot;:&quot;write&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;write&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;api&quot;,&quot;repo&quot;]},{&quot;id&quot;:&quot;ok&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;ok&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;api&quot;,&quot;shell&quot;]},{&quot;id&quot;:&quot;refused&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;refused&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;api&quot;,&quot;shell&quot;]},{&quot;id&quot;:&quot;undo&quot;,&quot;type&quot;:&quot;phase&quot;,&quot;messageIds&quot;:[&quot;press-u&quot;,&quot;inverse&quot;,&quot;undo-patch&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;person&quot;,&quot;shell&quot;,&quot;optimistic&quot;,&quot;api&quot;]},{&quot;id&quot;:&quot;press-u&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;press-u&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;person&quot;,&quot;shell&quot;]},{&quot;id&quot;:&quot;inverse&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;inverse&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;shell&quot;,&quot;optimistic&quot;]},{&quot;id&quot;:&quot;undo-patch&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;undo-patch&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;shell&quot;,&quot;api&quot;]}]}</metadata>
   <defs>
-    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#85857f"/></marker>
-    <marker id="arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10" fill="none" stroke="#85857f" stroke-width="1.5"/></marker>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#84948b"/></marker>
+    <marker id="arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10" fill="none" stroke="#84948b" stroke-width="1.5"/></marker>
   </defs>
-  <rect width="1920" height="1080" fill="#f8f8f6"/>
+  <rect width="1920" height="1080" fill="#fafbf8"/>
   <g font-family="Arial, Helvetica, sans-serif" data-export-layer="title">
-    <text x="70" y="43" font-size="11" letter-spacing="2.5" fill="#626b6f">FRACTAL / SEQUENCE JOURNEY</text>
-    <text x="70" y="88" text-anchor="start" font-size="34" fill="#292927"><tspan x="70" dy="0">Setting intent from the drawer</tspan></text>
-    <text x="70" y="126" text-anchor="start" font-size="15" fill="#74746f"><tspan x="70" dy="0">An optimistic edit: the browser re-classifies the project locally with the same pure rules the server uses, then persists through the API.</tspan></text>
+    <text x="70" y="43" font-size="11" letter-spacing="2.5" fill="#607c69">FRACTAL / SEQUENCE JOURNEY</text>
+    <text x="70" y="88" text-anchor="start" font-size="34" fill="#243b34"><tspan x="70" dy="0">Editing a field in the table</tspan></text>
+    <text x="70" y="126" text-anchor="start" font-size="15" fill="#6e7d72"><tspan x="70" dy="0">An optimistic edit. The browser validates the patch and re-runs the attention rules with exactly the functions the server runs, so the row moves before the request is sent; the server&apos;s answer</tspan><tspan x="70" dy="19">replaces it, and a refusal puts the kept entry back with the API&apos;s own message. Undo is the inverse patch through the same endpoint, which is why `ongoing set` can do everything this does.</tspan></text>
   </g>
-  <g font-family="Arial, Helvetica, sans-serif" transform="translate(74.27160493827171 190) scale(0.9382716049382716)"><g data-column="person" data-members="person" data-elements="">
-    <rect x="102" y="32" width="244" height="44" rx="12" fill="#ffffff" stroke="#759EB5" stroke-width="2"/>
-    <text x="224" y="59" text-anchor="middle" font-size="15" fill="#292927"><tspan x="224" dy="0">Marcus</tspan></text>
-    <path d="M224 76V740" stroke="#ddddda" stroke-width="1.2" stroke-dasharray="5 7"/>
-  </g><g data-column="drawer" data-members="drawer" data-elements="web.drawer">
-    <rect x="390" y="32" width="244" height="44" rx="12" fill="#ffffff" stroke="#759EB5" stroke-width="2"/>
-    <text x="512" y="59" text-anchor="middle" font-size="15" fill="#292927"><tspan x="512" dy="0">Project drawer</tspan></text>
-    <path d="M512 76V740" stroke="#ddddda" stroke-width="1.2" stroke-dasharray="5 7"/>
+  <g font-family="Arial, Helvetica, sans-serif" transform="translate(447.64044943820227 190) scale(0.5337078651685393)"><g data-column="person" data-members="person" data-elements="">
+    <rect x="102.00000000000001" y="32" width="207.42857142857142" height="44" rx="12" fill="#ffffff" stroke="#759EB5" stroke-width="2"/>
+    <text x="205.71428571428572" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="205.71428571428572" dy="0">Marcus</tspan></text>
+    <path d="M205.71428571428572 76V1354" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
+  </g><g data-column="shell" data-members="shell" data-elements="inventory.shell">
+    <rect x="353.42857142857144" y="32" width="207.42857142857142" height="44" rx="12" fill="#ffffff" stroke="#759EB5" stroke-width="2"/>
+    <text x="457.14285714285717" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="457.14285714285717" dy="0">Inventory shell</tspan></text>
+    <path d="M457.14285714285717 76V1354" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
+  </g><g data-column="optimistic" data-members="optimistic" data-elements="inventory.optimistic">
+    <rect x="604.8571428571429" y="32" width="207.42857142857142" height="44" rx="12" fill="#ffffff" stroke="#89A579" stroke-width="2"/>
+    <text x="708.5714285714286" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="708.5714285714286" dy="0">Optimistic edit</tspan></text>
+    <path d="M708.5714285714286 76V1354" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
+  </g><g data-column="registry" data-members="registry" data-elements="inventory.registry">
+    <rect x="856.2857142857142" y="32" width="207.42857142857142" height="44" rx="12" fill="#ffffff" stroke="#89A579" stroke-width="2"/>
+    <text x="959.9999999999999" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="959.9999999999999" dy="0">Field registry</tspan></text>
+    <path d="M959.9999999999999 76V1354" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
   </g><g data-column="attention" data-members="attention" data-elements="domain.attention">
-    <rect x="678" y="32" width="244" height="44" rx="12" fill="#ffffff" stroke="#89A579" stroke-width="2"/>
-    <text x="800" y="59" text-anchor="middle" font-size="15" fill="#292927"><tspan x="800" dy="0">Attention rules (browser)</tspan></text>
-    <path d="M800 76V740" stroke="#ddddda" stroke-width="1.2" stroke-dasharray="5 7"/>
-  </g><g data-column="api" data-members="api" data-elements="service.projects_api">
-    <rect x="966" y="32" width="244" height="44" rx="12" fill="#ffffff" stroke="#739886" stroke-width="2"/>
-    <text x="1088" y="59" text-anchor="middle" font-size="15" fill="#292927"><tspan x="1088" dy="0">Projects API</tspan></text>
-    <path d="M1088 76V740" stroke="#ddddda" stroke-width="1.2" stroke-dasharray="5 7"/>
-  </g><g data-column="rules" data-members="rules" data-elements="domain.project">
-    <rect x="1254" y="32" width="244" height="44" rx="12" fill="#ffffff" stroke="#89A579" stroke-width="2"/>
-    <text x="1376" y="59" text-anchor="middle" font-size="15" fill="#292927"><tspan x="1376" dy="0">Decision rules</tspan></text>
-    <path d="M1376 76V740" stroke="#ddddda" stroke-width="1.2" stroke-dasharray="5 7"/>
+    <rect x="1107.7142857142858" y="32" width="207.42857142857142" height="44" rx="12" fill="#ffffff" stroke="#89A579" stroke-width="2"/>
+    <text x="1211.4285714285716" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="1211.4285714285716" dy="0">Attention rules</tspan></text>
+    <path d="M1211.4285714285716 76V1354" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
+  </g><g data-column="api" data-members="api" data-elements="inventory.entries_api">
+    <rect x="1359.142857142857" y="32" width="207.42857142857142" height="44" rx="12" fill="#ffffff" stroke="#739886" stroke-width="2"/>
+    <text x="1462.857142857143" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="1462.857142857143" dy="0">Entries API</tspan></text>
+    <path d="M1462.857142857143 76V1354" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
   </g><g data-column="repo" data-members="repo" data-elements="catalog.repository">
-    <rect x="1542" y="32" width="244" height="44" rx="12" fill="#ffffff" stroke="#B59669" stroke-width="2"/>
-    <text x="1664" y="59" text-anchor="middle" font-size="15" fill="#292927"><tspan x="1664" dy="0">Repository</tspan></text>
-    <path d="M1664 76V740" stroke="#ddddda" stroke-width="1.2" stroke-dasharray="5 7"/>
-  </g><g data-row-id="optimistic" data-message-ids="choose,reclassify,views" data-participant-ids="person,drawer,attention" data-row-type="phase" data-phase-depth="0" data-collapsed="false">
-        <rect x="58" y="118" width="1772" height="35" rx="10" fill="#eeeeeb" stroke="#d5d5d0"/>
-        <text x="78" y="141" text-anchor="start" font-size="15" fill="#292927"><tspan x="78" dy="0">1. Reflect the change immediately</tspan></text>
+    <rect x="1610.5714285714284" y="32" width="207.42857142857142" height="44" rx="12" fill="#ffffff" stroke="#B59669" stroke-width="2"/>
+    <text x="1714.2857142857142" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="1714.2857142857142" dy="0">Repository</tspan></text>
+    <path d="M1714.2857142857142 76V1354" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
+  </g><g data-row-id="apply-locally" data-message-ids="choose,apply,validate-local,reclassify,moved" data-participant-ids="person,shell,optimistic,registry,attention" data-row-type="phase" data-phase-depth="0" data-collapsed="false">
+        <rect x="58" y="118" width="1804" height="35" rx="10" fill="#f4f6f3" stroke="#d9e0da"/>
+        <text x="78" y="141" text-anchor="start" font-size="15" fill="#243b34"><tspan x="78" dy="0">1. Move the row before anything is sent</tspan></text>
         
-        <text x="1788" y="139.5" text-anchor="end" font-size="11" fill="#7d7d77">3 interactions</text>
-      </g><g data-row-id="choose" data-message-ids="choose" data-participant-ids="person,drawer" data-row-type="message" data-kind="call">
-      <rect x="188" y="167" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="368" y="190" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="368" dy="0">Set intent to invest</tspan></text>
+        <text x="1820" y="139.5" text-anchor="end" font-size="11" fill="#78867c">5 interactions</text>
+      </g><g data-row-id="choose" data-message-ids="choose" data-participant-ids="person,shell" data-row-type="message" data-kind="call">
+      <rect x="151.42857142857144" y="167" width="360" height="66" rx="7" fill="#fafbf8"/>
+      <text x="331.42857142857144" y="190" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="331.42857142857144" dy="0">e, then set intent to invest</tspan></text>
+      <text x="331.42857142857144" y="212" text-anchor="middle" font-size="11" fill="#78867c"><tspan x="331.42857142857144" dy="0">The cell opens the editor the field&apos;s registered type asks</tspan><tspan x="331.42857142857144" dy="15">for.</tspan></text>
+      <path d="M205.71428571428572 238H449.14285714285717" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
+    </g><g data-row-id="apply" data-message-ids="apply" data-participant-ids="shell,optimistic" data-row-type="message" data-kind="call">
+      <rect x="402.8571428571429" y="263" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="582.8571428571429" y="286" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="582.8571428571429" dy="0">applyPatch(entry, { intent: &apos;invest&apos; })</tspan></text>
       
-      <path d="M224 206H504" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
-    </g><g data-row-id="reclassify" data-message-ids="reclassify" data-participant-ids="drawer,attention" data-row-type="message" data-kind="call">
-      <rect x="476" y="231" width="360" height="66" rx="7" fill="#f8f8f6"/>
-      <text x="656" y="254" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="656" dy="0">classifyAttentionViews(project with new intent)</tspan></text>
-      <text x="656" y="276" text-anchor="middle" font-size="11" fill="#7d7d77"><tspan x="656" dy="0">Dormant requires intent other than invest, so the row can</tspan><tspan x="656" dy="15">leave that view before the server answers.</tspan></text>
-      <path d="M512 302H792" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
-    </g><g data-row-id="views" data-message-ids="views" data-participant-ids="attention,drawer" data-row-type="message" data-kind="return">
-      <rect x="476" y="327" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="656" y="350" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="656" dy="0">Updated memberships and reasons</tspan></text>
+      <path d="M457.14285714285717 302H700.5714285714286" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
+    </g><g data-row-id="validate-local" data-message-ids="validate-local" data-participant-ids="optimistic,registry" data-row-type="message" data-kind="call">
+      <rect x="654.2857142857142" y="327" width="360" height="66" rx="7" fill="#fafbf8"/>
+      <text x="834.2857142857142" y="350" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="834.2857142857142" dy="0">validateEntryPatch(registry, kind, patch)</tspan></text>
+      <text x="834.2857142857142" y="372" text-anchor="middle" font-size="11" fill="#78867c"><tspan x="834.2857142857142" dy="0">A refusal here never leaves the browser, and it is the</tspan><tspan x="834.2857142857142" dy="15">message the CLI would print.</tspan></text>
+      <path d="M708.5714285714286 398H951.9999999999999" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
+    </g><g data-row-id="reclassify" data-message-ids="reclassify" data-participant-ids="optimistic,attention" data-row-type="message" data-kind="call">
+      <rect x="780" y="423" width="360" height="85" rx="7" fill="#fafbf8"/>
+      <text x="960" y="446" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="960" dy="0">classifyAttentionViews(entry with the new</tspan><tspan x="960" dy="17">intent)</tspan></text>
+      <text x="960" y="487" text-anchor="middle" font-size="11" fill="#78867c"><tspan x="960" dy="0">Dormant requires an intent other than invest, so the row</tspan><tspan x="960" dy="15">can leave that view before the server answers.</tspan></text>
+      <path d="M708.5714285714286 513H1203.4285714285716" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
+    </g><g data-row-id="moved" data-message-ids="moved" data-participant-ids="optimistic,shell" data-row-type="message" data-kind="return">
+      <rect x="402.8571428571429" y="538" width="360" height="49" rx="7" fill="#fafbf8"/>
+      <text x="582.8571428571429" y="561" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="582.8571428571429" dy="0">A new entry, re-classified; the old one is kept for</tspan><tspan x="582.8571428571429" dy="17">a rollback</tspan></text>
       
-      <path d="M800 366H520" fill="none" stroke="#85857f" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow)"/>
-    </g><g data-row-id="persist" data-message-ids="patch,validate,write,ok,reload" data-participant-ids="drawer,api,rules,repo" data-row-type="phase" data-phase-depth="0" data-collapsed="false">
-        <rect x="58" y="391" width="1772" height="35" rx="10" fill="#eeeeeb" stroke="#d5d5d0"/>
-        <text x="78" y="414" text-anchor="start" font-size="15" fill="#292927"><tspan x="78" dy="0">2. Persist through the same API the CLI uses</tspan></text>
+      <path d="M708.5714285714286 592H465.14285714285717" fill="none" stroke="#84948b" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow)"/>
+    </g><g data-row-id="persist" data-message-ids="patch,validate-server,write,ok,refused" data-participant-ids="shell,api,registry,repo" data-row-type="phase" data-phase-depth="0" data-collapsed="false">
+        <rect x="58" y="617" width="1804" height="35" rx="10" fill="#f4f6f3" stroke="#d9e0da"/>
+        <text x="78" y="640" text-anchor="start" font-size="15" fill="#243b34"><tspan x="78" dy="0">2. Persist through the endpoint the CLI uses</tspan></text>
         
-        <text x="1788" y="412.5" text-anchor="end" font-size="11" fill="#7d7d77">5 interactions</text>
-      </g><g data-row-id="patch" data-message-ids="patch" data-participant-ids="drawer,api" data-row-type="message" data-kind="call">
-      <rect x="620" y="440" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="800" y="463" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="800" dy="0">PATCH /api/projects/:id { intent: invest }</tspan></text>
+        <text x="1820" y="638.5" text-anchor="end" font-size="11" fill="#78867c">5 interactions</text>
+      </g><g data-row-id="patch" data-message-ids="patch" data-participant-ids="shell,api" data-row-type="message" data-kind="call">
+      <rect x="780" y="666" width="360" height="85" rx="7" fill="#fafbf8"/>
+      <text x="960" y="689" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="960" dy="0">PATCH /api/entries/project/&lt;slug&gt; { intent:</tspan><tspan x="960" dy="17">&apos;invest&apos; }</tspan></text>
+      <text x="960" y="730" text-anchor="middle" font-size="11" fill="#78867c"><tspan x="960" dy="0">`ongoing set &lt;entry&gt; intent invest` sends the same body to</tspan><tspan x="960" dy="15">the same route.</tspan></text>
+      <path d="M457.14285714285717 756H1454.857142857143" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
+    </g><g data-row-id="validate-server" data-message-ids="validate-server" data-participant-ids="api,registry" data-row-type="message" data-kind="call">
+      <rect x="1031.4285714285713" y="781" width="360" height="49" rx="7" fill="#fafbf8"/>
+      <text x="1211.4285714285713" y="804" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="1211.4285714285713" dy="0">validateEntryPatch — the one path from an</tspan><tspan x="1211.4285714285713" dy="17">untrusted patch to stored values</tspan></text>
       
-      <path d="M512 479H1080" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
-    </g><g data-row-id="validate" data-message-ids="validate" data-participant-ids="api,rules" data-row-type="message" data-kind="call">
-      <rect x="1052" y="504" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="1232" y="527" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="1232" dy="0">validateDecisionUpdate</tspan></text>
-      
-      <path d="M1088 543H1368" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M1462.857142857143 835H967.9999999999999" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="write" data-message-ids="write" data-participant-ids="api,repo" data-row-type="message" data-kind="call">
-      <rect x="1196" y="568" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="1376" y="591" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="1376" dy="0">updateDecision(id, { intent })</tspan></text>
+      <rect x="1408.5714285714284" y="860" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="1588.5714285714284" y="883" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="1588.5714285714284" dy="0">patchEntry(id, patch)</tspan></text>
       
-      <path d="M1088 607H1656" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
-    </g><g data-row-id="ok" data-message-ids="ok" data-participant-ids="api,drawer" data-row-type="message" data-kind="return">
-      <rect x="620" y="632" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="800" y="655" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="800" dy="0">200 { id, intent }</tspan></text>
+      <path d="M1462.857142857143 899H1706.2857142857142" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
+    </g><g data-row-id="ok" data-message-ids="ok" data-participant-ids="api,shell" data-row-type="message" data-kind="return">
+      <rect x="780" y="924" width="360" height="49" rx="7" fill="#fafbf8"/>
+      <text x="960" y="947" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="960" dy="0">200 — the whole re-read entry, which replaces</tspan><tspan x="960" dy="17">the optimistic row</tspan></text>
       
-      <path d="M1088 671H520" fill="none" stroke="#85857f" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow)"/>
-    </g><g data-row-id="reload" data-message-ids="reload" data-participant-ids="drawer,api" data-row-type="message" data-kind="call">
-      <rect x="620" y="696" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="800" y="719" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="800" dy="0">invalidateAll → GET page model</tspan></text>
+      <path d="M1462.857142857143 978H465.14285714285717" fill="none" stroke="#84948b" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow)"/>
+    </g><g data-row-id="refused" data-message-ids="refused" data-participant-ids="api,shell" data-row-type="message" data-kind="return">
+      <rect x="780" y="1003" width="360" height="85" rx="7" fill="#fafbf8"/>
+      <text x="960" y="1026" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="960" dy="0">400 — the kept entry goes back and the reason is</tspan><tspan x="960" dy="17">shown beside the cell</tspan></text>
+      <text x="960" y="1067" text-anchor="middle" font-size="11" fill="#78867c"><tspan x="960" dy="0">No toast, no spinner: quiet recovery, inline, where the edit</tspan><tspan x="960" dy="15">happened.</tspan></text>
+      <path d="M1462.857142857143 1093H465.14285714285717" fill="none" stroke="#84948b" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow)"/>
+    </g><g data-row-id="undo" data-message-ids="press-u,inverse,undo-patch" data-participant-ids="person,shell,optimistic,api" data-row-type="phase" data-phase-depth="0" data-collapsed="false">
+        <rect x="58" y="1118" width="1804" height="35" rx="10" fill="#f4f6f3" stroke="#d9e0da"/>
+        <text x="78" y="1141" text-anchor="start" font-size="15" fill="#243b34"><tspan x="78" dy="0">3. Undo is a patch like any other</tspan></text>
+        
+        <text x="1820" y="1139.5" text-anchor="end" font-size="11" fill="#78867c">3 interactions</text>
+      </g><g data-row-id="press-u" data-message-ids="press-u" data-participant-ids="person,shell" data-row-type="message" data-kind="call">
+      <rect x="151.42857142857144" y="1167" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="331.42857142857144" y="1190" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="331.42857142857144" dy="0">u</tspan></text>
       
-      <path d="M512 735H1080" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M205.71428571428572 1206H449.14285714285717" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
+    </g><g data-row-id="inverse" data-message-ids="inverse" data-participant-ids="shell,optimistic" data-row-type="message" data-kind="call">
+      <rect x="402.8571428571429" y="1231" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="582.8571428571429" y="1254" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="582.8571428571429" dy="0">inversePatch(entry before the edit, patch)</tspan></text>
+      
+      <path d="M457.14285714285717 1270H700.5714285714286" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
+    </g><g data-row-id="undo-patch" data-message-ids="undo-patch" data-participant-ids="shell,api" data-row-type="message" data-kind="call">
+      <rect x="780" y="1295" width="360" height="49" rx="7" fill="#fafbf8"/>
+      <text x="960" y="1318" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="960" dy="0">PATCH the previous value — validated and</tspan><tspan x="960" dy="17">re-classified the same way</tspan></text>
+      
+      <path d="M457.14285714285717 1349H1454.857142857143" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g></g>
   <g font-family="Arial, Helvetica, sans-serif" data-export-layer="footer">
-    <path d="M70 992H1850" stroke="#ddddda"/>
-    <text x="70" y="1027" font-size="12" font-weight="600" letter-spacing="1" fill="#626b6f">CURRENT · 8 INTERACTIONS</text>
-    <text x="620" y="1027" font-size="11" fill="#7d7d77">SOURCE · Authored 2026-09-11 from src/routes/+page.svelte, src/lib/components/dashboard/ProjectDrawer.svelte, src/routes/api/projects/[id]/+server.ts, and src/lib/domain/attention.ts.</text>
+    <path d="M70 992H1850" stroke="#dce2db"/>
+    <text x="70" y="1027" font-size="12" font-weight="600" letter-spacing="1" fill="#607c69">CURRENT · 13 INTERACTIONS</text>
+    <text x="620" y="1027" font-size="11" fill="#78867c">SOURCE · Authored 2026-09-12 from src/routes/(inventory)/+page.svelte, src/lib/ui/catalog.svelte.ts, src/lib/domain/optimistic.ts, src/routes/api/entries/[kind]/[slug]/+server.ts, and src/lib/domain/fields.ts.</text>
   </g>
   </svg>

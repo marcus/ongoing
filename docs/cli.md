@@ -272,11 +272,13 @@ usually what a script wants.
   use `hide` for those.
 - `forget` and `prune --yes` return 409 while a scan is running, since removing a row underneath a
   scan would fail the run. Each forgotten project is logged to the service log by name and path.
-- `ongoing list --hidden` is the clause `is_hidden:true`, so the hidden shelf is reachable from
-  every surface rather than only from the `/hidden` page.
-- `ongoing list` reads `GET /api/entries`, which is the whole read contract. `/api/projects` is the
-  project projection the current browser still renders, and it keeps its own parameters until the
-  Phase 4 shell replaces it.
+- `ongoing list --hidden` is the clause `is_hidden:true`, so the hidden shelf is a query rather
+  than a page; the browser reaches it the same way, at `/?saved=hidden`.
+- `ongoing list` reads `GET /api/entries`, which is the whole read contract — and so does the
+  browser, whose `?q=`, `?sort=`, `?columns=`, and `?saved=` are the same strings these flags
+  produce. `listDefaultClauses` in `src/lib/domain/query.ts` is shared by both, which is why a URL
+  and an `ongoing list` invocation return the same rows. `/api/projects` is the project projection
+  `ongoing show` and `ongoing status` still read for their attention reasons.
 
 ## Fields, relations, and views
 

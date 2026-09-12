@@ -1,186 +1,186 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" role="img" aria-labelledby="sequence-title sequence-description" data-theme="graphite" data-theme-appearance="light">
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" role="img" aria-labelledby="sequence-title sequence-description" data-theme="grove" data-theme-appearance="light">
   <title id="sequence-title">ongoing scan --wait</title><desc id="sequence-description">A shell-started full-catalog scan: lease, discovery, per-project collectors, then GitHub, while the CLI polls the catalog until the run settles.</desc><metadata>{&quot;journeyId&quot;:&quot;manual-scan&quot;,&quot;provenance&quot;:&quot;Authored 2026-09-11 from bin/ongoing.ts (commandScan, waitForScan), src/routes/api/scan/+server.ts, src/lib/server/scanning/scanner.ts, and src/lib/server/collectors/discover.ts. A successful path; collector failures are recorded as warnings and are not shown.&quot;,&quot;hiddenLanes&quot;:[],&quot;rows&quot;:[{&quot;id&quot;:&quot;start&quot;,&quot;type&quot;:&quot;phase&quot;,&quot;messageIds&quot;:[&quot;invoke&quot;,&quot;post&quot;,&quot;start-run&quot;,&quot;lease&quot;,&quot;accepted&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;shell&quot;,&quot;cli&quot;,&quot;api&quot;,&quot;scanner&quot;,&quot;repo&quot;]},{&quot;id&quot;:&quot;invoke&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;invoke&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;shell&quot;,&quot;cli&quot;]},{&quot;id&quot;:&quot;post&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;post&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;cli&quot;,&quot;api&quot;]},{&quot;id&quot;:&quot;start-run&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;start-run&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;api&quot;,&quot;scanner&quot;]},{&quot;id&quot;:&quot;lease&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;lease&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;scanner&quot;,&quot;repo&quot;]},{&quot;id&quot;:&quot;accepted&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;accepted&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;api&quot;,&quot;cli&quot;]},{&quot;id&quot;:&quot;discovery&quot;,&quot;type&quot;:&quot;phase&quot;,&quot;messageIds&quot;:[&quot;walk&quot;,&quot;upsert&quot;,&quot;missing&quot;,&quot;discovered&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;scanner&quot;,&quot;discover&quot;,&quot;repo&quot;]},{&quot;id&quot;:&quot;walk&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;walk&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;scanner&quot;,&quot;discover&quot;]},{&quot;id&quot;:&quot;upsert&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;upsert&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;discover&quot;,&quot;repo&quot;]},{&quot;id&quot;:&quot;missing&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;missing&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;discover&quot;,&quot;repo&quot;]},{&quot;id&quot;:&quot;discovered&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;discovered&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;discover&quot;,&quot;scanner&quot;]},{&quot;id&quot;:&quot;collect&quot;,&quot;type&quot;:&quot;phase&quot;,&quot;messageIds&quot;:[&quot;heartbeat&quot;,&quot;git&quot;,&quot;td&quot;,&quot;stack&quot;,&quot;loc&quot;,&quot;metrics&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;scanner&quot;,&quot;repo&quot;,&quot;local&quot;]},{&quot;id&quot;:&quot;heartbeat&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;heartbeat&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;scanner&quot;,&quot;repo&quot;]},{&quot;id&quot;:&quot;git&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;git&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;scanner&quot;,&quot;local&quot;]},{&quot;id&quot;:&quot;td&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;td&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;scanner&quot;,&quot;local&quot;]},{&quot;id&quot;:&quot;stack&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;stack&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;scanner&quot;,&quot;local&quot;]},{&quot;id&quot;:&quot;loc&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;loc&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;scanner&quot;,&quot;local&quot;]},{&quot;id&quot;:&quot;metrics&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;metrics&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;scanner&quot;,&quot;repo&quot;]},{&quot;id&quot;:&quot;remote&quot;,&quot;type&quot;:&quot;phase&quot;,&quot;messageIds&quot;:[&quot;baseline&quot;,&quot;hosting&quot;,&quot;hosting-write&quot;,&quot;finish&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;scanner&quot;,&quot;repo&quot;,&quot;github&quot;]},{&quot;id&quot;:&quot;baseline&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;baseline&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;scanner&quot;,&quot;repo&quot;]},{&quot;id&quot;:&quot;hosting&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;hosting&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;scanner&quot;,&quot;github&quot;]},{&quot;id&quot;:&quot;hosting-write&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;hosting-write&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;github&quot;,&quot;repo&quot;]},{&quot;id&quot;:&quot;finish&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;finish&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;scanner&quot;,&quot;repo&quot;]},{&quot;id&quot;:&quot;wait&quot;,&quot;type&quot;:&quot;phase&quot;,&quot;messageIds&quot;:[&quot;poll&quot;,&quot;settled&quot;,&quot;report&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;cli&quot;,&quot;api&quot;,&quot;shell&quot;]},{&quot;id&quot;:&quot;poll&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;poll&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;cli&quot;,&quot;api&quot;]},{&quot;id&quot;:&quot;settled&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;settled&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;api&quot;,&quot;cli&quot;]},{&quot;id&quot;:&quot;report&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;report&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;cli&quot;,&quot;shell&quot;]}]}</metadata>
   <defs>
-    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#85857f"/></marker>
-    <marker id="arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10" fill="none" stroke="#85857f" stroke-width="1.5"/></marker>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#84948b"/></marker>
+    <marker id="arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10" fill="none" stroke="#84948b" stroke-width="1.5"/></marker>
   </defs>
-  <rect width="1920" height="1080" fill="#f8f8f6"/>
+  <rect width="1920" height="1080" fill="#fafbf8"/>
   <g font-family="Arial, Helvetica, sans-serif" data-export-layer="title">
-    <text x="70" y="43" font-size="11" letter-spacing="2.5" fill="#626b6f">FRACTAL / SEQUENCE JOURNEY</text>
-    <text x="70" y="88" text-anchor="start" font-size="34" fill="#292927"><tspan x="70" dy="0">ongoing scan --wait</tspan></text>
-    <text x="70" y="126" text-anchor="start" font-size="15" fill="#74746f"><tspan x="70" dy="0">A shell-started full-catalog scan: lease, discovery, per-project collectors, then GitHub, while the CLI polls the catalog until the run settles.</tspan></text>
+    <text x="70" y="43" font-size="11" letter-spacing="2.5" fill="#607c69">FRACTAL / SEQUENCE JOURNEY</text>
+    <text x="70" y="88" text-anchor="start" font-size="34" fill="#243b34"><tspan x="70" dy="0">ongoing scan --wait</tspan></text>
+    <text x="70" y="126" text-anchor="start" font-size="15" fill="#6e7d72"><tspan x="70" dy="0">A shell-started full-catalog scan: lease, discovery, per-project collectors, then GitHub, while the CLI polls the catalog until the run settles.</tspan></text>
   </g>
   <g font-family="Arial, Helvetica, sans-serif" transform="translate(582.360248447205 190) scale(0.39337474120082816)"><g data-column="shell" data-members="shell" data-elements="">
     <rect x="102" y="32" width="176" height="63" rx="12" fill="#ffffff" stroke="#759EB5" stroke-width="2"/>
-    <text x="190" y="59" text-anchor="middle" font-size="15" fill="#292927"><tspan x="190" dy="0">Shell or agent</tspan></text>
-    <path d="M190 95V1862" stroke="#ddddda" stroke-width="1.2" stroke-dasharray="5 7"/>
+    <text x="190" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="190" dy="0">Shell or agent</tspan></text>
+    <path d="M190 95V1862" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
   </g><g data-column="cli" data-members="cli" data-elements="cli.scan_cmd">
     <rect x="322" y="32" width="176" height="63" rx="12" fill="#ffffff" stroke="#82A6B6" stroke-width="2"/>
-    <text x="410" y="59" text-anchor="middle" font-size="15" fill="#292927"><tspan x="410" dy="0">ongoing scan</tspan></text>
-    <path d="M410 95V1862" stroke="#ddddda" stroke-width="1.2" stroke-dasharray="5 7"/>
+    <text x="410" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="410" dy="0">ongoing scan</tspan></text>
+    <path d="M410 95V1862" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
   </g><g data-column="api" data-members="api" data-elements="service.scan_api">
     <rect x="542" y="32" width="176" height="63" rx="12" fill="#ffffff" stroke="#739886" stroke-width="2"/>
-    <text x="630" y="59" text-anchor="middle" font-size="15" fill="#292927"><tspan x="630" dy="0">Scan API</tspan></text>
-    <path d="M630 95V1862" stroke="#ddddda" stroke-width="1.2" stroke-dasharray="5 7"/>
+    <text x="630" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="630" dy="0">Scan API</tspan></text>
+    <path d="M630 95V1862" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
   </g><g data-column="scanner" data-members="scanner" data-elements="scanning.scanner">
     <rect x="762" y="32" width="176" height="63" rx="12" fill="#ffffff" stroke="#9A91C4" stroke-width="2"/>
-    <text x="850" y="59" text-anchor="middle" font-size="15" fill="#292927"><tspan x="850" dy="0">Scanner</tspan></text>
-    <path d="M850 95V1862" stroke="#ddddda" stroke-width="1.2" stroke-dasharray="5 7"/>
+    <text x="850" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="850" dy="0">Scanner</tspan></text>
+    <path d="M850 95V1862" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
   </g><g data-column="repo" data-members="repo" data-elements="catalog.repository">
     <rect x="982" y="32" width="176" height="63" rx="12" fill="#ffffff" stroke="#B59669" stroke-width="2"/>
-    <text x="1070" y="59" text-anchor="middle" font-size="15" fill="#292927"><tspan x="1070" dy="0">Repository</tspan></text>
-    <path d="M1070 95V1862" stroke="#ddddda" stroke-width="1.2" stroke-dasharray="5 7"/>
+    <text x="1070" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="1070" dy="0">Repository</tspan></text>
+    <path d="M1070 95V1862" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
   </g><g data-column="discover" data-members="discover" data-elements="scanning.discover">
     <rect x="1202" y="32" width="176" height="63" rx="12" fill="#ffffff" stroke="#D4A373" stroke-width="2"/>
-    <text x="1290" y="59" text-anchor="middle" font-size="15" fill="#292927"><tspan x="1290" dy="0">Discovery</tspan></text>
-    <path d="M1290 95V1862" stroke="#ddddda" stroke-width="1.2" stroke-dasharray="5 7"/>
+    <text x="1290" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="1290" dy="0">Discovery</tspan></text>
+    <path d="M1290 95V1862" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
   </g><g data-column="local" data-members="local" data-elements="scanning.git">
     <rect x="1422" y="32" width="176" height="63" rx="12" fill="#ffffff" stroke="#D4A373" stroke-width="2"/>
-    <text x="1510" y="59" text-anchor="middle" font-size="15" fill="#292927"><tspan x="1510" dy="0">git / td / stack /</tspan><tspan x="1510" dy="19">cloc</tspan></text>
-    <path d="M1510 95V1862" stroke="#ddddda" stroke-width="1.2" stroke-dasharray="5 7"/>
+    <text x="1510" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="1510" dy="0">git / td / stack /</tspan><tspan x="1510" dy="19">cloc</tspan></text>
+    <path d="M1510 95V1862" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
   </g><g data-column="github" data-members="github" data-elements="scanning.github">
     <rect x="1642" y="32" width="176" height="63" rx="12" fill="#ffffff" stroke="#D4A373" stroke-width="2"/>
-    <text x="1730" y="59" text-anchor="middle" font-size="15" fill="#292927"><tspan x="1730" dy="0">GitHub enrichment</tspan></text>
-    <path d="M1730 95V1862" stroke="#ddddda" stroke-width="1.2" stroke-dasharray="5 7"/>
+    <text x="1730" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="1730" dy="0">GitHub enrichment</tspan></text>
+    <path d="M1730 95V1862" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
   </g><g data-row-id="start" data-message-ids="invoke,post,start-run,lease,accepted" data-participant-ids="shell,cli,api,scanner,repo" data-row-type="phase" data-phase-depth="0" data-collapsed="false">
-        <rect x="58" y="137" width="1804" height="35" rx="10" fill="#eeeeeb" stroke="#d5d5d0"/>
-        <text x="78" y="160" text-anchor="start" font-size="15" fill="#292927"><tspan x="78" dy="0">1. Acquire the lease</tspan></text>
-        <text x="256.34" y="160" text-anchor="start" font-size="11" fill="#7d7d77"><tspan x="256.34" dy="0">A second concurrent scan is refused with 409 rather than queued.</tspan></text>
-        <text x="1820" y="158.5" text-anchor="end" font-size="11" fill="#7d7d77">5 interactions</text>
+        <rect x="58" y="137" width="1804" height="35" rx="10" fill="#f4f6f3" stroke="#d9e0da"/>
+        <text x="78" y="160" text-anchor="start" font-size="15" fill="#243b34"><tspan x="78" dy="0">1. Acquire the lease</tspan></text>
+        <text x="256.34" y="160" text-anchor="start" font-size="11" fill="#78867c"><tspan x="256.34" dy="0">A second concurrent scan is refused with 409 rather than queued.</tspan></text>
+        <text x="1820" y="158.5" text-anchor="end" font-size="11" fill="#78867c">5 interactions</text>
       </g><g data-row-id="invoke" data-message-ids="invoke" data-participant-ids="shell,cli" data-row-type="message" data-kind="call">
-      <rect x="120" y="186" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="300" y="209" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="300" dy="0">ongoing scan --wait</tspan></text>
+      <rect x="120" y="186" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="300" y="209" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="300" dy="0">ongoing scan --wait</tspan></text>
       
-      <path d="M190 225H402" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M190 225H402" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="post" data-message-ids="post" data-participant-ids="cli,api" data-row-type="message" data-kind="call">
-      <rect x="340" y="250" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="520" y="273" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="520" dy="0">POST /api/scan {}</tspan></text>
+      <rect x="340" y="250" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="520" y="273" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="520" dy="0">POST /api/scan {}</tspan></text>
       
-      <path d="M410 289H622" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M410 289H622" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="start-run" data-message-ids="start-run" data-participant-ids="api,scanner" data-row-type="message" data-kind="call">
-      <rect x="560" y="314" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="740" y="337" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="740" dy="0">start({ reason: manual })</tspan></text>
+      <rect x="560" y="314" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="740" y="337" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="740" dy="0">start({ reason: manual })</tspan></text>
       
-      <path d="M630 353H842" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M630 353H842" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="lease" data-message-ids="lease" data-participant-ids="scanner,repo" data-row-type="message" data-kind="call">
-      <rect x="780" y="378" width="360" height="66" rx="7" fill="#f8f8f6"/>
-      <text x="960" y="401" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="960" dy="0">tryCreateScanRun with lease owner</tspan></text>
-      <text x="960" y="423" text-anchor="middle" font-size="11" fill="#7d7d77"><tspan x="960" dy="0">Fails if another run is running and its heartbeat is not</tspan><tspan x="960" dy="15">stale.</tspan></text>
-      <path d="M850 449H1062" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <rect x="780" y="378" width="360" height="66" rx="7" fill="#fafbf8"/>
+      <text x="960" y="401" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="960" dy="0">tryCreateScanRun with lease owner</tspan></text>
+      <text x="960" y="423" text-anchor="middle" font-size="11" fill="#78867c"><tspan x="960" dy="0">Fails if another run is running and its heartbeat is not</tspan><tspan x="960" dy="15">stale.</tspan></text>
+      <path d="M850 449H1062" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="accepted" data-message-ids="accepted" data-participant-ids="api,cli" data-row-type="message" data-kind="return">
-      <rect x="340" y="474" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="520" y="497" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="520" dy="0">202 { runId, status: running }</tspan></text>
+      <rect x="340" y="474" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="520" y="497" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="520" dy="0">202 { runId, status: running }</tspan></text>
       
-      <path d="M630 513H418" fill="none" stroke="#85857f" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow)"/>
+      <path d="M630 513H418" fill="none" stroke="#84948b" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow)"/>
     </g><g data-row-id="discovery" data-message-ids="walk,upsert,missing,discovered" data-participant-ids="scanner,discover,repo" data-row-type="phase" data-phase-depth="0" data-collapsed="false">
-        <rect x="58" y="538" width="1804" height="35" rx="10" fill="#eeeeeb" stroke="#d5d5d0"/>
-        <text x="78" y="561" text-anchor="start" font-size="15" fill="#292927"><tspan x="78" dy="0">2. Discover and reconcile</tspan></text>
+        <rect x="58" y="538" width="1804" height="35" rx="10" fill="#f4f6f3" stroke="#d9e0da"/>
+        <text x="78" y="561" text-anchor="start" font-size="15" fill="#243b34"><tspan x="78" dy="0">2. Discover and reconcile</tspan></text>
         
-        <text x="1820" y="559.5" text-anchor="end" font-size="11" fill="#7d7d77">4 interactions</text>
+        <text x="1820" y="559.5" text-anchor="end" font-size="11" fill="#78867c">4 interactions</text>
       </g><g data-row-id="walk" data-message-ids="walk" data-participant-ids="scanner,discover" data-row-type="message" data-kind="call">
-      <rect x="890" y="587" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="1070" y="610" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="1070" dy="0">discoverAndReconcile(roots, depth, globs)</tspan></text>
+      <rect x="890" y="587" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="1070" y="610" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="1070" dy="0">discoverAndReconcile(roots, depth, globs)</tspan></text>
       
-      <path d="M850 626H1282" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M850 626H1282" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="upsert" data-message-ids="upsert" data-participant-ids="discover,repo" data-row-type="message" data-kind="call">
-      <rect x="1000" y="651" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="1180" y="674" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="1180" dy="0">upsertDiscovered per repository</tspan></text>
+      <rect x="1000" y="651" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="1180" y="674" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="1180" dy="0">upsertDiscovered per repository</tspan></text>
       
-      <path d="M1290 690H1078" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M1290 690H1078" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="missing" data-message-ids="missing" data-participant-ids="discover,repo" data-row-type="message" data-kind="call">
-      <rect x="1000" y="715" width="360" height="49" rx="7" fill="#f8f8f6"/>
-      <text x="1180" y="738" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="1180" dy="0">markUnseenMissing; forget confirmed-gone after</tspan><tspan x="1180" dy="17">grace</tspan></text>
+      <rect x="1000" y="715" width="360" height="49" rx="7" fill="#fafbf8"/>
+      <text x="1180" y="738" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="1180" dy="0">markUnseenMissing; forget confirmed-gone after</tspan><tspan x="1180" dy="17">grace</tspan></text>
       
-      <path d="M1290 769H1078" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M1290 769H1078" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="discovered" data-message-ids="discovered" data-participant-ids="discover,scanner" data-row-type="message" data-kind="return">
-      <rect x="890" y="794" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="1070" y="817" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="1070" dy="0">projects, enrichmentProjects (hidden excluded)</tspan></text>
+      <rect x="890" y="794" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="1070" y="817" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="1070" dy="0">projects, enrichmentProjects (hidden excluded)</tspan></text>
       
-      <path d="M1290 833H858" fill="none" stroke="#85857f" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow)"/>
+      <path d="M1290 833H858" fill="none" stroke="#84948b" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow)"/>
     </g><g data-row-id="collect" data-message-ids="heartbeat,git,td,stack,loc,metrics" data-participant-ids="scanner,repo,local" data-row-type="phase" data-phase-depth="0" data-collapsed="false">
-        <rect x="58" y="858" width="1804" height="35" rx="10" fill="#eeeeeb" stroke="#d5d5d0"/>
-        <text x="78" y="881" text-anchor="start" font-size="15" fill="#292927"><tspan x="78" dy="0">3. Collect per project</tspan></text>
-        <text x="275.15" y="881" text-anchor="start" font-size="11" fill="#7d7d77"><tspan x="275.15" dy="0">Runs under gitConcurrency; cloc additionally under clocConcurrency and only when the tracked-worktree fingerprint changed (policy: changed).</tspan></text>
-        <text x="1820" y="879.5" text-anchor="end" font-size="11" fill="#7d7d77">6 interactions</text>
+        <rect x="58" y="858" width="1804" height="35" rx="10" fill="#f4f6f3" stroke="#d9e0da"/>
+        <text x="78" y="881" text-anchor="start" font-size="15" fill="#243b34"><tspan x="78" dy="0">3. Collect per project</tspan></text>
+        <text x="275.15" y="881" text-anchor="start" font-size="11" fill="#78867c"><tspan x="275.15" dy="0">Runs under gitConcurrency; cloc additionally under clocConcurrency and only when the tracked-worktree fingerprint changed (policy: changed).</tspan></text>
+        <text x="1820" y="879.5" text-anchor="end" font-size="11" fill="#78867c">6 interactions</text>
       </g><g data-row-id="heartbeat" data-message-ids="heartbeat" data-participant-ids="scanner,repo" data-row-type="message" data-kind="async">
-      <rect x="780" y="907" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="960" y="930" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="960" dy="0">renewScanLease every 10 s</tspan></text>
+      <rect x="780" y="907" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="960" y="930" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="960" dy="0">renewScanLease every 10 s</tspan></text>
       
-      <path d="M850 946H1062" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow-open)"/>
+      <path d="M850 946H1062" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow-open)"/>
     </g><g data-row-id="git" data-message-ids="git" data-participant-ids="scanner,local" data-row-type="message" data-kind="call">
-      <rect x="1000" y="971" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="1180" y="994" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="1180" dy="0">collectGitMetrics</tspan></text>
+      <rect x="1000" y="971" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="1180" y="994" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="1180" dy="0">collectGitMetrics</tspan></text>
       
-      <path d="M850 1010H1502" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M850 1010H1502" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="td" data-message-ids="td" data-participant-ids="scanner,local" data-row-type="message" data-kind="call">
-      <rect x="1000" y="1035" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="1180" y="1058" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="1180" dy="0">collectTdMetrics (HTTP, else CLI)</tspan></text>
+      <rect x="1000" y="1035" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="1180" y="1058" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="1180" dy="0">collectTdMetrics (HTTP, else CLI)</tspan></text>
       
-      <path d="M850 1074H1502" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M850 1074H1502" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="stack" data-message-ids="stack" data-participant-ids="scanner,local" data-row-type="message" data-kind="call">
-      <rect x="1000" y="1099" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="1180" y="1122" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="1180" dy="0">collectStackDeclarations</tspan></text>
+      <rect x="1000" y="1099" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="1180" y="1122" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="1180" dy="0">collectStackDeclarations</tspan></text>
       
-      <path d="M850 1138H1502" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M850 1138H1502" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="loc" data-message-ids="loc" data-participant-ids="scanner,local" data-row-type="message" data-kind="call">
-      <rect x="1000" y="1163" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="1180" y="1186" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="1180" dy="0">collectLocMetrics if fingerprint changed</tspan></text>
+      <rect x="1000" y="1163" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="1180" y="1186" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="1180" dy="0">collectLocMetrics if fingerprint changed</tspan></text>
       
-      <path d="M850 1202H1502" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M850 1202H1502" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="metrics" data-message-ids="metrics" data-participant-ids="scanner,repo" data-row-type="message" data-kind="call">
-      <rect x="780" y="1227" width="360" height="49" rx="7" fill="#f8f8f6"/>
-      <text x="960" y="1250" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="960" dy="0">updateMetrics, saveSnapshot, resolve or record</tspan><tspan x="960" dy="17">collection errors</tspan></text>
+      <rect x="780" y="1227" width="360" height="49" rx="7" fill="#fafbf8"/>
+      <text x="960" y="1250" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="960" dy="0">updateMetrics, saveSnapshot, resolve or record</tspan><tspan x="960" dy="17">collection errors</tspan></text>
       
-      <path d="M850 1281H1062" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M850 1281H1062" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="remote" data-message-ids="baseline,hosting,hosting-write,finish" data-participant-ids="scanner,repo,github" data-row-type="phase" data-phase-depth="0" data-collapsed="false">
-        <rect x="58" y="1306" width="1804" height="35" rx="10" fill="#eeeeeb" stroke="#d5d5d0"/>
-        <text x="78" y="1329" text-anchor="start" font-size="15" fill="#292927"><tspan x="78" dy="0">4. Baselines and GitHub, once per run</tspan></text>
+        <rect x="58" y="1306" width="1804" height="35" rx="10" fill="#f4f6f3" stroke="#d9e0da"/>
+        <text x="78" y="1329" text-anchor="start" font-size="15" fill="#243b34"><tspan x="78" dy="0">4. Baselines and GitHub, once per run</tspan></text>
         
-        <text x="1820" y="1327.5" text-anchor="end" font-size="11" fill="#7d7d77">4 interactions</text>
+        <text x="1820" y="1327.5" text-anchor="end" font-size="11" fill="#78867c">4 interactions</text>
       </g><g data-row-id="baseline" data-message-ids="baseline" data-participant-ids="scanner,repo" data-row-type="message" data-kind="call">
-      <rect x="780" y="1355" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="960" y="1378" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="960" dy="0">refreshReleaseBaselines for declared toolchains</tspan></text>
+      <rect x="780" y="1355" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="960" y="1378" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="960" dy="0">refreshReleaseBaselines for declared toolchains</tspan></text>
       
-      <path d="M850 1394H1062" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M850 1394H1062" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="hosting" data-message-ids="hosting" data-participant-ids="scanner,github" data-row-type="message" data-kind="call">
-      <rect x="1110" y="1419" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="1290" y="1442" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="1290" dy="0">collectGitHubEnrichment(projects, force: false)</tspan></text>
+      <rect x="1110" y="1419" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="1290" y="1442" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="1290" dy="0">collectGitHubEnrichment(projects, force: false)</tspan></text>
       
-      <path d="M850 1458H1722" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M850 1458H1722" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="hosting-write" data-message-ids="hosting-write" data-participant-ids="github,repo" data-row-type="message" data-kind="call">
-      <rect x="1220" y="1483" width="360" height="49" rx="7" fill="#f8f8f6"/>
-      <text x="1400" y="1506" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="1400" dy="0">hosting and traffic metrics, star and traffic</tspan><tspan x="1400" dy="17">snapshots</tspan></text>
+      <rect x="1220" y="1483" width="360" height="49" rx="7" fill="#fafbf8"/>
+      <text x="1400" y="1506" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="1400" dy="0">hosting and traffic metrics, star and traffic</tspan><tspan x="1400" dy="17">snapshots</tspan></text>
       
-      <path d="M1730 1537H1078" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M1730 1537H1078" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="finish" data-message-ids="finish" data-participant-ids="scanner,repo" data-row-type="message" data-kind="call">
-      <rect x="780" y="1562" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="960" y="1585" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="960" dy="0">finishScanRun(completed, counts)</tspan></text>
+      <rect x="780" y="1562" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="960" y="1585" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="960" dy="0">finishScanRun(completed, counts)</tspan></text>
       
-      <path d="M850 1601H1062" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M850 1601H1062" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="wait" data-message-ids="poll,settled,report" data-participant-ids="cli,api,shell" data-row-type="phase" data-phase-depth="0" data-collapsed="false">
-        <rect x="58" y="1626" width="1804" height="35" rx="10" fill="#eeeeeb" stroke="#d5d5d0"/>
-        <text x="78" y="1649" text-anchor="start" font-size="15" fill="#292927"><tspan x="78" dy="0">5. The CLI polls until the run settles</tspan></text>
+        <rect x="58" y="1626" width="1804" height="35" rx="10" fill="#f4f6f3" stroke="#d9e0da"/>
+        <text x="78" y="1649" text-anchor="start" font-size="15" fill="#243b34"><tspan x="78" dy="0">5. The CLI polls until the run settles</tspan></text>
         
-        <text x="1820" y="1647.5" text-anchor="end" font-size="11" fill="#7d7d77">3 interactions</text>
+        <text x="1820" y="1647.5" text-anchor="end" font-size="11" fill="#78867c">3 interactions</text>
       </g><g data-row-id="poll" data-message-ids="poll" data-participant-ids="cli,api" data-row-type="message" data-kind="call">
-      <rect x="340" y="1675" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="520" y="1698" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="520" dy="0">GET /api/projects every 2 s, read scan.status</tspan></text>
+      <rect x="340" y="1675" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="520" y="1698" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="520" dy="0">GET /api/projects every 2 s, read scan.status</tspan></text>
       
-      <path d="M410 1714H622" fill="none" stroke="#85857f" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M410 1714H622" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="settled" data-message-ids="settled" data-participant-ids="api,cli" data-row-type="message" data-kind="return">
-      <rect x="340" y="1739" width="360" height="34" rx="7" fill="#f8f8f6"/>
-      <text x="520" y="1762" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="520" dy="0">scan.status: completed</tspan></text>
+      <rect x="340" y="1739" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="520" y="1762" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="520" dy="0">scan.status: completed</tspan></text>
       
-      <path d="M630 1778H418" fill="none" stroke="#85857f" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow)"/>
+      <path d="M630 1778H418" fill="none" stroke="#84948b" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow)"/>
     </g><g data-row-id="report" data-message-ids="report" data-participant-ids="cli,shell" data-row-type="message" data-kind="return">
-      <rect x="120" y="1803" width="360" height="49" rx="7" fill="#f8f8f6"/>
-      <text x="300" y="1826" text-anchor="middle" font-size="13" fill="#62625e"><tspan x="300" dy="0">discovered · updated · errors (exit 1 unless</tspan><tspan x="300" dy="17">completed)</tspan></text>
+      <rect x="120" y="1803" width="360" height="49" rx="7" fill="#fafbf8"/>
+      <text x="300" y="1826" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="300" dy="0">discovered · updated · errors (exit 1 unless</tspan><tspan x="300" dy="17">completed)</tspan></text>
       
-      <path d="M410 1857H198" fill="none" stroke="#85857f" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow)"/>
+      <path d="M410 1857H198" fill="none" stroke="#84948b" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow)"/>
     </g></g>
   <g font-family="Arial, Helvetica, sans-serif" data-export-layer="footer">
-    <path d="M70 992H1850" stroke="#ddddda"/>
-    <text x="70" y="1027" font-size="12" font-weight="600" letter-spacing="1" fill="#626b6f">CURRENT · 22 INTERACTIONS</text>
-    <text x="620" y="1027" font-size="11" fill="#7d7d77">SOURCE · Authored 2026-09-11 from bin/ongoing.ts (commandScan, waitForScan), src/routes/api/scan/+server.ts, src/lib/server/scanning/scanner.ts, and src/lib/server/collectors/discover.ts. A successful path; collector fai…</text>
+    <path d="M70 992H1850" stroke="#dce2db"/>
+    <text x="70" y="1027" font-size="12" font-weight="600" letter-spacing="1" fill="#607c69">CURRENT · 22 INTERACTIONS</text>
+    <text x="620" y="1027" font-size="11" fill="#78867c">SOURCE · Authored 2026-09-11 from bin/ongoing.ts (commandScan, waitForScan), src/routes/api/scan/+server.ts, src/lib/server/scanning/scanner.ts, and src/lib/server/collectors/discover.ts. A successful path; collector fai…</text>
   </g>
   </svg>

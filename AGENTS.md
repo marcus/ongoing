@@ -42,7 +42,8 @@ goes. New capability order is unchanged: domain function, repository method, API
 `projects` table is gone and the metric tables are keyed by `entry_id`. Do not add a column for a new per-entry
 value — register a field. `validateEntryPatch(registry, kind, patch)` in `src/lib/domain/fields.ts` is the only
 path from an untrusted patch to stored values, and the API, the CLI, and (from Phase 4) the browser all call it.
-`/api/projects` is now the project projection of the same entries and stays until the new shell ships.
+`/api/projects` is the project projection of the same entries; the new shell does not use it, but `ongoing
+show` and `ongoing status` still do.
 
 **Phase 2 has landed.** Reading the catalog is one query grammar: `src/lib/domain/query.ts` parses and
 evaluates it, `GET /api/entries?q=&sort=&columns=&saved=` is the single read endpoint, and `ongoing list`
@@ -61,6 +62,19 @@ untouched. Do not add a technologies table or a `/api/technologies` route: `ongo
 in `technology.ts`, and a signature beside it only if a manifest can see it. The `project-standards`
 skill's language and tool tables are generated from `ongoing tech export` by
 `scripts/render-project-standards.ts`; edit the catalog, then regenerate.
+
+**Phase 4 has landed.** The browser is the inventory shell: a rail, a table over chosen columns with
+inline editors, a detail panel on `Enter`, fact sheets at `/p/<slug>` and `/t/<slug>`, the radar at
+`/radar`, providers at `/providers`, and `Cmd+K`. Everything lives under `src/routes/(inventory)/`,
+which is one route group over one `+layout.server.ts` that loads the whole catalog once; filtering,
+sorting, and column changes are `filterRows`/`sortRows` in the browser, so a list operation costs no
+round trip. **The URL is the query** — `?q=`, `?sort=`, `?columns=`, `?saved=` carry the same strings the
+CLI carries, and `listDefaultClauses` is shared with `ongoing list` so a URL and a CLI invocation are the
+same command. Edits are optimistic with undo through `src/lib/domain/optimistic.ts`, which re-runs
+`validateEntryPatch` and `classifyAttentionViews` locally before the server answers. Do not add a button
+without a CLI verb: `tests/e2e/inventory.test.ts` drives `bin/ongoing` against the same server for every
+browser mutation it makes. `dashboard.css`, the ticker, the flyout, the drawer, the project list and row,
+drag reorder, and the `/hidden` page are gone; `?saved=hidden` is the hidden shelf now.
 
 **Phase 5 has landed.** Every collector is a provider with a manifest in `src/lib/domain/provider.ts`: it
 declares its kinds, its namespaced read-only fields, the relation kinds it writes, what it needs from the
@@ -125,6 +139,12 @@ Before committing:
 
 ## Styling
 
-All dashboard styling lives in one file: `src/lib/components/dashboard/dashboard.css`. There is no
-`--font-size-base` variable or Tailwind config — every `font-size` is an absolute px value declared per component,
-so an app-wide font bump means editing every `font-size:` line in that file, not just the `body` rule.
+Every colour, size, weight, and duration resolves to a token in `src/lib/ui/tokens.css`. **No component
+declares a `font-size` in pixels or a colour literal** — that was exactly the problem with the
+`dashboard.css` monolith this replaced, where an app-wide type change meant editing 1,468 lines.
+
+The house style is written down in [DESIGN.md](DESIGN.md): the tokens, the components in `src/lib/ui/`,
+the keyboard map with each key's CLI equivalent, and the places the design deliberately departs from the
+Linear patterns it started from. Read it before adding a screen, a component, or a colour. Screens are
+recorded in `docs/qa/screens/` (dark and light); regenerate with
+`QA_SCREENSHOTS=1 E2E_PORT=7801 bun run test:e2e tests/e2e/screenshots.test.ts`.

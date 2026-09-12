@@ -5,9 +5,9 @@
 <svelte:head>
   <meta
     name="description"
-    content="A private dashboard for deciding where project attention matters most."
+    content="A private software inventory: what exists, what it is built with, and what deserves attention."
   />
-  <meta name="theme-color" content="#0f0d0a" />
+  <meta name="theme-color" content="#17161c" />
 </svelte:head>
 
 {@render children()}
