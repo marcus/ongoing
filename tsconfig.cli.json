@@ -1,0 +1,25 @@
+{
+  // `bun run check` runs svelte-check over the SvelteKit tsconfig, whose `include` covers src/ and
+  // tests/ but not bin/ — so the CLI, which is a real 2,500-line program, was never type-checked.
+  // This config checks it on its own terms: bare Bun, no SvelteKit, `$lib` resolved the way Bun
+  // resolves it when `ongoing` links the core library in-process.
+  "compilerOptions": {
+    "noEmit": true,
+    "allowJs": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["esnext", "DOM", "DOM.Iterable"],
+    "types": ["bun"],
+    "baseUrl": ".",
+    "paths": {
+      "$lib": ["src/lib"],
+      "$lib/*": ["src/lib/*"]
+    }
+  },
+  "include": ["bin/**/*.ts"]
+}

@@ -2548,6 +2548,15 @@ async function main(argv: string[]): Promise<void> {
       return commandStop(args);
     case 'serve':
       return commandServe(args);
+    // A session cookie is an HTTP thing: there is nothing to log in to in this process.
+    case 'login': {
+      const secret = args.positional[0] ?? process.env.ONGOING_ACCESS_SECRET;
+      if (!secret)
+        throw new CliError('Usage: ongoing login <secret> (or set ONGOING_ACCESS_SECRET)');
+      if (!(await new Client(baseUrl(args)).login(secret)))
+        throw new CliError('The access secret was not accepted.');
+      return out(`${green('✓')} session saved to ${SESSION_FILE}`);
+    }
   }
 
   const client = await createClient(args);
@@ -2610,13 +2619,6 @@ async function main(argv: string[]): Promise<void> {
       return commandScan(client, args);
     case 'open':
       return commandOpen(client, args);
-    case 'login': {
-      const secret = args.positional[0] ?? process.env.ONGOING_ACCESS_SECRET;
-      if (!secret)
-        throw new CliError('Usage: ongoing login <secret> (or set ONGOING_ACCESS_SECRET)');
-      if (!(await client.login(secret))) throw new CliError('The access secret was not accepted.');
-      return out(`${green('✓')} session saved to ${SESSION_FILE}`);
-    }
     default:
       throw new CliError(`Unknown command: ${command}\nRun \`ongoing help\` for usage.`);
   }
