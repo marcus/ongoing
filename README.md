@@ -55,7 +55,7 @@ The production source of truth is the private repository `git@github.com:marcus/
 
 ## Architecture
 
-The full product plan lives in `docs/plans/ongoing-projects-dashboard.md`. The initial architectural constraints are recorded in `docs/adr/`: app-owned storage, provider boundaries, cache-first bounded scanning, and toolchain release baselines.
+The plan for the shipped product lives in `docs/plans/implemented/ongoing-projects-dashboard.md`; the redesign that turns Ongoing into a software inventory is `docs/plans/active/ongoing-inventory-redesign.md`. The architectural constraints are recorded in `docs/adr/`: app-owned storage, provider boundaries, cache-first bounded scanning, toolchain release baselines, and the entry, query, provider, and design-system decisions behind the redesign.
 
 ## Attention views
 

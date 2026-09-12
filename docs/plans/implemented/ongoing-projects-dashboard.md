@@ -1,5 +1,10 @@
 # Ongoing projects dashboard
 
+**Status:** implemented, 2026-09-11. This is the plan the shipped dashboard was built from and the
+reference for behaviour that must not regress. New work belongs in
+[the inventory redesign](../active/ongoing-inventory-redesign.md), which supersedes this document's
+model, surfaces, and roadmap while keeping the attention views it defines.
+
 ## Summary
 
 Build a small local web app that scans Git repositories under `~/code`, enriches them with local Git, TD, and GitHub data, and presents them as a sortable vertical list. The point is not just to inventory projects. The app should help answer a harder question: where would a few hours of attention have the most value?

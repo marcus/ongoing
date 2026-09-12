@@ -1,7 +1,7 @@
 # First-release coverage map
 
 This map ties the first-release definition of done and test strategy in
-`docs/plans/ongoing-projects-dashboard.md` to executable checks. It is intentionally pragmatic for
+`docs/plans/implemented/ongoing-projects-dashboard.md` to executable checks. It is intentionally pragmatic for
 a single-user, trusted-LAN application: related stories share feature-level release gates, while
 security, persistence, migration, and deployment boundaries keep dedicated coverage.
 

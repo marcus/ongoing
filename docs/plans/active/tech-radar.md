@@ -1,6 +1,14 @@
 # Tech radar: technologies as catalog entries
 
-**Status:** sketch. Not scheduled. Written so the idea has a home; nothing below is built.
+**Status:** active — the detailed model for Phase 3 of
+[the inventory redesign](ongoing-inventory-redesign.md) (td-1155ba). Nothing below is built.
+
+This document keeps the radar's own vocabulary, detection rules, and steel thread. The redesign
+owns the shape they land in: a technology is an **entry** with `kind = 'technology'`, its ring and
+tool surface are **registered fields**, and a usage edge is a **relation** with `kind = 'uses'`.
+The standalone `technologies` and `project_technologies` tables in "Steel thread" below are
+superseded by that model; read them as the data the radar needs, not as a migration to write.
+Where the two documents disagree, the redesign wins.
 
 ## Summary
 
@@ -116,7 +124,8 @@ Attention: a project using an `out` technology, or a technology whose ring is pa
 
 The smallest version that proves the shape:
 
-1. Migration: `technologies` and `project_technologies` tables.
+1. Register the `technology` entry kind, its fields, and the `uses` and `provides` relation kinds
+   (no migration: rows in the registry the redesign's Phase 1 builds).
 2. Seed six technologies by hand: `go`, `sveltekit`, `sqlite`, `google-auth`, `tailwind`, `td`, with rings.
 3. Signature detection for those six inside the existing stack collector; languages read from `project_stacks`.
 4. `ongoing tech list`, `tech show`, `tech set --ring`, `tech link`, `tech export --json`.
@@ -124,13 +133,22 @@ The smallest version that proves the shape:
 
 Stop there and live with it for a few weeks. The web page, attention reasons, the skill generator, and `toolSurface` follow only if the CLI view gets used.
 
-## Open questions
+## Resolved questions
 
-- Is `providedByProjectId` enough project-to-project modelling, or does the first real question ("what breaks if I retire comms") need explicit project-to-project edges? Lean: enough for now.
-- Do languages get rings at all, or does the existing `stacks` upgrade pressure cover what matters for them? Lean: rings, because "Python is cool" is a preference that release baselines cannot express.
-- Version-aware edges: is "uses Go" enough, or does the radar need "Go 1.27 vs 1.24" as separate concerns? Lean: store the version on the edge, ring the technology, and let `tech show` group by version.
-- Where signatures that need a source grep (bun:sqlite) stop being worth it. Lean: manifest-only in the steel thread.
+Settled in Phase 0 of the redesign on 2026-09-11.
+
+- **A `provides` relation is enough project-to-project modelling.** `providedByProjectId` becomes a
+  `provides` relation (project → technology). `depends_on` between projects stays a registered
+  relation kind with no writer until a real "what breaks if I retire comms" question arrives.
+- **Languages get rings.** "Python is cool" is a preference release baselines cannot express, and
+  the ring is cheap: one field on an entry that already exists.
+- **Edges carry the version, entries carry the ring.** `uses` relations store the declared version
+  in their attributes; `ongoing tech show` groups by version. There is no per-version technology.
+- **Signatures are manifest-only.** A signature that needs a source grep (`bun:sqlite`) is out of
+  scope until a manifest-readable one proves insufficient for something Marcus actually asks about.
 
 ## Changelog
 
 - 2026-09-07: sketch written from a conversation with Marcus. Nothing built.
+- 2026-09-11: adopted as Phase 3 of the inventory redesign, moved to `active/`, open questions
+  settled, and the model re-expressed on entries, fields, and relations.

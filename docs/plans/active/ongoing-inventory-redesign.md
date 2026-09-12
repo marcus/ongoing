@@ -1,10 +1,10 @@
 # Ongoing as a software inventory
 
-**Status:** proposal, for discussion. Nothing below is built. Decisions are marked _settled_ only where
-the existing code or Marcus's standing principles already decide them; everything else is a lean.
+**Status:** active, in implementation. Decisions 1 through 5 and every open question are settled
+(Phase 0, 2026-09-11); nothing below is built yet. Each phase has a td epic, listed in its section.
 
 Inputs: the running dashboard and its Fractal model (`docs/diagrams/fractal/`), the tech radar
-sketch (`../tech-radar.md`), the project-standards brief
+model (`tech-radar.md`, this plan's Phase 3 companion), the project-standards brief
 (`~/code/clara-home/docs/plans/active/agentic-sdlc-project-standards.md`), the `project-standards`
 skill, td-c757bc, td-3a561b, and what LeanIX gets right and wrong.
 
@@ -68,10 +68,9 @@ which is the part to refuse. Its model is mostly right.
 - Replacing td, GitHub, or Sidecar surfaces. Ongoing points at them.
 - Cost tracking, scoring, or a portfolio grade.
 
-## Settled decisions
+## Standing constraints
 
-These follow from the existing ADRs and Marcus's design principles and are not up for re-discussion
-here.
+These follow from the existing ADRs and Marcus's design principles and were never in question.
 
 - App-owned storage, filesystem discovery authoritative for local projects (ADR 0001).
 - Providers behind domain-owned interfaces; a provider failure never fails a scan (ADR 0002, 0003).
@@ -80,53 +79,47 @@ here.
 - No grand score. Attention views stay independent, transparent classifications.
 - Auth stays disabled on aerie. The redesign does not touch the auth model.
 
-## Decision 1: backend language
+## Decision 1: backend language — settled
 
-**Lean: stay on SvelteKit and Bun.** Revisit only if a trigger below fires.
+**Ongoing stays on SvelteKit and Bun.** One TypeScript core, one process serving the UI and the
+API, and the domain rules shared verbatim with the browser so an optimistic edit can re-run them.
+A Go rewrite would buy a single binary at the price of a second implementation of every rule in
+the browser; `bun build --compile` is the cheaper answer and is a Phase 6 spike, not a premise.
 
-What is actually being chosen is where the domain rules live and how the thing is distributed.
+**The CLI gains a transport adapter.** `ongoing` links the core library in-process when no service
+is running and speaks HTTP when one is, so `ongoing scan` and `ongoing list` work with no daemon.
 
-- The attention classifier, stack resolution, and soon the query parser run in both the server and
-  the browser. One TypeScript module serves both. A Go backend would mean a second implementation
-  of every rule in the browser, or giving up optimistic re-classification.
-- One process serves the UI and the API. Go would split it into a Go service plus a separate
-  frontend build, which is more to operate for no user-visible gain.
-- Distribution is the honest argument for Go: a single binary and a Homebrew tap. Bun answers most
-  of it with `bun build --compile`, which produces a single executable including the SvelteKit
-  server, and a tap can ship that. This is unproven for this app and is a Phase 6 spike.
-- The CLI today needs the service running. For an open-source user who wants `ongoing scan` and
-  `ongoing list` with no daemon, the CLI should be able to link the core library in-process and
-  fall back to HTTP when a service is present. That is a transport adapter, and it works in either
-  language.
+Reopen only on a trigger: the scanner must run on hosts without Bun; the browser stops needing
+shared domain code; or a standalone `ongoing` binary under Bun proves unreliable.
 
-Triggers that would reopen this: the scanner needs to run on hosts without Bun; the browser stops
-needing shared domain code; or a standalone `ongoing` binary under Bun turns out to be unreliable.
+## Decision 2: the entry model — settled
 
-## Decision 2: the entry model
-
-**Lean: one `entries` table with a `kind`, a typed field registry, JSON attributes, and a
-`relations` table.** Provider-collected data stays in its own tables keyed by entry id.
-
-What is being chosen: whether adding a field or a kind is a migration (today) or a row (proposed),
-at the cost of moving nine well-typed project columns into a JSON document.
+**One `entries` table with a `kind`, a typed field registry, JSON `attributes`, and a `relations`
+table.** Provider-collected data stays in its own tables keyed by entry id and is projected into
+namespaced fields by the read model. Adding a field or an entry kind is a row, not a migration;
+the price paid knowingly is that nine well-typed project columns become a JSON document validated
+by the registry instead of by SQLite. ADR 0005 records this.
 
 ### Entries
 
-| Column                                    | Notes                                                                                   |
-| ----------------------------------------- | --------------------------------------------------------------------------------------- |
-| `id`                                      | stable, as today                                                                        |
-| `kind`                                    | `project`, `technology`, later others; registered like a field                          |
-| `slug`                                    | unique per kind; what URLs and the CLI use (`ongoing show td`, `/p/td`, `/t/sveltekit`) |
-| `name`                                    | display name                                                                            |
-| `note`                                    | free text, as today                                                                     |
-| `tags`                                    | JSON array of strings                                                                   |
-| `is_favorite`, `is_hidden`, `manual_rank` | as today                                                                                |
-| `attributes`                              | JSON object of registered field values                                                  |
-| `review_after`                            | as today; kind-agnostic                                                                 |
-| `created_at`, `updated_at`                |                                                                                         |
+| Column                     | Notes                                                                                   |
+| -------------------------- | --------------------------------------------------------------------------------------- |
+| `id`                       | stable, as today                                                                        |
+| `kind`                     | `project`, `technology`, later others; registered like a field                          |
+| `slug`                     | unique per kind; what URLs and the CLI use (`ongoing show td`, `/p/td`, `/t/sveltekit`) |
+| `name`                     | display name                                                                            |
+| `note`                     | free text, as today                                                                     |
+| `tags`                     | JSON array of strings                                                                   |
+| `is_favorite`, `is_hidden` | as today                                                                                |
+| `attributes`               | JSON object of registered field values, including `manual_rank`                         |
+| `review_after`             | as today; kind-agnostic                                                                 |
+| `created_at`, `updated_at` |                                                                                         |
 
-`intent`, `excitement`, `strategic_importance`, `next_action`, and the tech radar's `ring`,
-`tool_surface`, and `technology_kind` all become registered fields living in `attributes`.
+`intent`, `excitement`, `strategic_importance`, `next_action`, `manual_rank`, and the tech radar's
+`ring`, `tool_surface`, and `technology_kind` all become registered fields living in `attributes`.
+`manual_rank` is an ordinary sparse integer field: it stays a sort key, its sparse-assignment rule
+moves into the field's domain helper, and reordering becomes a palette and CLI command over it
+rather than a table interaction.
 
 ### Sources
 
@@ -158,8 +151,9 @@ go through the same path.
 
 Provider-owned metric tables (`project_metrics`, `project_stacks`, `metric_snapshots`) do not move
 in this plan. The read model projects them into namespaced fields (`git.commits30d`, `github.stars`,
-`td.open`, `stack.go`), so filtering and sorting treat them like any other field. Re-homing them
-into per-provider documents is a later step inside Phase 5, if the provider seam needs it.
+`td.open`, `stack.go`), so filtering and sorting treat them like any other field. They stay typed
+tables behind that projection; re-homing them into per-provider JSON documents waits for a second
+hosting or issues provider to exist and prove the shape wrong.
 
 ### Relations
 
@@ -168,6 +162,11 @@ unique on `(from_id, to_id, kind, evidence)`. Relation kinds are registered like
 entry kinds they connect: `uses` (project → technology), `provides` (project → technology),
 `depends_on` (project → project), `part_of` (project → project). `evidence` is `declared` or
 `detected`; detected rows are rewritten by their provider on every scan and never edited by hand.
+
+Phase 3 ships `uses` and `provides` only. `depends_on` and `part_of` stay registered kinds with no
+writer until a real question ("what breaks if I retire comms") arrives — "provided by project X"
+already answers the version of it that comes up today, and a project-to-project edge nobody
+maintains is worse than no edge.
 
 ### Saved views
 
@@ -180,9 +179,13 @@ Attributes as one JSON document per entry, filtered and sorted in the read model
 interface to key, record, and simple scans. No JSON1 expressions in business logic. At the catalog's
 size this is fast and it survives a move to JSONL, Postgres, or a document store unchanged.
 
-## Decision 3: the query model
+## Decision 3: the query model — settled
 
-One grammar, parsed by a pure domain function, used by the API, the CLI, and the browser.
+**One filter grammar, parsed by a pure domain function, used by the API, the CLI, and the browser.**
+A query is a string; a saved view is a stored query plus columns; the URL, the `--saved` flag, and
+the API parameter all carry the same text. There is no second query language and no UI-only filter
+state. Existing `--view`, `--filter`, `--stack`, and `--search` flags survive as clause aliases.
+ADR 0006 records this.
 
 ```
 filter   := clause (' ' clause)*
@@ -201,9 +204,14 @@ ongoing list --saved oss-momentum
 Bare text searches name, slug, path, and note, as today. Unknown fields error with the closest
 registered key. The browser builds the same string from its filter UI and puts it in the URL.
 
-## Decision 4: provider seams
+## Decision 4: provider seams — settled
 
-Every collector becomes a **provider** with a manifest. The manifest is what makes the seam real.
+**Every collector becomes a provider with a manifest, and every baked-in assumption becomes a named
+adapter that can be switched off.** The manifest is what makes the seam real: it declares the fields
+and relation kinds a provider contributes, what it needs to run, and when it runs. Configuration
+lives in one TOML file with environment variables as overrides — `~/.config/ongoing/config.toml`,
+`--config` to point elsewhere — because a list of enabled providers with per-provider settings is
+not something environment variables express honestly. ADR 0007 records this.
 
 ```ts
 interface ProviderManifest {
@@ -238,10 +246,11 @@ Deployment scripts move out of the core. `scripts/release-*.ts` and the aerie co
 profile the core does not import. The core gains `ongoing serve --data-dir`, `ongoing scan`, and
 `ongoing init`, which is all a new user needs.
 
-## Decision 5: frontend direction
+## Decision 5: frontend direction — settled
 
 **Start from `linear-design-patterns`, then drift into a house style on purpose.** The current
-`dashboard.css` monolith and mockup-derived layout are replaced, not restyled.
+`dashboard.css` monolith and mockup-derived layout are replaced, not restyled; the house style is
+written down in `DESIGN.md` as it drifts so the drift stays deliberate. ADR 0008 records this.
 
 Screens:
 
@@ -273,7 +282,7 @@ palette and CLI).
 Dependencies are noted per phase. Phases 3 and 4 can run as parallel tracks once Phase 2 lands;
 Phase 5 can start any time after Phase 1.
 
-### Phase 0: decisions and housekeeping
+### Phase 0: decisions and housekeeping — done (td-7a51f7)
 
 - Discuss and settle Decisions 1 through 5; rewrite this section as they settle.
 - Write ADRs 0005 (entry model and field registry), 0006 (query model), 0007 (provider manifests
@@ -285,7 +294,19 @@ Phase 5 can start any time after Phase 1.
 
 Evidence: ADRs merged, td epics filed, `fractal validate` clean.
 
-### Phase 1: entry model, field registry, relations
+**Handoff (2026-09-11).** Every lean is now a settled statement in the sections above; the plan is
+the specification Phase 1 builds from, and nothing in it is open. The ADRs carry the reasoning, so
+a phase agent should read `docs/adr/0005`–`0008` before the phase section rather than re-deriving
+it. The tech radar sketch stayed a separate document, `tech-radar.md` beside this one, as Phase 3's
+detailed model — it is long, specific to one phase, and easier to close out than to keep inline;
+its own open questions are settled there. `docs/plans/implemented/ongoing-projects-dashboard.md`
+still describes the shipped product and is the reference for behaviour Phase 1 must not break.
+Phase epics: td-1e9a01, td-a4b0b6, td-1155ba, td-d843f6, td-c5dc7d, td-daa20f, with dependencies
+recorded in td. td-c757bc and td-3a561b now point here and are Phase 3's to close. The Fractal
+model's proposed scene now covers the whole plan (`inventory` subsystem, `proposed-inventory`
+scene); Phase 1 extends it rather than replacing it. Nothing was built, migrated, or deployed.
+
+### Phase 1: entry model, field registry, relations — td-1e9a01
 
 - Migration: `entries`, `entry_sources`, `fields`, `relations`, `saved_views`. Projects migrate in
   place with `kind = 'project'`; decision fields move into `attributes`; discovery columns move to
@@ -305,7 +326,7 @@ Evidence: existing Vitest and Playwright suites pass; a user field added by CLI 
 `ongoing show` and `ongoing list --json`; a declared relation round-trips; the production catalog
 migrates on aerie with a verified backup.
 
-### Phase 2: query model and CLI parity
+### Phase 2: query model and CLI parity — td-a4b0b6
 
 Depends on Phase 1.
 
@@ -321,13 +342,17 @@ Depends on Phase 1.
 Evidence: docs/cli.md rewritten; a table of old flag → new clause with tests; parser fuzz test
 over registered fields.
 
-### Phase 3: technologies and the radar
+### Phase 3: technologies and the radar — td-1155ba
 
 Depends on Phase 1. Runs alongside Phase 2 or 4.
 
+Detailed model: [tech-radar.md](tech-radar.md) — ring vocabulary, signature detection, the `uses`
+edge, the surfaces, and the steel thread. It is this phase's specification, rewritten onto the
+entry model; where the two disagree, this plan wins.
+
 - `technology` kind with fields `technology_kind`, `ring`, `tool_surface`, `review_after`;
   relation kinds `uses` and `provides`.
-- Seed the six technologies from the radar sketch through the CLI, not a migration.
+- Seed the six technologies from the radar model through the CLI, not a migration.
 - `tech-signatures` provider: manifest-dependency signatures inside the stack collector's parse
   pass; languages read from `project_stacks`. Detected `uses` edges rewritten every scan.
 - CLI: `ongoing tech list|show|add|set|export`, `ongoing show <project>` gains a uses section,
@@ -339,7 +364,7 @@ Depends on Phase 1. Runs alongside Phase 2 or 4.
 Evidence: `ongoing tech show go` lists every Go project with versions; the skill regenerates from
 the export with no hand edits.
 
-### Phase 4: frontend redesign
+### Phase 4: frontend redesign — td-d843f6
 
 Depends on Phase 2 for the table; the design-system spike can start during Phase 1.
 
@@ -354,14 +379,15 @@ Depends on Phase 2 for the table; the design-system spike can start during Phase
 Evidence: every browser mutation has a CLI equivalent test; Lighthouse-style interaction under
 100 ms for list operations at 500 entries; screenshots in `docs/qa/`.
 
-### Phase 5: providers as adapters and the host seam
+### Phase 5: providers as adapters and the host seam — td-c5dc7d
 
 Depends on Phase 1. Independent of Phases 3 and 4.
 
 - Provider manifests for `filesystem`, `git`, `loc`, `td`, `stack`, `github`, `endoflife`,
   `tech-signatures`. Scanner iterates enabled providers rather than a fixed sequence.
-- Configuration file (`~/.config/ongoing/config.toml` or `.env`, one format) with an `[providers]`
-  section; env vars remain overrides. `ongoing providers` and `GET /api/providers`.
+- Configuration file: TOML at `~/.config/ongoing/config.toml`, `--config` to point elsewhere, with
+  a `[providers]` section; env vars remain overrides and `.env` keeps working for secrets.
+  `ongoing providers` and `GET /api/providers`.
 - Host adapter interface behind `serve`, `scan`, `restart`, `stop`, `logs`; `launchd` as the first
   implementation, `foreground` as the second.
 - Deployment profile: aerie constants and the release scripts move to `deploy/aerie/`; the core
@@ -373,7 +399,7 @@ Depends on Phase 1. Independent of Phases 3 and 4.
 Evidence: aerie runs with the same behaviour through the new wiring; a machine with no `td`, no
 `cloc`, and no GitHub token runs a clean scan with those providers reported unavailable.
 
-### Phase 6: inventory uses and open-source release
+### Phase 6: inventory uses and open-source release — td-daa20f
 
 Depends on Phases 2 through 5.
 
@@ -386,8 +412,10 @@ Depends on Phases 2 through 5.
   proves painful.
 - `ongoing init`, `ongoing serve`, single-binary spike with `bun build --compile`, Homebrew tap
   if the spike holds.
-- License, README rewrite for a stranger, CI on GitHub Actions, public repository, removal of
-  every remaining Marcus-specific string from the core.
+- License, README rewrite for a stranger, CI on GitHub Actions, removal of every remaining
+  Marcus-specific string from the core, and only then the repository goes public. The repository
+  stays private until the Phase 6 evidence below passes on a machine that is not aerie; publishing
+  earlier behind a "not yet usable elsewhere" notice buys nothing and costs a support surface.
 
 Evidence: a fresh macOS account installs, inits, scans a directory, and edits an entry from the
 browser and the CLI, with no aerie or Marcus configuration present.
@@ -399,18 +427,24 @@ browser and the CLI, with no aerie or Marcus configuration present.
 - Migrations are additive within a phase and reversible by restoring the pre-phase backup.
 - New capability order: domain function, repository method, API route, CLI verb, then UI.
 
-## Open questions
+## Resolved questions
 
-- Should provider metric tables move into per-provider JSON documents in Phase 5, or stay as
-  typed tables behind the projection? Lean: stay, until a second hosting or issues provider exists.
-- Does `manual_rank` survive as a core column or become an ordinary integer field? Lean: field,
-  with `reorder` as a palette and CLI command over it.
-- One config file format for the open-source install: TOML, JSON, or keep env only? Lean: TOML
-  with env overrides, since env alone does not express provider lists well.
-- Is `depends_on` between projects wanted in Phase 3, or is `provides` enough until a real
-  "what breaks if I retire comms" question arrives? Lean: `provides` only.
-- Public repository timing: at Phase 6, or earlier with a "not yet usable elsewhere" notice?
+Settled in Phase 0 on 2026-09-11. Reopen one only with a reason written down here.
+
+- **Provider metric tables stay typed tables** behind the read model's namespaced projection.
+  Moving them into per-provider JSON documents waits for a second hosting or issues provider.
+- **`manual_rank` becomes an ordinary integer field** in `attributes`, still a sort key, with
+  `reorder` as a palette and CLI command rather than a drag interaction.
+- **Configuration is TOML with environment overrides**, since environment variables alone cannot
+  express a provider list with per-provider settings.
+- **`depends_on` is registered but unwritten until Phase 6 or later.** Phase 3 ships `uses` and
+  `provides`; "provided by project X" answers the question that actually comes up today.
+- **The repository goes public at the end of Phase 6**, once the fresh-machine evidence passes.
+  No early publication behind a disclaimer.
 
 ## Changelog
 
 - 2026-09-11: proposal written from a conversation with Marcus. Nothing built.
+- 2026-09-11: Phase 0 — decisions 1–5 and every open question settled, ADRs 0005–0008 written, the
+  shipped dashboard plan moved to `implemented/`, the tech radar re-homed here as Phase 3's
+  companion, six phase epics filed in td, and the Fractal proposal scene widened to the whole plan.
