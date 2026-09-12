@@ -6,3 +6,6 @@ playwright-report
 test-results
 docs/mockups
 .claude/
+
+.ongoing-builds/
+.ongoing-build-*

@@ -250,7 +250,7 @@
               "id": "poll",
               "from": "cli",
               "to": "api",
-              "title": "GET /api/projects every 2 s, read scan.status",
+              "title": "GET /api/scan?runId=... every 2 s",
               "kind": "call"
             },
             {
@@ -276,9 +276,9 @@
     {
       "id": "daily-refresh",
       "title": "The 03:00 calendar scan",
-      "description": "launchd starts a separate process that opens the same database, takes the lease, and runs one changed-policy scan while the web agent keeps serving.",
+      "description": "launchd requests a scan from the running service. All collection and database access use the deployed build; an unavailable service fails without opening the catalog.",
       "status": "current",
-      "provenance": "Authored 2026-09-11 from docs/deployment.md, scripts/scan.ts, src/lib/server/scanning/dependencies.ts, and the lease logic in src/lib/server/catalog/repository.ts. Timing is a launchd calendar interval, not measured.",
+      "provenance": "Verified from scripts/scan.ts, src/lib/host/scheduled-scan.ts, bin/ongoing.ts, src/routes/api/scan/+server.ts, and the production launchd profile.",
       "participants": [
         {
           "id": "launchd",
@@ -289,6 +289,11 @@
           "id": "job",
           "element": "ops.scan_job",
           "title": "scripts/scan.ts"
+        },
+        {
+          "id": "web",
+          "element": "service.runtime",
+          "title": "Web process"
         },
         {
           "id": "wiring",
@@ -304,18 +309,13 @@
           "id": "sqlite",
           "element": "catalog.sqlite",
           "title": "ongoing.sqlite"
-        },
-        {
-          "id": "web",
-          "element": "service.runtime",
-          "title": "Web process"
         }
       ],
       "groups": [
         {
           "id": "scan-process",
-          "title": "Scan agent process",
-          "participants": ["job", "wiring", "scanner"]
+          "title": "Deployed web process",
+          "participants": ["web", "wiring", "scanner"]
         }
       ],
       "steps": [
@@ -337,26 +337,34 @@
               "type": "message",
               "id": "open",
               "from": "job",
-              "to": "sqlite",
-              "title": "Open in WAL mode; apply pending migrations",
+              "to": "web",
+              "title": "POST /api/scan over HTTP; no database access in the job",
               "kind": "call"
             },
             {
               "type": "message",
               "id": "wire",
-              "from": "job",
+              "from": "web",
               "to": "wiring",
-              "title": "createScannerDependencies(config)",
+              "title": "Use collector wiring from the pinned build",
               "kind": "call",
-              "description": "The identical GitHub and endoflife wiring the web process uses."
+              "description": "Source changes cannot alter the scheduled scanner before deployment."
             }
           ]
         },
         {
           "type": "phase",
           "id": "share-db",
-          "title": "2. Share the database safely",
+          "title": "2. Acquire the scan lease",
           "steps": [
+            {
+              "type": "message",
+              "id": "scan",
+              "from": "web",
+              "to": "scanner",
+              "title": "start({ reason: manual, refresh: changed })",
+              "kind": "call"
+            },
             {
               "type": "message",
               "id": "acquire",
@@ -391,14 +399,6 @@
           "steps": [
             {
               "type": "message",
-              "id": "scan",
-              "from": "job",
-              "to": "scanner",
-              "title": "scan({ reason: cli, refresh: changed })",
-              "kind": "call"
-            },
-            {
-              "type": "message",
               "id": "writes",
               "from": "scanner",
               "to": "sqlite",
@@ -409,16 +409,16 @@
               "type": "message",
               "id": "done",
               "from": "scanner",
-              "to": "job",
-              "title": "ScanResult JSON on stdout; nonzero exit if not completed",
+              "to": "web",
+              "title": "Persist terminal result for this run",
               "kind": "return"
             },
             {
               "type": "message",
               "id": "close",
               "from": "job",
-              "to": "sqlite",
-              "title": "close()",
+              "to": "web",
+              "title": "GET /api/scan?runId=... until terminal; JSON result and nonzero on failure",
               "kind": "call"
             }
           ]

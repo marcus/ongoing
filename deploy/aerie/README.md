@@ -17,10 +17,10 @@ means writing `deploy/<name>/` beside this one, not editing the core (ADR 0007).
 
 ## What the core keeps
 
-The application's own entry points live in `src/lib/host/`: `production-server.ts` is the HTTP
-boundary every host adapter starts, and `scan-command.ts` is one scan. `scripts/production-server.ts`
-and `scripts/scan.ts` are **shims** onto them, kept because the plists installed on aerie name those
-paths; the next deploy can point the plists at `src/lib/host/` and delete the shims. See
+The application's entry points live in `src/lib/host/`: `production-server.ts` is the HTTP
+boundary, `build.ts` publishes immutable bundles, and `scan-command.ts` runs an explicit standalone
+scan. The installed stable `scripts/scan.ts` entry point delegates to `scheduled-scan.ts`, an HTTP-only
+client of the deployed service. Never repoint the calendar agent at the standalone scanner. See
 [docs/deployment.md](../../docs/deployment.md).
 
 ## Running a machine without a profile
@@ -53,9 +53,17 @@ ongoing serve
 
 Both agents use that one app-owned Bun executable. `.bun-version` is the only place the Bun version is written down: `deploy/aerie/provision-runtime.sh` installs that release with `/opt/homebrew/bin/mise` scoped to Ongoing's own data directory and points the stable executable at it, and the release worker re-runs provisioning whenever the checkout moves, so bumping Bun is editing `.bun-version`, running `bun install` to refresh `bun.lock`, and deploying. Provisioning does not install into, replace, or select Marcus's `~/.bun` runtime and does not change a global mise default. Release scripts reject different hosts, paths, labels, and health targets. They do not use `sudo`, modify the firewall/router, or touch unrelated services.
 
-The daily agent sets `PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin`, so launchd resolves Homebrew's `gh`, `td`, `cloc`, and `git` without inheriting interactive shell startup files or user runtime shims. Its `ProgramArguments` still selects the absolute app-owned Bun executable. Deployment verifies the committed PATH and all four tools before stopping either agent, then installs the definition atomically and bootstraps the calendar agent from that installed file.
+Both agents carry the collector PATH declared in `release-config.ts`, including mise shims and
+Homebrew. Collection now happens in the web process, whose environment supplies tools, scan roots,
+and the database path. Deployment checks the tools before stopping either agent, then atomically
+installs the definitions and bootstraps the calendar job.
 
-The web process runs the committed `scripts/production-server.ts` boundary in front of adapter-node. **That file is now a two-line shim**: the boundary itself moved to `src/lib/host/production-server.ts`, and `scripts/scan.ts` is likewise a shim onto `src/lib/host/scan-command.ts`. The shims exist only because the installed plists name those paths; the next deploy should update both `ProgramArguments` to `src/lib/host/production-server.ts` and `src/lib/host/scan-command.ts` and then delete `scripts/production-server.ts` and `scripts/scan.ts`. Nothing else has to change: the committed `.plist.example` files, which the release worker installs, still name the shim paths, so a deploy made before that edit keeps working. It counts raw fixed-length and chunked mutation bytes before SvelteKit actions, then forwards bounded requests to a private ephemeral loopback adapter listener. It also has `ONGOING_ENABLE_SCAN_SCHEDULER=false`, so it creates neither the development startup scan nor the five-minute interval. The scan agent invokes the shared `scripts/scan.ts` once at 03:00 local time against the same database and scan root. Its definition has no `RunAtLoad` or `KeepAlive`; registering or restarting it does not cause an immediate scan. A manual or per-project scan remains available, and the durable scan lease prevents overlap.
+The web process runs `scripts/production-server.ts`, a stable shim onto the host boundary. It pins
+one immutable adapter-node directory, bounds raw mutation bytes, and forwards to a private loopback
+listener. `ONGOING_ENABLE_SCAN_SCHEDULER=false` disables startup and five-minute development scans.
+The calendar invokes `scripts/scan.ts` at 03:00 with `ONGOING_URL` targeting this service. It never
+opens the database itself. No `RunAtLoad` or `KeepAlive` means registering the calendar does not
+trigger a scan. Manual and scheduled requests share the deployed scanner and durable scan lease.
 
 ## One-time setup
 
@@ -133,3 +141,12 @@ bun run rollback --host marcus@aerie.local --checkout /Users/marcus/code/ongoing
 The loopback request above is the host-local minimal health probe. The authenticated smoke must use the configured `APP_ORIGIN` (`http://aerie.local:7766`); substituting the loopback origin intentionally fails the same-origin mutation checks with 403.
 
 Remove `--dry-run` to quiesce both agents, take a new safety backup, rebuild the recorded prior SHA with the pinned runtime, restore both definitions, register the daily job without an unscheduled scan, restart the web process, and verify port 7766 health. Add `--restore-database` only for a non-backward-compatible migration; the database copy and WAL/SHM cleanup happen while both jobs are stopped. A healthy public response is exactly `{"ok":true}`; catalog and mutation endpoints require a valid session. Finish with the LAN smoke from a second machine and confirm both `launchctl print` targets and all four log files.
+
+### Safe local builds and scheduled scans
+
+The 03:00 agent runs `scripts/scan.ts` with `ONGOING_URL=http://127.0.0.1:7766`. It requests the
+scan through the deployed service and waits for its result. It no longer opens the live database
+from source. Its plist needs no database path or scan roots; those belong to the web agent.
+
+Builds publish immutable artifacts under `.ongoing-builds/`; `ongoing restart --build` activates the
+new bundle. For an existing directory-based installation, stop the service and adopt the old bundle as an immutable build before the first new build. See [the lifecycle and retention guidance](../../docs/deployment.md#build-and-activation-lifecycle).

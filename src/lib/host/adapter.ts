@@ -76,5 +76,5 @@ export interface CommandResult {
 export type HostCommandRunner = (
   command: string,
   args: readonly string[],
-  options?: { cwd?: string; stdio?: 'inherit' | 'pipe' }
+  options?: { cwd?: string; stdio?: 'inherit' | 'pipe'; env?: NodeJS.ProcessEnv }
 ) => CommandResult;

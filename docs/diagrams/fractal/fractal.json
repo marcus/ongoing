@@ -61,15 +61,9 @@
     {
       "id": "lease-holders",
       "title": "One scan at a time",
-      "description": "Two processes open the same SQLite file. The durable scan lease in scan_runs, heartbeated every 10 seconds, keeps a manual scan from overlapping the calendar job.",
+      "description": "Manual and calendar requests use the deployed scanner. The durable scan lease prevents overlap, including with explicit standalone local scans.",
       "kind": "permission",
-      "members": [
-        "scanning.scanner",
-        "service.runtime",
-        "ops.scan_job",
-        "catalog.repository",
-        "catalog.sqlite"
-      ],
+      "members": ["scanning.scanner", "service.runtime", "catalog.repository", "catalog.sqlite"],
       "color": "#9A91C4"
     },
     {
@@ -121,7 +115,7 @@
     {
       "id": "adapter-seams",
       "title": "Switchable seams",
-      "description": "Every assumption that used to be baked in — where repositories live, who hosts them, who tracks issues, who counts lines, what runs the service, where it deploys, and who reads the export — is now declared in a manifest or an adapter and switched in one TOML file. A provider that is off or missing its tools registers no fields, so the rules that read them go inert rather than wrong. This is what lets Ongoing run on a machine that is not aerie.",
+      "description": "Every assumption that used to be baked in \u2014 where repositories live, who hosts them, who tracks issues, who counts lines, what runs the service, where it deploys, and who reads the export \u2014 is now declared in a manifest or an adapter and switched in one TOML file. A provider that is off or missing its tools registers no fields, so the rules that read them go inert rather than wrong. This is what lets Ongoing run on a machine that is not aerie.",
       "kind": "ownership",
       "members": [
         "inventory.providers",
@@ -191,10 +185,11 @@
     {
       "id": "operations",
       "title": "Running on aerie.local",
-      "description": "Two launchd agents, one pinned Bun, a health-gated deploy that quiesces both before touching the database.",
-      "expanded": ["ops", "external", "service"],
+      "description": "Immutable builds keep live routes safe; the calendar requests scans from the deployed web service.",
+      "expanded": ["ops"],
       "proposed": false,
-      "lens": "structure"
+      "lens": "structure",
+      "scope": "ops"
     },
     {
       "id": "trust-boundaries",
@@ -207,7 +202,7 @@
     {
       "id": "inventory",
       "title": "Ongoing as a software inventory",
-      "description": "The whole redesign in one frame, and it has all landed: entries, the field registry, the query grammar, the entries API, the CLI and its transport, the keyboard-first browser shell that builds the same query string, the provider manifests, one configuration file, the host adapter, the deployment and export profiles, and Phase 6 — completeness from the registry, repositories with no local checkout, and an install that is two commands.",
+      "description": "The whole redesign in one frame, and it has all landed: entries, the field registry, the query grammar, the entries API, the CLI and its transport, the keyboard-first browser shell that builds the same query string, the provider manifests, one configuration file, the host adapter, the deployment and export profiles, and Phase 6 \u2014 completeness from the registry, repositories with no local checkout, and an install that is two commands.",
       "expanded": ["inventory"],
       "proposed": false,
       "lens": "structure",

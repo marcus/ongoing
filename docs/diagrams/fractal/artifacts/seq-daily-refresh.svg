@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" role="img" aria-labelledby="sequence-title sequence-description" data-theme="grove" data-theme-appearance="light">
-  <title id="sequence-title">The 03:00 calendar scan</title><desc id="sequence-description">launchd starts a separate process that opens the same database, takes the lease, and runs one changed-policy scan while the web agent keeps serving.</desc><metadata>{&quot;journeyId&quot;:&quot;daily-refresh&quot;,&quot;provenance&quot;:&quot;Authored 2026-09-11 from docs/deployment.md, scripts/scan.ts, src/lib/server/scanning/dependencies.ts, and the lease logic in src/lib/server/catalog/repository.ts. Timing is a launchd calendar interval, not measured.&quot;,&quot;hiddenLanes&quot;:[],&quot;rows&quot;:[{&quot;id&quot;:&quot;launch&quot;,&quot;type&quot;:&quot;phase&quot;,&quot;messageIds&quot;:[&quot;fire&quot;,&quot;open&quot;,&quot;wire&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;launchd&quot;,&quot;job&quot;,&quot;sqlite&quot;,&quot;wiring&quot;]},{&quot;id&quot;:&quot;fire&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;fire&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;launchd&quot;,&quot;job&quot;]},{&quot;id&quot;:&quot;open&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;open&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;job&quot;,&quot;sqlite&quot;]},{&quot;id&quot;:&quot;wire&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;wire&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;job&quot;,&quot;wiring&quot;]},{&quot;id&quot;:&quot;share-db&quot;,&quot;type&quot;:&quot;phase&quot;,&quot;messageIds&quot;:[&quot;acquire&quot;,&quot;web-refused&quot;,&quot;web-reads&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;scanner&quot;,&quot;sqlite&quot;,&quot;web&quot;]},{&quot;id&quot;:&quot;acquire&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;acquire&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;scanner&quot;,&quot;sqlite&quot;]},{&quot;id&quot;:&quot;web-refused&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;web-refused&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;web&quot;,&quot;sqlite&quot;]},{&quot;id&quot;:&quot;web-reads&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;web-reads&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;web&quot;,&quot;sqlite&quot;]},{&quot;id&quot;:&quot;run&quot;,&quot;type&quot;:&quot;phase&quot;,&quot;messageIds&quot;:[&quot;scan&quot;,&quot;writes&quot;,&quot;done&quot;,&quot;close&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;job&quot;,&quot;scanner&quot;,&quot;sqlite&quot;]},{&quot;id&quot;:&quot;scan&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;scan&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;job&quot;,&quot;scanner&quot;]},{&quot;id&quot;:&quot;writes&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;writes&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;scanner&quot;,&quot;sqlite&quot;]},{&quot;id&quot;:&quot;done&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;done&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;scanner&quot;,&quot;job&quot;]},{&quot;id&quot;:&quot;close&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;close&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;job&quot;,&quot;sqlite&quot;]}]}</metadata>
+  <title id="sequence-title">The 03:00 calendar scan</title><desc id="sequence-description">launchd requests a scan from the running service. All collection and database access use the deployed build; an unavailable service fails without opening the catalog.</desc><metadata>{&quot;journeyId&quot;:&quot;daily-refresh&quot;,&quot;provenance&quot;:&quot;Verified from scripts/scan.ts, src/lib/host/scheduled-scan.ts, bin/ongoing.ts, src/routes/api/scan/+server.ts, and the production launchd profile.&quot;,&quot;hiddenLanes&quot;:[],&quot;rows&quot;:[{&quot;id&quot;:&quot;launch&quot;,&quot;type&quot;:&quot;phase&quot;,&quot;messageIds&quot;:[&quot;fire&quot;,&quot;open&quot;,&quot;wire&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;launchd&quot;,&quot;job&quot;,&quot;web&quot;,&quot;wiring&quot;]},{&quot;id&quot;:&quot;fire&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;fire&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;launchd&quot;,&quot;job&quot;]},{&quot;id&quot;:&quot;open&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;open&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;job&quot;,&quot;web&quot;]},{&quot;id&quot;:&quot;wire&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;wire&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;web&quot;,&quot;wiring&quot;]},{&quot;id&quot;:&quot;share-db&quot;,&quot;type&quot;:&quot;phase&quot;,&quot;messageIds&quot;:[&quot;scan&quot;,&quot;acquire&quot;,&quot;web-refused&quot;,&quot;web-reads&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;web&quot;,&quot;scanner&quot;,&quot;sqlite&quot;]},{&quot;id&quot;:&quot;scan&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;scan&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;web&quot;,&quot;scanner&quot;]},{&quot;id&quot;:&quot;acquire&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;acquire&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;scanner&quot;,&quot;sqlite&quot;]},{&quot;id&quot;:&quot;web-refused&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;web-refused&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;web&quot;,&quot;sqlite&quot;]},{&quot;id&quot;:&quot;web-reads&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;web-reads&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;web&quot;,&quot;sqlite&quot;]},{&quot;id&quot;:&quot;run&quot;,&quot;type&quot;:&quot;phase&quot;,&quot;messageIds&quot;:[&quot;writes&quot;,&quot;done&quot;,&quot;close&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;scanner&quot;,&quot;sqlite&quot;,&quot;web&quot;,&quot;job&quot;]},{&quot;id&quot;:&quot;writes&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;writes&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;scanner&quot;,&quot;sqlite&quot;]},{&quot;id&quot;:&quot;done&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;done&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;scanner&quot;,&quot;web&quot;]},{&quot;id&quot;:&quot;close&quot;,&quot;type&quot;:&quot;message&quot;,&quot;messageIds&quot;:[&quot;close&quot;],&quot;hiddenMessageIds&quot;:[],&quot;participantIds&quot;:[&quot;job&quot;,&quot;web&quot;]}]}</metadata>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#84948b"/></marker>
     <marker id="arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10" fill="none" stroke="#84948b" stroke-width="1.5"/></marker>
@@ -8,33 +8,33 @@
   <g font-family="Arial, Helvetica, sans-serif" data-export-layer="title">
     <text x="70" y="43" font-size="11" letter-spacing="2.5" fill="#607c69">FRACTAL / SEQUENCE JOURNEY</text>
     <text x="70" y="88" text-anchor="start" font-size="34" fill="#243b34"><tspan x="70" dy="0">The 03:00 calendar scan</tspan></text>
-    <text x="70" y="126" text-anchor="start" font-size="15" fill="#6e7d72"><tspan x="70" dy="0">launchd starts a separate process that opens the same database, takes the lease, and runs one changed-policy scan while the web agent keeps serving.</tspan></text>
+    <text x="70" y="126" text-anchor="start" font-size="15" fill="#6e7d72"><tspan x="70" dy="0">launchd requests a scan from the running service. All collection and database access use the deployed build; an unavailable service fails without opening the catalog.</tspan></text>
   </g>
-  <g font-family="Arial, Helvetica, sans-serif" transform="translate(284.44444444444446 190) scale(0.7156308851224106)"><g data-column="launchd" data-members="launchd" data-elements="external.launchd">
+  <g font-family="Arial, Helvetica, sans-serif" transform="translate(293.85329619312904 190) scale(0.7056638811513464)"><g data-column="launchd" data-members="launchd" data-elements="external.launchd">
     <rect x="102" y="32" width="244" height="44" rx="12" fill="#ffffff" stroke="#A69B8C" stroke-width="2"/>
     <text x="224" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="224" dy="0">launchd</tspan></text>
-    <path d="M224 76V992" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
+    <path d="M224 76V1007" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
   </g><g data-column="job" data-members="job" data-elements="ops.scan_job">
     <rect x="390" y="32" width="244" height="44" rx="12" fill="#ffffff" stroke="#9FA8B3" stroke-width="2"/>
     <text x="512" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="512" dy="0">scripts/scan.ts</tspan></text>
-    <path d="M512 76V992" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
-  </g><g data-column="wiring" data-members="wiring" data-elements="scanning.wiring">
-    <rect x="678" y="32" width="244" height="44" rx="12" fill="#ffffff" stroke="#9A91C4" stroke-width="2"/>
-    <text x="800" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="800" dy="0">Collector wiring</tspan></text>
-    <path d="M800 76V992" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
-  </g><g data-column="scanner" data-members="scanner" data-elements="scanning.scanner">
-    <rect x="966" y="32" width="244" height="44" rx="12" fill="#ffffff" stroke="#9A91C4" stroke-width="2"/>
-    <text x="1088" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="1088" dy="0">Scanner</tspan></text>
-    <path d="M1088 76V992" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
-  </g><g data-column="sqlite" data-members="sqlite" data-elements="catalog.sqlite">
-    <rect x="1254" y="32" width="244" height="44" rx="12" fill="#ffffff" stroke="#B59669" stroke-width="2"/>
-    <text x="1376" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="1376" dy="0">ongoing.sqlite</tspan></text>
-    <path d="M1376 76V992" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
+    <path d="M512 76V1007" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
   </g><g data-column="web" data-members="web" data-elements="service.runtime">
-    <rect x="1542" y="32" width="244" height="44" rx="12" fill="#ffffff" stroke="#739886" stroke-width="2"/>
-    <text x="1664" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="1664" dy="0">Web process</tspan></text>
-    <path d="M1664 76V992" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
-  </g><g data-row-id="launch" data-message-ids="fire,open,wire" data-participant-ids="launchd,job,sqlite,wiring" data-row-type="phase" data-phase-depth="0" data-collapsed="false">
+    <rect x="678" y="32" width="244" height="44" rx="12" fill="#ffffff" stroke="#739886" stroke-width="2"/>
+    <text x="800" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="800" dy="0">Web process</tspan></text>
+    <path d="M800 76V1007" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
+  </g><g data-column="wiring" data-members="wiring" data-elements="scanning.wiring">
+    <rect x="966" y="32" width="244" height="44" rx="12" fill="#ffffff" stroke="#9A91C4" stroke-width="2"/>
+    <text x="1088" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="1088" dy="0">Collector wiring</tspan></text>
+    <path d="M1088 76V1007" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
+  </g><g data-column="scanner" data-members="scanner" data-elements="scanning.scanner">
+    <rect x="1254" y="32" width="244" height="44" rx="12" fill="#ffffff" stroke="#9A91C4" stroke-width="2"/>
+    <text x="1376" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="1376" dy="0">Scanner</tspan></text>
+    <path d="M1376 76V1007" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
+  </g><g data-column="sqlite" data-members="sqlite" data-elements="catalog.sqlite">
+    <rect x="1542" y="32" width="244" height="44" rx="12" fill="#ffffff" stroke="#B59669" stroke-width="2"/>
+    <text x="1664" y="59" text-anchor="middle" font-size="15" fill="#243b34"><tspan x="1664" dy="0">ongoing.sqlite</tspan></text>
+    <path d="M1664 76V1007" stroke="#dce2db" stroke-width="1.2" stroke-dasharray="5 7"/>
+  </g><g data-row-id="launch" data-message-ids="fire,open,wire" data-participant-ids="launchd,job,web,wiring" data-row-type="phase" data-phase-depth="0" data-collapsed="false">
         <rect x="58" y="118" width="1772" height="35" rx="10" fill="#f4f6f3" stroke="#d9e0da"/>
         <text x="78" y="141" text-anchor="start" font-size="15" fill="#243b34"><tspan x="78" dy="0">1. Calendar event</tspan></text>
         <text x="236.04499999999996" y="141" text-anchor="start" font-size="11" fill="#78867c"><tspan x="236.04499999999996" dy="0">No RunAtLoad and no KeepAlive: registering the agent never triggers a scan.</tspan></text>
@@ -44,65 +44,65 @@
       <text x="368" y="190" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="368" dy="0">StartCalendarInterval 03:00 with pinned Bun and a</tspan><tspan x="368" dy="17">fixed PATH</tspan></text>
       
       <path d="M224 221H504" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow-open)"/>
-    </g><g data-row-id="open" data-message-ids="open" data-participant-ids="job,sqlite" data-row-type="message" data-kind="call">
-      <rect x="764" y="246" width="360" height="34" rx="7" fill="#fafbf8"/>
-      <text x="944" y="269" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="944" dy="0">Open in WAL mode; apply pending migrations</tspan></text>
+    </g><g data-row-id="open" data-message-ids="open" data-participant-ids="job,web" data-row-type="message" data-kind="call">
+      <rect x="476" y="246" width="360" height="49" rx="7" fill="#fafbf8"/>
+      <text x="656" y="269" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="656" dy="0">POST /api/scan over HTTP; no database access in</tspan><tspan x="656" dy="17">the job</tspan></text>
       
-      <path d="M512 285H1368" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
-    </g><g data-row-id="wire" data-message-ids="wire" data-participant-ids="job,wiring" data-row-type="message" data-kind="call">
-      <rect x="476" y="310" width="360" height="66" rx="7" fill="#fafbf8"/>
-      <text x="656" y="333" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="656" dy="0">createScannerDependencies(config)</tspan></text>
-      <text x="656" y="355" text-anchor="middle" font-size="11" fill="#78867c"><tspan x="656" dy="0">The identical GitHub and endoflife wiring the web process</tspan><tspan x="656" dy="15">uses.</tspan></text>
-      <path d="M512 381H792" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
-    </g><g data-row-id="share-db" data-message-ids="acquire,web-refused,web-reads" data-participant-ids="scanner,sqlite,web" data-row-type="phase" data-phase-depth="0" data-collapsed="false">
-        <rect x="58" y="406" width="1772" height="35" rx="10" fill="#f4f6f3" stroke="#d9e0da"/>
-        <text x="78" y="429" text-anchor="start" font-size="15" fill="#243b34"><tspan x="78" dy="0">2. Share the database safely</tspan></text>
+      <path d="M512 300H792" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
+    </g><g data-row-id="wire" data-message-ids="wire" data-participant-ids="web,wiring" data-row-type="message" data-kind="call">
+      <rect x="764" y="325" width="360" height="66" rx="7" fill="#fafbf8"/>
+      <text x="944" y="348" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="944" dy="0">Use collector wiring from the pinned build</tspan></text>
+      <text x="944" y="370" text-anchor="middle" font-size="11" fill="#78867c"><tspan x="944" dy="0">Source changes cannot alter the scheduled scanner before</tspan><tspan x="944" dy="15">deployment.</tspan></text>
+      <path d="M800 396H1080" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
+    </g><g data-row-id="share-db" data-message-ids="scan,acquire,web-refused,web-reads" data-participant-ids="web,scanner,sqlite" data-row-type="phase" data-phase-depth="0" data-collapsed="false">
+        <rect x="58" y="421" width="1772" height="35" rx="10" fill="#f4f6f3" stroke="#d9e0da"/>
+        <text x="78" y="444" text-anchor="start" font-size="15" fill="#243b34"><tspan x="78" dy="0">2. Acquire the scan lease</tspan></text>
         
-        <text x="1788" y="427.5" text-anchor="end" font-size="11" fill="#78867c">3 interactions</text>
-      </g><g data-row-id="acquire" data-message-ids="acquire" data-participant-ids="scanner,sqlite" data-row-type="message" data-kind="call">
-      <rect x="1052" y="455" width="360" height="49" rx="7" fill="#fafbf8"/>
-      <text x="1232" y="478" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="1232" dy="0">INSERT scan_runs with lease owner unless a fresh</tspan><tspan x="1232" dy="17">heartbeat exists</tspan></text>
+        <text x="1788" y="442.5" text-anchor="end" font-size="11" fill="#78867c">4 interactions</text>
+      </g><g data-row-id="scan" data-message-ids="scan" data-participant-ids="web,scanner" data-row-type="message" data-kind="call">
+      <rect x="908" y="470" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="1088" y="493" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="1088" dy="0">start({ reason: manual, refresh: changed })</tspan></text>
       
-      <path d="M1088 509H1368" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
-    </g><g data-row-id="web-refused" data-message-ids="web-refused" data-participant-ids="web,sqlite" data-row-type="message" data-kind="call">
+      <path d="M800 509H1368" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
+    </g><g data-row-id="acquire" data-message-ids="acquire" data-participant-ids="scanner,sqlite" data-row-type="message" data-kind="call">
       <rect x="1340" y="534" width="360" height="49" rx="7" fill="#fafbf8"/>
-      <text x="1520" y="557" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="1520" dy="0">A manual POST /api/scan during the run sees the</tspan><tspan x="1520" dy="17">active lease and answers 409</tspan></text>
+      <text x="1520" y="557" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="1520" dy="0">INSERT scan_runs with lease owner unless a fresh</tspan><tspan x="1520" dy="17">heartbeat exists</tspan></text>
       
-      <path d="M1664 588H1384" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M1376 588H1656" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
+    </g><g data-row-id="web-refused" data-message-ids="web-refused" data-participant-ids="web,sqlite" data-row-type="message" data-kind="call">
+      <rect x="1052" y="613" width="360" height="49" rx="7" fill="#fafbf8"/>
+      <text x="1232" y="636" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="1232" dy="0">A manual POST /api/scan during the run sees the</tspan><tspan x="1232" dy="17">active lease and answers 409</tspan></text>
+      
+      <path d="M800 667H1656" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g><g data-row-id="web-reads" data-message-ids="web-reads" data-participant-ids="web,sqlite" data-row-type="message" data-kind="call">
-      <rect x="1340" y="613" width="360" height="49" rx="7" fill="#fafbf8"/>
-      <text x="1520" y="636" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="1520" dy="0">Dashboard reads continue against the last</tspan><tspan x="1520" dy="17">committed rows</tspan></text>
+      <rect x="1052" y="692" width="360" height="49" rx="7" fill="#fafbf8"/>
+      <text x="1232" y="715" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="1232" dy="0">Dashboard reads continue against the last</tspan><tspan x="1232" dy="17">committed rows</tspan></text>
       
-      <path d="M1664 667H1384" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
-    </g><g data-row-id="run" data-message-ids="scan,writes,done,close" data-participant-ids="job,scanner,sqlite" data-row-type="phase" data-phase-depth="0" data-collapsed="false">
-        <rect x="58" y="692" width="1772" height="35" rx="10" fill="#f4f6f3" stroke="#d9e0da"/>
-        <text x="78" y="715" text-anchor="start" font-size="15" fill="#243b34"><tspan x="78" dy="0">3. Changed policy</tspan></text>
-        <text x="231.91999999999996" y="715" text-anchor="start" font-size="11" fill="#78867c"><tspan x="231.91999999999996" dy="0">scripts/scan.ts defaults to changed: git, TD, and stack every time, cloc only where the tracked worktree fingerprint moved, then baselines and GitHub when due.</tspan></text>
-        <text x="1788" y="713.5" text-anchor="end" font-size="11" fill="#78867c">4 interactions</text>
-      </g><g data-row-id="scan" data-message-ids="scan" data-participant-ids="job,scanner" data-row-type="message" data-kind="call">
-      <rect x="620" y="741" width="360" height="34" rx="7" fill="#fafbf8"/>
-      <text x="800" y="764" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="800" dy="0">scan({ reason: cli, refresh: changed })</tspan></text>
+      <path d="M800 746H1656" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
+    </g><g data-row-id="run" data-message-ids="writes,done,close" data-participant-ids="scanner,sqlite,web,job" data-row-type="phase" data-phase-depth="0" data-collapsed="false">
+        <rect x="58" y="771" width="1772" height="35" rx="10" fill="#f4f6f3" stroke="#d9e0da"/>
+        <text x="78" y="794" text-anchor="start" font-size="15" fill="#243b34"><tspan x="78" dy="0">3. Changed policy</tspan></text>
+        <text x="231.91999999999996" y="794" text-anchor="start" font-size="11" fill="#78867c"><tspan x="231.91999999999996" dy="0">scripts/scan.ts defaults to changed: git, TD, and stack every time, cloc only where the tracked worktree fingerprint moved, then baselines and GitHub when due.</tspan></text>
+        <text x="1788" y="792.5" text-anchor="end" font-size="11" fill="#78867c">3 interactions</text>
+      </g><g data-row-id="writes" data-message-ids="writes" data-participant-ids="scanner,sqlite" data-row-type="message" data-kind="call">
+      <rect x="1340" y="820" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="1520" y="843" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="1520" dy="0">Serialized metric writes with lease checks</tspan></text>
       
-      <path d="M512 780H1080" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
-    </g><g data-row-id="writes" data-message-ids="writes" data-participant-ids="scanner,sqlite" data-row-type="message" data-kind="call">
-      <rect x="1052" y="805" width="360" height="34" rx="7" fill="#fafbf8"/>
-      <text x="1232" y="828" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="1232" dy="0">Serialized metric writes with lease checks</tspan></text>
+      <path d="M1376 859H1656" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
+    </g><g data-row-id="done" data-message-ids="done" data-participant-ids="scanner,web" data-row-type="message" data-kind="return">
+      <rect x="908" y="884" width="360" height="34" rx="7" fill="#fafbf8"/>
+      <text x="1088" y="907" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="1088" dy="0">Persist terminal result for this run</tspan></text>
       
-      <path d="M1088 844H1368" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
-    </g><g data-row-id="done" data-message-ids="done" data-participant-ids="scanner,job" data-row-type="message" data-kind="return">
-      <rect x="620" y="869" width="360" height="49" rx="7" fill="#fafbf8"/>
-      <text x="800" y="892" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="800" dy="0">ScanResult JSON on stdout; nonzero exit if not</tspan><tspan x="800" dy="17">completed</tspan></text>
+      <path d="M1376 923H808" fill="none" stroke="#84948b" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow)"/>
+    </g><g data-row-id="close" data-message-ids="close" data-participant-ids="job,web" data-row-type="message" data-kind="call">
+      <rect x="476" y="948" width="360" height="49" rx="7" fill="#fafbf8"/>
+      <text x="656" y="971" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="656" dy="0">GET /api/scan?runId=... until terminal; JSON result</tspan><tspan x="656" dy="17">and nonzero on failure</tspan></text>
       
-      <path d="M1088 923H520" fill="none" stroke="#84948b" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow)"/>
-    </g><g data-row-id="close" data-message-ids="close" data-participant-ids="job,sqlite" data-row-type="message" data-kind="call">
-      <rect x="764" y="948" width="360" height="34" rx="7" fill="#fafbf8"/>
-      <text x="944" y="971" text-anchor="middle" font-size="13" fill="#66766d"><tspan x="944" dy="0">close()</tspan></text>
-      
-      <path d="M512 987H1368" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M512 1002H792" fill="none" stroke="#84948b" stroke-width="2" marker-end="url(#arrow)"/>
     </g></g>
   <g font-family="Arial, Helvetica, sans-serif" data-export-layer="footer">
     <path d="M70 992H1850" stroke="#dce2db"/>
     <text x="70" y="1027" font-size="12" font-weight="600" letter-spacing="1" fill="#607c69">CURRENT · 10 INTERACTIONS</text>
-    <text x="620" y="1027" font-size="11" fill="#78867c">SOURCE · Authored 2026-09-11 from docs/deployment.md, scripts/scan.ts, src/lib/server/scanning/dependencies.ts, and the lease logic in src/lib/server/catalog/repository.ts. Timing is a launchd calendar interval, not measured.</text>
+    <text x="620" y="1027" font-size="11" fill="#78867c">SOURCE · Verified from scripts/scan.ts, src/lib/host/scheduled-scan.ts, bin/ongoing.ts, src/routes/api/scan/+server.ts, and the production launchd profile.</text>
   </g>
   </svg>

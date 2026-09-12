@@ -521,6 +521,16 @@ const routes: { method: string; pattern: RegExp; handle: Handler }[] = [
     }
   },
   {
+    method: 'GET',
+    pattern: /^\/api\/scan$/,
+    handle: ({ repository, parameter }) => {
+      const runId = parameter('runId');
+      if (!runId) return json({ error: 'runId is required' }, { status: 400 });
+      const run = repository.getScanRun(runId);
+      return run ? json(run) : json({ error: 'Unknown scan run' }, { status: 404 });
+    }
+  },
+  {
     method: 'POST',
     pattern: /^\/api\/scan$/,
     handle: async ({ body, scan }) => {

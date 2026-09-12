@@ -10,6 +10,7 @@ export const repositoryRoot = dirname(dirname(dirname(dirname(fileURLToPath(impo
 export const systemRunner: HostCommandRunner = (command, args, options = {}) => {
   const result = spawnSync(command, [...args], {
     cwd: options.cwd,
+    env: options.env,
     stdio: options.stdio ?? 'pipe',
     encoding: 'utf8'
   });

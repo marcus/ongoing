@@ -13,6 +13,11 @@ import {
   type ServerResponse
 } from 'node:http';
 
+import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
+import { pinBuild } from './build';
+import { repositoryRoot } from './run';
+
 const CLIENT_ADDRESS_HEADER = 'x-ongoing-client-address';
 
 export function productionBodyLimit(value = process.env.BODY_SIZE_LIMIT): number {
@@ -101,7 +106,9 @@ export async function startProductionServer(): Promise<void> {
   // The adapter trusts this header only on its private ephemeral loopback listener. The public
   // listener always overwrites it from the actual socket, preserving login rate limiting.
   process.env.ADDRESS_HEADER = CLIENT_ADDRESS_HEADER;
-  const builtHandler = new URL('../../../build/handler.js', import.meta.url).href;
+  const build = pinBuild(repositoryRoot);
+  console.log(`Serving build ${build}`);
+  const builtHandler = pathToFileURL(join(build, 'handler.js')).href;
   const { handler } = (await import(builtHandler)) as { handler: RequestListener };
   const internal = createServer(handler);
   await new Promise<void>((resolve, reject) => {

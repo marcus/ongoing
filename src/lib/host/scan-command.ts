@@ -6,9 +6,9 @@ import { createScannerDependencies } from '$lib/server/scanning/dependencies';
 import { ScanInProgressError, Scanner, type RefreshPolicy } from '$lib/server/scanning/scanner';
 
 /**
- * One scan, outside the web process: the daily agent, `ongoing scan` with no service running, and
- * the `foreground` host all come through here. `scripts/scan.ts` is a shim onto it because the
- * installed scan LaunchAgent names that path.
+ * One scan, outside the web process: `ongoing scan` with no service running and
+ * the `foreground` host come through here. Scheduled jobs use HTTP through `scripts/scan.ts`
+ * so source migrations cannot run ahead of the deployed service.
  */
 export interface ScanCommandOptions {
   projectId?: string;

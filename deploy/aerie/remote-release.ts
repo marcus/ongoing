@@ -143,6 +143,11 @@ async function quiesce(config: ReleaseConfig): Promise<void> {
     const target = `gui/${uid}/${label}`;
     if (await commandSucceeds(['launchctl', 'print', target], config.checkout))
       await command(['launchctl', 'bootout', target], config.checkout);
+    const deadline = Date.now() + 30_000;
+    while (await commandSucceeds(['launchctl', 'print', target], config.checkout)) {
+      if (Date.now() >= deadline) throw new Error(`Timed out waiting for ${label} to stop`);
+      await Bun.sleep(300);
+    }
   }
 }
 
@@ -184,7 +189,7 @@ async function installAgentDefinitions(config: ReleaseConfig): Promise<void> {
 async function startAgents(config: ReleaseConfig): Promise<void> {
   const domain = `gui/${userId()}`;
   // The scan definition deliberately has neither RunAtLoad nor KeepAlive, so bootstrapping it
-  // only registers the 04:00 calendar event. The web definition starts immediately.
+  // only registers the 03:00 calendar event. The web definition starts immediately.
   await command(['launchctl', 'bootstrap', domain, config.scanPlist], config.checkout);
   await command(['launchctl', 'bootstrap', domain, config.webPlist], config.checkout);
   await waitForHealth(config.healthUrl);

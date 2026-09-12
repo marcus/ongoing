@@ -1,7 +1,7 @@
 # Dependencies and generated application state
 node_modules/
 .svelte-kit/
-build/
+/build
 coverage/
 playwright-report/
 test-results/
@@ -30,3 +30,6 @@ test-results/
 # graphify knowledge graph cache (rebuilt by clara-home bin/graphify-refresh)
 graphify-out/
 .claude/worktrees/
+
+.ongoing-builds/
+.ongoing-build-*

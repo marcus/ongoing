@@ -178,7 +178,7 @@ describe('production LaunchAgent definitions', () => {
     expect(web).toContain(`<key>PATH</key><string>${PRODUCTION_SCAN_PATH}</string>`);
   });
 
-  it('runs only the shared scanner at 03:00 with shared storage and no load loop', () => {
+  it('requests the deployed scanner at 03:00 without local storage or a load loop', () => {
     expect(scan).toContain(`<key>Label</key><string>${PRODUCTION_SCAN_LABEL}</string>`);
     expect(scan.match(/<key>StartCalendarInterval<\/key>/g)).toHaveLength(1);
     expect(scan).toMatch(/<key>Hour<\/key><integer>3<\/integer>/);
@@ -201,8 +201,9 @@ describe('production LaunchAgent definitions', () => {
       '<key>DATABASE_PATH</key><string>/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite</string>'
     ]) {
       expect(web).toContain(shared);
-      expect(scan).toContain(shared);
+      expect(scan).not.toContain(shared);
     }
+    expect(scan).toContain('<key>ONGOING_URL</key><string>http://127.0.0.1:7766</string>');
     expect(PRODUCTION_SCAN_LABEL).not.toBe(PRODUCTION_WEB_LABEL);
   });
 

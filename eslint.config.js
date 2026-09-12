@@ -46,6 +46,13 @@ export default tseslint.config(
     rules: { 'svelte/no-navigation-without-resolve': 'off' }
   },
   {
-    ignores: ['.svelte-kit/', 'build/', 'coverage/', 'playwright-report/', 'test-results/']
+    ignores: [
+      '.ongoing-builds/',
+      '.svelte-kit/',
+      'build/',
+      'coverage/',
+      'playwright-report/',
+      'test-results/'
+    ]
   }
 );

@@ -1261,7 +1261,7 @@ function describe(body: Record<string, unknown>): string {
 /**
  * A scan is the service's job when a service is running — it holds the lease and streams progress
  * to the browser. With nothing running, it is the **host's** job, and the host runs exactly what the
- * scheduled agent runs, so a machine with no daemon and a machine with one refresh identically.
+ * local command runs. The scheduled agent forces HTTP so only deployed code touches its catalog.
  */
 async function commandScan(client: ApiClient, args: Args): Promise<void> {
   const token = args.positional[0];
@@ -1288,7 +1288,8 @@ async function commandScan(client: ApiClient, args: Args): Promise<void> {
     report(args, started, `scan ${started.runId} started${project ? ` for ${project.name}` : ''}`);
     return;
   }
-  const finished = await waitForScan(client);
+  const finished = await waitForScan(client, started.runId);
+  if (!finished || finished.status !== 'completed') process.exitCode = 1;
   if (flag(args, 'json')) return printJson(finished);
   if (!finished) return out(dim(`scan ${started.runId} is still running`));
   out(
@@ -1298,12 +1299,16 @@ async function commandScan(client: ApiClient, args: Args): Promise<void> {
   if (finished.status !== 'completed') process.exitCode = 1;
 }
 
-/** Polls the latest run until it settles; a settled newer run means ours already finished. */
-async function waitForScan(client: ApiClient, timeoutMs = 900_000): Promise<ScanRun | null> {
+/** Polls this run so a later scan cannot hide its failure. */
+async function waitForScan(
+  client: ApiClient,
+  runId: string,
+  timeoutMs = 900_000
+): Promise<ScanRun | null> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     await new Promise((done) => setTimeout(done, 2_000));
-    const scan = (await client.request<PageModel>('/api/projects')).scan;
+    const scan = await client.request<ScanRun>('/api/scan', { query: { runId } });
     if (scan && scan.status !== 'running') return scan;
   }
   return null;

@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun --bun vite dev --host 127.0.0.1",
-    "build": "vite build",
+    "build": "bun run src/lib/host/build.ts",
     "preview": "bun --bun vite preview --host 127.0.0.1",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && tsc --project ./tsconfig.cli.json",
     "lint": "eslint . && prettier --check .",

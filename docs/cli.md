@@ -604,22 +604,22 @@ ongoing export --profile json --kind technology --compact
 
 ## HTTP endpoints behind these verbs
 
-| Verb                        | Endpoint                                               |
-| --------------------------- | ------------------------------------------------------ |
-| `list`, `views`, `stacks`   | `GET /api/entries?q=&sort=&columns=&saved=`            |
-| `show`, `status`            | `GET /api/projects` (the entry projection)             |
-| `get`, `entry list`         | `GET /api/entries`, `GET /api/entries/:kind/:slug`     |
-| `set`, `tag`, `untag`       | `PATCH /api/entries/:kind/:slug`                       |
-| `entry add`, `entry remove` | `POST /api/entries`, `DELETE /api/entries/:kind/:slug` |
-| `field list/add/remove`     | `GET/POST/DELETE /api/fields`                          |
-| `link`, `unlink`            | `GET/POST/DELETE /api/relations`                       |
-| `view list/save/delete`     | `GET/POST/PATCH/DELETE /api/views`                     |
-| `tech list/show/export`     | `GET /api/entries?q=kind:technology`                   |
-| `tech add`, `tech seed`     | `POST /api/entries`, `PATCH /api/entries/:kind/:slug`  |
-| `providers`                 | `GET /api/providers`                                   |
-| `export`                    | `GET /api/export?profile=&drafts=&kind=`               |
-| `website export`            | `GET /api/website` (the `opentangle` profile)          |
-| `scan`                      | `POST /api/scan`                                       |
+| Verb                        | Endpoint                                                |
+| --------------------------- | ------------------------------------------------------- |
+| `list`, `views`, `stacks`   | `GET /api/entries?q=&sort=&columns=&saved=`             |
+| `show`, `status`            | `GET /api/projects` (the entry projection)              |
+| `get`, `entry list`         | `GET /api/entries`, `GET /api/entries/:kind/:slug`      |
+| `set`, `tag`, `untag`       | `PATCH /api/entries/:kind/:slug`                        |
+| `entry add`, `entry remove` | `POST /api/entries`, `DELETE /api/entries/:kind/:slug`  |
+| `field list/add/remove`     | `GET/POST/DELETE /api/fields`                           |
+| `link`, `unlink`            | `GET/POST/DELETE /api/relations`                        |
+| `view list/save/delete`     | `GET/POST/PATCH/DELETE /api/views`                      |
+| `tech list/show/export`     | `GET /api/entries?q=kind:technology`                    |
+| `tech add`, `tech seed`     | `POST /api/entries`, `PATCH /api/entries/:kind/:slug`   |
+| `providers`                 | `GET /api/providers`                                    |
+| `export`                    | `GET /api/export?profile=&drafts=&kind=`                |
+| `website export`            | `GET /api/website` (the `opentangle` profile)           |
+| `scan`                      | `POST /api/scan`; `--wait` reads `GET /api/scan?runId=` |
 
 Every one of these is answered identically by the in-process transport when no service is running.
 `serve`, `restart`, `stop`, and `logs` have no endpoint: they are the host adapter, not the API.

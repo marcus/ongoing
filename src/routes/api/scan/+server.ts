@@ -4,6 +4,15 @@ import type { RequestHandler } from './$types';
 
 const refreshPolicies = new Set<RefreshPolicy>(['cheap', 'changed', 'full']);
 
+/** Read the exact run being waited on, even if another scan has started since. */
+export const GET: RequestHandler = async ({ url }) => {
+  const runId = url.searchParams.get('runId');
+  if (!runId) return json({ error: 'runId is required' }, { status: 400 });
+  const { catalogRepository } = await import('$lib/server/scanning/runtime');
+  const run = catalogRepository.getScanRun(runId);
+  return run ? json(run) : json({ error: 'Unknown scan run' }, { status: 404 });
+};
+
 export const POST: RequestHandler = async ({ request }) => {
   let body: unknown;
   try {

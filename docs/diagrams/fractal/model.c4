@@ -66,8 +66,8 @@ model {
     metadata { uid 'service' fractalColor '#739886' evidence ['src/hooks.server.ts', 'src/lib/server/scanning/runtime.ts'] }
 
     edge = component 'Production edge' {
-      description 'Committed node:http boundary in front of adapter-node: counts raw mutation bytes, rejects oversized bodies, and forwards to a private loopback listener.'
-      metadata { uid 'service.edge' fractalColor '#739886' evidence ['src/lib/host/production-server.ts', 'docs/deployment.md'] }
+      description 'Pins one immutable adapter build at startup, counts raw mutation bytes, rejects oversized bodies, and forwards to a private loopback listener. Publishing a build never changes live imports or assets.'
+      metadata { uid 'service.edge' fractalColor '#739886' evidence ['src/lib/host/production-server.ts', 'src/lib/host/build.ts', 'docs/deployment.md'] }
     }
     gate = component 'Request gate' {
       description 'SvelteKit handle: session check for private paths, same-origin check for mutations when auth is on, bounded bodies, security headers, and the development scan scheduler trigger.'
@@ -134,7 +134,7 @@ model {
       metadata { uid 'scanning.scanner' fractalColor '#9A91C4' evidence ['src/lib/server/scanning/scanner.ts', 'src/lib/server/scanning/limit.ts'] }
     }
     wiring = component 'Collector wiring' {
-      description 'The production dependency set (GitHub provider, endoflife baseline) used identically by the web process and the scan job.'
+      description 'The collector dependency set used by the deployed web scanner and explicit standalone scans. Calendar jobs call the web scanner over HTTP.'
       metadata { uid 'scanning.wiring' fractalColor '#9A91C4' evidence ['src/lib/server/scanning/dependencies.ts'] }
     }
     scheduler = component 'Development scheduler' {
@@ -218,8 +218,12 @@ model {
     metadata { uid 'ops' fractalColor '#9FA8B3' evidence ['docs/deployment.md', 'deploy/aerie/release-config.ts'] }
 
     scan_job = job 'Daily scan entry' {
-      description 'scripts/scan.ts opens the same database with the same collector wiring as the web process and runs one scan; exits nonzero when a run is already leased.'
-      metadata { uid 'ops.scan_job' fractalColor '#9FA8B3' evidence ['src/lib/host/scan-command.ts', 'docs/deployment.md'] }
+      description 'scripts/scan.ts forces HTTP transport through the CLI, requests the deployed scanner, and waits for its exact run ID. No local catalog fallback or source migrations; unavailable service, lease conflicts, and failed runs exit nonzero.'
+      metadata { uid 'ops.scan_job' fractalColor '#9FA8B3' evidence ['scripts/scan.ts', 'src/lib/host/scheduled-scan.ts', 'bin/ongoing.ts', 'docs/deployment.md'] }
+    }
+    build = component 'Immutable build publisher' {
+      description 'Stages adapter-node in a unique directory, serializes Vite builds, and atomically selects only successful bundles through the build symlink. Retains old artifacts for live processes; legacy directory installations require explicit adoption while stopped.'
+      metadata { uid 'ops.build' fractalColor '#9FA8B3' evidence ['src/lib/host/build.ts', 'svelte.config.js', 'src/lib/host/build.test.ts'] }
     }
     release = component 'Deploy & rollback' {
       description 'Client validates the pinned runtime, then the remote worker fast-forwards main, quiesces both agents, backs up SQLite, builds, migrates once, reinstalls definitions, and waits for health on 7766.'
@@ -494,9 +498,10 @@ model {
 
   // Operations
   external.launchd .runs service.edge 'Web agent on 7766' { metadata { uid 'launchd-web' } }
+  ops.build .supplies service.edge 'Immutable bundle pinned until restart' { metadata { uid 'build-edge' } }
+  inventory.host .calls ops.build 'Build before restart when requested' { metadata { uid 'host-build' } }
   external.launchd .schedules ops.scan_job 'Scan agent at 03:00 local' { metadata { uid 'launchd-scan' } }
-  ops.scan_job .calls scanning.scanner 'One cli-reason scan with the shared wiring' { metadata { uid 'scanjob-scanner' } }
-  ops.scan_job .calls catalog.database 'Opens the production database' { metadata { uid 'scanjob-database' } }
+  ops.scan_job .calls service.scan_api 'Request a deployed scan and poll its exact run ID' { metadata { uid 'scanjob-scanner' } }
   ops.release .calls external.launchd 'Quiesce, reinstall definitions, start' { metadata { uid 'release-launchd' } }
   ops.release .writes catalog.sqlite 'Consistent backup, migrate once, restore on rollback' { metadata { uid 'release-sqlite' } }
   ops.release .calls ops.provision 'Validates the pinned Bun before deploying' { metadata { uid 'release-provision' } }
