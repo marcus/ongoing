@@ -89,6 +89,19 @@ ongoing unlink <entry> <kind> <entry>
 ongoing view list | view save <name> [query] [--columns a,b] [--kind <kind>] | view delete <name>
 ongoing scan [project] [--full|--cheap] [--wait]
 
+ongoing tech list ['<query>']          the technologies in the catalog, in ring order
+  --ring hot|warm|cool|out            only one ring
+  --kind language|framework|library|service|tool|platform
+  --stale                             only rings whose review date has passed
+  --unused                            only technologies no project uses
+ongoing tech show <technology>        ring, note, and every project using it with versions
+ongoing tech add <slug> --kind <kind> --ring <ring> [--name ...] [--note ...] [--tool-surface ...]
+ongoing tech set <technology> [--ring ...] [--kind ...] [--note ...] [--tool-surface ...]
+                              [--review-after YYYY-MM-DD]
+ongoing tech seed [--file <json>] [--force]
+                                      seed the technologies Ongoing ships with; idempotent
+ongoing tech export [--pretty]        technologies and edges as one deterministic document
+
 ongoing open [project] [--terminal|--github]
 ongoing logs [-f] [--lines N] [--scan]
 ongoing restart [--build] [--scan]
@@ -199,7 +212,8 @@ first half and `view:attention` is the second. Everything else behaves as it did
 These are computed by the read model rather than stored, and are filterable and sortable like any
 other field: `path`, `is_missing`, `views` (the attention views an entry is in — `view:` is its
 alias), `warnings` (unresolved collector errors), `tech` (technologies linked by `uses`/`provides`),
-`stack.lag`, `github.starsGained30d`, and `github.trafficViewsDelta30d`. `kind` is a field too.
+`stack.lag`, `github.starsGained30d`, and `github.trafficViewsDelta30d`. `kind` is a field too, and
+technology entries add `used_by`, `provided_by`, and `ring_stale`.
 
 `--json` works on every command that reads or changes catalog data, and colour is dropped when
 stdout is not a TTY or `NO_COLOR` is set, so the CLI composes:
@@ -297,6 +311,53 @@ ongoing list --saved stack-go --columns name,stack.go
 ongoing view delete oss-momentum
 ```
 
+## The radar
+
+A technology is an entry with `kind = 'technology'`, its **ring** is a registered field, and a usage
+edge is a `uses` relation carrying the version the manifest declared. Four rings, ordered: `hot` is
+the default choice for new work, `warm` is fine to keep using, `cool` needs a reason, and `out` is
+"do not start new work on it" — which is why `out` in use is an `upgrade` reason. Every ring carries
+a `review_after`, and a ring past its review date puts the projects using it in `attention`, the
+same way a stale project decision does.
+
+```sh
+ongoing tech seed                          # the technologies Ongoing ships with
+ongoing tech list --ring hot               # what is current, in ring order
+ongoing tech show go                       # every Go project, with the version each declares
+ongoing tech set python --ring cool --review-after 2027-01-01
+ongoing list 'tech:go stack.go<1.26' --paths   # a fleet sweep, from the same query model
+```
+
+`ongoing tech seed` is idempotent by construction: a missing technology is created, a field the
+catalog has not filled in is filled, and a value someone has since changed is left alone — so a
+re-seed after `ongoing tech set go --ring warm` does not undo the edit. `--force` overwrites with
+the seeded values, and `--file` seeds from a JSON file with the same shape instead of the built-in
+list. Seeding also declares the `provides` edge for a technology one of the catalogued projects
+supplies (`td`, `sidecar`, `comms`, …).
+
+Edges come from two places and never fight. **Declared** edges are written by hand
+(`ongoing link ongoing uses sveltekit --note "the app shell"`) and survive every scan. **Detected**
+edges belong to the `tech-signatures` provider, which reads dependency manifests inside the stack
+collector's pass — `package.json`, `go.mod`, `Gemfile`, `Cargo.toml`, `composer.json` — plus marker
+files like `.todos/config.json`, and takes languages from the toolchains the same pass collected.
+They are rewritten whole on every scan, so a dependency dropped from a manifest loses its edge, and
+they are never edited by hand. A signature exists only for a technology already in the catalog: a
+dependency nobody catalogued is invisible.
+
+Technology entries carry three derived fields — `used_by` (how many projects use it), `provided_by`,
+and `ring_stale` — so every `tech list` flag is an ordinary clause:
+
+```sh
+ongoing list 'kind:technology ring:out' --columns name,used_by
+ongoing list 'kind:technology ring_stale:true'
+ongoing list --saved technologies
+```
+
+`ongoing tech export` prints technologies and their edges in ring order with each project list
+sorted, so a generator that renders it twice produces the same bytes. That is what
+`scripts/render-project-standards.ts` reads to regenerate the language and tool tables in the
+`project-standards` skill.
+
 ## HTTP endpoints behind these verbs
 
 | Verb                        | Endpoint                                               |
@@ -309,6 +370,8 @@ ongoing view delete oss-momentum
 | `field list/add/remove`     | `GET/POST/DELETE /api/fields`                          |
 | `link`, `unlink`            | `GET/POST/DELETE /api/relations`                       |
 | `view list/save/delete`     | `GET/POST/PATCH/DELETE /api/views`                     |
+| `tech list/show/export`     | `GET /api/entries?q=kind:technology`                   |
+| `tech add`, `tech seed`     | `POST /api/entries`, `PATCH /api/entries/:kind/:slug`  |
 
 ## Website selection and public copy
 

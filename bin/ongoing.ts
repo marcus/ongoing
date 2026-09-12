@@ -32,6 +32,18 @@ import {
   validateQuery
 } from '../src/lib/domain/query';
 import { relationKinds } from '../src/lib/domain/relation';
+import {
+  reviewAfterFrom,
+  ringOrder,
+  seedFields,
+  technologyExport,
+  technologyRings,
+  technologySeeds,
+  TECHNOLOGY_KIND,
+  technologyKinds,
+  type TechnologySeed,
+  type UsedTechnology
+} from '../src/lib/domain/technology';
 import type { AttributeValue } from '../src/lib/domain/entry';
 
 const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -242,7 +254,10 @@ function parseArgs(argv: string[]): Args {
     'slug',
     'evidence',
     'saved',
-    'tech'
+    'tech',
+    'ring',
+    'tool-surface',
+    'name'
   ]);
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -757,6 +772,28 @@ async function commandShow(client: Client, args: Args): Promise<void> {
   out();
   for (const [key, value] of decisions) out(`${dim(pad(key, label))}  ${value}`);
   for (const [key, value] of extra) out(`${dim(pad(key, label))}  ${value}`);
+
+  // The radar section: what this project uses, at which version, and on whose word. It reads the
+  // entry rather than the project projection, because edges live on entries.
+  const entry = (await fetchEntryPage(client, { q: 'kind:project' })).entries.find(
+    (candidate) => candidate.id === project.id
+  );
+  const uses = entry?.technologies ?? [];
+  const provides = (entry?.relations.outgoing ?? []).filter(
+    (relation) => relation.kind === 'provides'
+  );
+  if (uses.length || provides.length) {
+    out();
+    out(bold('uses'));
+    const width = Math.max(4, ...uses.map((technology) => technology.name.length));
+    for (const technology of uses)
+      out(
+        `  ${pad(technology.name, width)} ${pad(technology.version ?? dim('unpinned'), 10)} ` +
+          `${pad(paintRing(technology.ring), 6)} ${dim(technology.evidence)}` +
+          `${technology.sourceFile ? dim(` ${technology.sourceFile}`) : ''}`
+      );
+    for (const relation of provides) out(`  ${dim('provides')} ${relation.other?.name ?? '?'}`);
+  }
 
   const active = project.views;
   if (active.length) {
@@ -1338,6 +1375,7 @@ interface RelationView {
   kind: string;
   evidence: string;
   provider: string | null;
+  attributes: Record<string, AttributeValue>;
   note: string | null;
   other: { id: string; kind: string; slug: string; name: string } | null;
 }
@@ -1358,6 +1396,7 @@ interface EntryView {
   fields: Record<string, AttributeValue>;
   views: ViewKey[];
   stacks: Stack[];
+  technologies: UsedTechnology[];
   errors: { collector: string; message: string; occurredAt: string }[];
   sources: EntrySourceView[];
   relations: { outgoing: RelationView[]; incoming: RelationView[] };
@@ -1745,6 +1784,353 @@ async function commandView(client: Client, args: Args): Promise<void> {
   throw new CliError('Usage: ongoing view save|list|delete');
 }
 
+/* ---------------------------------------------------------------- the radar */
+
+const RING_STYLE: Record<string, (text: string) => string> = {
+  hot: green,
+  warm: cyan,
+  cool: yellow,
+  out: red
+};
+
+function paintRing(ring: string | null): string {
+  if (!ring) return dim('–');
+  return (RING_STYLE[ring] ?? dim)(ring);
+}
+
+function technologyRow(entry: EntryView): {
+  ring: string;
+  kind: string;
+  usedBy: number;
+  stale: boolean;
+} {
+  return {
+    ring: (entry.fields.ring as string) ?? '',
+    kind: (entry.fields.technology_kind as string) ?? '',
+    usedBy: Number(entry.fields.used_by ?? 0),
+    stale: entry.fields.ring_stale === true
+  };
+}
+
+/** Ring order first — the radar's whole point — then name; never alphabetical on the ring itself. */
+function byRing(left: EntryView, right: EntryView): number {
+  return (
+    ringOrder(left.fields.ring as string) - ringOrder(right.fields.ring as string) ||
+    left.name.localeCompare(right.name, 'en')
+  );
+}
+
+async function fetchTechnologies(client: Client): Promise<EntryView[]> {
+  return (await fetchEntries(client, TECHNOLOGY_KIND)).sort(byRing);
+}
+
+async function resolveTechnology(client: Client, token: string): Promise<EntryView> {
+  const technologies = await fetchTechnologies(client);
+  const needle = token.toLocaleLowerCase('en');
+  const found =
+    technologies.find((entry) => entry.slug === needle || entry.id === token) ??
+    technologies.find((entry) => entry.name.toLocaleLowerCase('en') === needle) ??
+    technologies.filter((entry) =>
+      `${entry.name} ${entry.slug}`.toLocaleLowerCase('en').includes(needle)
+    )[0];
+  if (!found)
+    throw new CliError(
+      `No technology matches "${token}". Try \`ongoing tech list\` or \`ongoing tech add ${token} --kind tool --ring warm\`.`
+    );
+  return found;
+}
+
+/** The `uses` edges pointing at one technology, newest declared version first. */
+function usageRows(technology: EntryView): {
+  project: string;
+  version: string;
+  evidence: string;
+  source: string;
+}[] {
+  return technology.relations.incoming
+    .filter((relation) => relation.kind === 'uses' && relation.other?.kind === 'project')
+    .map((relation) => ({
+      project: relation.other?.name ?? '?',
+      version: (relation.attributes.version as string) ?? '',
+      evidence: relation.evidence,
+      source: (relation.attributes.sourceFile as string) ?? relation.note ?? ''
+    }))
+    .sort(
+      (left, right) =>
+        right.version.localeCompare(left.version, 'en', { numeric: true }) ||
+        left.project.localeCompare(right.project, 'en')
+    );
+}
+
+async function commandTech(client: Client, args: Args): Promise<void> {
+  const action = args.positional.shift() ?? 'list';
+  switch (action) {
+    case 'list':
+      return techList(client, args);
+    case 'show':
+      return techShow(client, args);
+    case 'add':
+      return techAdd(client, args);
+    case 'set':
+      return techSet(client, args);
+    case 'export':
+      return techExport(client, args);
+    case 'seed':
+      return techSeed(client, args);
+    default:
+      throw new CliError('Usage: ongoing tech list|show|add|set|export|seed');
+  }
+}
+
+/**
+ * `ongoing tech list` — the radar itself. Every flag is a clause against the same query model
+ * `ongoing list` uses, so `ongoing list 'kind:technology ring:out'` is the identical read.
+ */
+async function techList(client: Client, args: Args): Promise<void> {
+  const clauses = ['kind:technology'];
+  const ring = choice(option(args, 'ring'), technologyRings, '--ring');
+  const kind = choice(option(args, 'kind'), technologyKinds, '--kind');
+  if (ring) clauses.push(`ring:${ring}`);
+  if (kind) clauses.push(`technology_kind:${kind}`);
+  if (flag(args, 'stale')) clauses.push('ring_stale:true');
+  if (flag(args, 'unused')) clauses.push('used_by:none,0');
+  if (args.positional.length) clauses.push(args.positional.join(' '));
+
+  const page = await fetchEntryPage(client, { q: clauses.join(' ') });
+  const technologies = [...page.entries].sort(byRing);
+  if (flag(args, 'json')) return printJson(technologies);
+  if (!technologies.length)
+    return out(dim('No technology matches — seed the catalog with `ongoing tech seed`.'));
+
+  const nameWidth = Math.max(4, ...technologies.map((entry) => entry.name.length));
+  out(
+    dim(
+      `${pad('name', nameWidth)}  ${pad('ring', 6)} ${pad('kind', 10)} ${padStart('used', 4)}  note`
+    )
+  );
+  for (const entry of technologies) {
+    const row = technologyRow(entry);
+    out(
+      `${bold(pad(entry.name, nameWidth))}  ${pad(paintRing(row.ring), 6)} ${pad(row.kind || '–', 10)} ` +
+        `${padStart(row.usedBy ? String(row.usedBy) : dim('0'), 4)}  ` +
+        `${dim(entry.note || (entry.fields.tool_surface as string) || '')}` +
+        (row.stale ? ` ${yellow('· ring stale')}` : '')
+    );
+  }
+  out(dim(`\n${technologies.length} technologies`));
+}
+
+/** `ongoing tech show go` — the ring, the note, and every project using it with its version. */
+async function techShow(client: Client, args: Args): Promise<void> {
+  const token = args.positional[0];
+  if (!token) throw new CliError('Usage: ongoing tech show <technology>');
+  const technology = await resolveTechnology(client, token);
+  const rows = usageRows(technology);
+  if (flag(args, 'json'))
+    return printJson({
+      ...technology,
+      usedBy: rows
+    });
+
+  const row = technologyRow(technology);
+  out(`${bold(technology.name)} ${dim(`technology/${technology.slug}`)}`);
+  const facts: [string, string][] = [
+    ['ring', `${paintRing(row.ring)}${row.stale ? yellow('  (review overdue)') : ''}`],
+    ['kind', row.kind || '–'],
+    ['note', technology.note || '–'],
+    ['tool surface', (technology.fields.tool_surface as string) || '–'],
+    ['review after', technology.reviewAfter ?? '–'],
+    ['provided by', (technology.fields.provided_by as string) || '–']
+  ];
+  const label = Math.max(...facts.map(([key]) => key.length));
+  out();
+  for (const [key, value] of facts) out(`${dim(pad(key, label))}  ${value}`);
+
+  out();
+  if (!rows.length) return out(dim('No project uses it yet.'));
+  const projectWidth = Math.max(7, ...rows.map((usage) => usage.project.length));
+  out(dim(`${pad('project', projectWidth)}  ${pad('version', 12)} ${pad('evidence', 9)} source`));
+  for (const usage of rows)
+    out(
+      `${pad(usage.project, projectWidth)}  ${pad(usage.version || dim('unpinned'), 12)} ` +
+        `${pad(usage.evidence === 'detected' ? usage.evidence : cyan(usage.evidence), 9)} ${dim(usage.source)}`
+    );
+  out(dim(`\n${rows.length} project${rows.length === 1 ? '' : 's'}`));
+}
+
+function technologyPatch(args: Args, registry: FieldRegistry): Record<string, unknown> {
+  const patch: Record<string, unknown> = {};
+  for (const [flagName, key] of [
+    ['ring', 'ring'],
+    ['kind', 'technology_kind'],
+    ['note', 'note'],
+    ['tool-surface', 'tool_surface'],
+    ['review-after', 'review_after'],
+    ['name', 'name']
+  ] as const) {
+    const raw = option(args, flagName);
+    if (raw === undefined) continue;
+    patch[key] = parseFieldInput(registry.get(key)!, raw);
+  }
+  return patch;
+}
+
+/** `ongoing tech add <slug> --kind K --ring R` — a technology no detector can invent for you. */
+async function techAdd(client: Client, args: Args): Promise<void> {
+  const slug = args.positional[0];
+  if (!slug) throw new CliError('Usage: ongoing tech add <slug> --kind <kind> --ring <ring>');
+  const registry = await fetchRegistry(client);
+  const patch = technologyPatch(args, registry);
+  const body: Record<string, unknown> = {
+    kind: TECHNOLOGY_KIND,
+    slug,
+    name: (patch.name as string) ?? slug,
+    ...patch
+  };
+  if (!body.ring) throw new CliError(`--ring is required (${technologyRings.join(', ')})`);
+  if (!body.technology_kind)
+    throw new CliError(`--kind is required (${technologyKinds.join(', ')})`);
+  const created = await client.request<EntryView>('/api/entries', { method: 'POST', body });
+  report(args, created, `created technology/${created.slug} (${body.ring})`);
+}
+
+/** `ongoing tech set sveltekit --ring warm` — the ring is the one thing Marcus keeps up to date. */
+async function techSet(client: Client, args: Args): Promise<void> {
+  const token = args.positional[0];
+  if (!token)
+    throw new CliError('Usage: ongoing tech set <technology> [--ring …] [--note …] [--kind …]');
+  const technology = await resolveTechnology(client, token);
+  const registry = await fetchRegistry(client);
+  const patch = technologyPatch(args, registry);
+  if (!Object.keys(patch).length)
+    throw new CliError('Nothing to set. Use --ring, --kind, --note, --tool-surface, or --name.');
+  validateEntryPatch(registry, TECHNOLOGY_KIND, patch);
+  const updated = await patchEntry(client, technology, patch);
+  report(
+    args,
+    { entry: entryLabel(updated), ...patch },
+    `${updated.name} updated: ${describe(patch)}`
+  );
+}
+
+/**
+ * `ongoing tech export` — technologies and their edges as one deterministic document, which is what
+ * the `project-standards` generator renders. JSON is the whole point, so `--json` is the default.
+ */
+async function techExport(client: Client, args: Args): Promise<void> {
+  const page = await fetchEntryPage(client, { q: '' });
+  const document = technologyExport(page.entries, { generatedAt: page.generatedAt });
+  if (flag(args, 'pretty')) {
+    for (const technology of document.technologies)
+      out(
+        `${pad(technology.slug, 18)} ${pad(technology.ring ?? '–', 6)} ${padStart(String(technology.projects.length), 4)} ${dim(technology.note)}`
+      );
+    return;
+  }
+  printJson(document);
+}
+
+interface SeedOutcome {
+  slug: string;
+  status: 'created' | 'updated' | 'unchanged';
+  changed: string[];
+  linked: string | null;
+}
+
+/**
+ * `ongoing tech seed` — the technologies Ongoing ships with, written through the same API any
+ * other client uses rather than a migration. It is idempotent by construction: a missing
+ * technology is created, a value the catalog has not filled in yet is filled, and a value someone
+ * has since changed is left alone unless `--force` says otherwise. Running it twice changes
+ * nothing the second time.
+ */
+async function techSeed(client: Client, args: Args): Promise<void> {
+  const file = option(args, 'file');
+  const seeds: TechnologySeed[] = file
+    ? (JSON.parse(readFileSync(expandHome(file), 'utf8')) as TechnologySeed[])
+    : [...technologySeeds];
+  const force = flag(args, 'force');
+  const registry = await fetchRegistry(client);
+  const entries = await fetchEntries(client);
+  const bySlug = new Map(
+    entries.filter((entry) => entry.kind === TECHNOLOGY_KIND).map((entry) => [entry.slug, entry])
+  );
+  const projects = new Map(
+    entries.filter((entry) => entry.kind === 'project').map((entry) => [entry.slug, entry])
+  );
+  const reviewAfter = reviewAfterFrom(Date.now());
+  const outcomes: SeedOutcome[] = [];
+
+  for (const seed of seeds) {
+    const fields = seedFields(seed);
+    let entry = bySlug.get(seed.slug);
+    const outcome: SeedOutcome = {
+      slug: seed.slug,
+      status: 'unchanged',
+      changed: [],
+      linked: null
+    };
+
+    if (!entry) {
+      const body = { kind: TECHNOLOGY_KIND, slug: seed.slug, ...fields, review_after: reviewAfter };
+      validateEntryPatch(registry, TECHNOLOGY_KIND, fields);
+      entry = await client.request<EntryView>('/api/entries', { method: 'POST', body });
+      outcome.status = 'created';
+    } else {
+      const patch: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(fields)) {
+        const current = entry.fields[key];
+        const empty = current === undefined || current === null || current === '';
+        if (value === null || value === '') continue;
+        if (empty || (force && current !== value)) patch[key] = value;
+      }
+      if (!entry.reviewAfter) patch.review_after = reviewAfter;
+      if (Object.keys(patch).length) {
+        validateEntryPatch(registry, TECHNOLOGY_KIND, patch);
+        entry = await patchEntry(client, entry, patch);
+        outcome.status = 'updated';
+        outcome.changed = Object.keys(patch);
+      }
+    }
+
+    // "Provided by project X" is a declared `provides` edge, which is all the project-to-project
+    // modelling the plan asks for at this phase.
+    const provider = seed.providedBy ? projects.get(seed.providedBy) : undefined;
+    const linked =
+      provider &&
+      !entry.relations.incoming.some(
+        (relation) => relation.kind === 'provides' && relation.other?.id === provider.id
+      );
+    if (provider && linked) {
+      await client.request('/api/relations', {
+        method: 'POST',
+        body: { from: provider.id, to: entry.id, kind: 'provides' }
+      });
+      outcome.linked = provider.slug;
+      if (outcome.status === 'unchanged') outcome.status = 'updated';
+    }
+    outcomes.push(outcome);
+  }
+
+  if (flag(args, 'json')) return printJson({ seeded: outcomes.length, outcomes });
+  const counts = {
+    created: outcomes.filter((outcome) => outcome.status === 'created').length,
+    updated: outcomes.filter((outcome) => outcome.status === 'updated').length,
+    unchanged: outcomes.filter((outcome) => outcome.status === 'unchanged').length
+  };
+  for (const outcome of outcomes.filter((candidate) => candidate.status !== 'unchanged'))
+    out(
+      `${green('✓')} ${pad(outcome.slug, 18)} ${outcome.status}` +
+        `${outcome.changed.length ? dim(` ${outcome.changed.join(', ')}`) : ''}` +
+        `${outcome.linked ? dim(` · provided by ${outcome.linked}`) : ''}`
+    );
+  out(
+    dim(
+      `${counts.created} created · ${counts.updated} updated · ${counts.unchanged} already current`
+    )
+  );
+}
+
 async function requireProject(client: Client, args: Args, command: string): Promise<Project> {
   const token = args.positional[0];
   if (!token) throw new CliError(`Usage: ongoing ${command} <project>`);
@@ -1832,6 +2218,16 @@ ${bold('Catalog')}
   view list                             saved views
   view save <name> [query] [--columns a,b] [--kind <kind>]
   view delete <name>
+
+${bold('Radar')}
+  tech list ['<query>'] [--ring ${technologyRings.join('|')}] [--kind <kind>]
+      [--stale] [--unused] [--json]     the technologies in the catalog, in ring order
+  tech show <technology>                ring, note, and every project using it, with versions
+  tech add <slug> --kind <kind> --ring <ring> [--name …] [--note …] [--tool-surface …]
+  tech set <technology> [--ring …] [--kind …] [--note …] [--tool-surface …] [--review-after …]
+  tech seed [--file <json>] [--force]   the technologies Ongoing ships with; idempotent
+  tech export [--pretty]                technologies and their edges, deterministic, for generators
+  link <project> uses <technology>      a declared edge; detected ones come from a scan
 
 ${bold('Local')}
   open [project] [--terminal|--github]  open the dashboard, or reveal a project
@@ -1924,6 +2320,8 @@ async function main(argv: string[]): Promise<void> {
       return commandLink(client, args, true);
     case 'view':
       return commandView(client, args);
+    case 'tech':
+      return commandTech(client, args);
     case 'website':
       return commandWebsite(client, args);
     case 'scan':
