@@ -8,14 +8,46 @@
       "status": "current",
       "provenance": "Authored 2026-09-11 from bin/ongoing.ts (commandScan, waitForScan), src/routes/api/scan/+server.ts, src/lib/server/scanning/scanner.ts, and src/lib/server/collectors/discover.ts. A successful path; collector failures are recorded as warnings and are not shown.",
       "participants": [
-        { "id": "shell", "title": "Shell or agent", "color": "#759EB5" },
-        { "id": "cli", "element": "cli.scan_cmd", "title": "ongoing scan" },
-        { "id": "api", "element": "service.scan_api", "title": "Scan API" },
-        { "id": "scanner", "element": "scanning.scanner", "title": "Scanner" },
-        { "id": "repo", "element": "catalog.repository", "title": "Repository" },
-        { "id": "discover", "element": "scanning.discover", "title": "Discovery" },
-        { "id": "local", "element": "scanning.git", "title": "git / td / stack / cloc" },
-        { "id": "github", "element": "scanning.github", "title": "GitHub enrichment" }
+        {
+          "id": "shell",
+          "title": "Shell or agent",
+          "color": "#759EB5"
+        },
+        {
+          "id": "cli",
+          "element": "cli.scan_cmd",
+          "title": "ongoing scan"
+        },
+        {
+          "id": "api",
+          "element": "service.scan_api",
+          "title": "Scan API"
+        },
+        {
+          "id": "scanner",
+          "element": "scanning.scanner",
+          "title": "Scanner"
+        },
+        {
+          "id": "repo",
+          "element": "catalog.repository",
+          "title": "Repository"
+        },
+        {
+          "id": "discover",
+          "element": "scanning.discover",
+          "title": "Discovery"
+        },
+        {
+          "id": "local",
+          "element": "scanning.git",
+          "title": "git / td / stack / cloc"
+        },
+        {
+          "id": "github",
+          "element": "scanning.github",
+          "title": "GitHub enrichment"
+        }
       ],
       "groups": [
         {
@@ -248,12 +280,36 @@
       "status": "current",
       "provenance": "Authored 2026-09-11 from docs/deployment.md, scripts/scan.ts, src/lib/server/scanning/dependencies.ts, and the lease logic in src/lib/server/catalog/repository.ts. Timing is a launchd calendar interval, not measured.",
       "participants": [
-        { "id": "launchd", "element": "external.launchd", "title": "launchd" },
-        { "id": "job", "element": "ops.scan_job", "title": "scripts/scan.ts" },
-        { "id": "wiring", "element": "scanning.wiring", "title": "Collector wiring" },
-        { "id": "scanner", "element": "scanning.scanner", "title": "Scanner" },
-        { "id": "sqlite", "element": "catalog.sqlite", "title": "ongoing.sqlite" },
-        { "id": "web", "element": "service.runtime", "title": "Web process" }
+        {
+          "id": "launchd",
+          "element": "external.launchd",
+          "title": "launchd"
+        },
+        {
+          "id": "job",
+          "element": "ops.scan_job",
+          "title": "scripts/scan.ts"
+        },
+        {
+          "id": "wiring",
+          "element": "scanning.wiring",
+          "title": "Collector wiring"
+        },
+        {
+          "id": "scanner",
+          "element": "scanning.scanner",
+          "title": "Scanner"
+        },
+        {
+          "id": "sqlite",
+          "element": "catalog.sqlite",
+          "title": "ongoing.sqlite"
+        },
+        {
+          "id": "web",
+          "element": "service.runtime",
+          "title": "Web process"
+        }
       ],
       "groups": [
         {
@@ -376,16 +432,48 @@
       "status": "current",
       "provenance": "Authored 2026-09-11 from src/routes/+page.svelte, src/lib/components/dashboard/ProjectDrawer.svelte, src/routes/api/projects/[id]/+server.ts, and src/lib/domain/attention.ts.",
       "participants": [
-        { "id": "person", "title": "Marcus", "color": "#759EB5" },
-        { "id": "drawer", "element": "web.drawer", "title": "Project drawer" },
-        { "id": "attention", "element": "domain.attention", "title": "Attention rules (browser)" },
-        { "id": "api", "element": "service.projects_api", "title": "Projects API" },
-        { "id": "rules", "element": "domain.project", "title": "Decision rules" },
-        { "id": "repo", "element": "catalog.repository", "title": "Repository" }
+        {
+          "id": "person",
+          "title": "Marcus",
+          "color": "#759EB5"
+        },
+        {
+          "id": "drawer",
+          "element": "web.drawer",
+          "title": "Project drawer"
+        },
+        {
+          "id": "attention",
+          "element": "domain.attention",
+          "title": "Attention rules (browser)"
+        },
+        {
+          "id": "api",
+          "element": "service.projects_api",
+          "title": "Projects API"
+        },
+        {
+          "id": "rules",
+          "element": "domain.project",
+          "title": "Decision rules"
+        },
+        {
+          "id": "repo",
+          "element": "catalog.repository",
+          "title": "Repository"
+        }
       ],
       "groups": [
-        { "id": "browser", "title": "Browser", "participants": ["drawer", "attention"] },
-        { "id": "server", "title": "Web process", "participants": ["api", "rules", "repo"] }
+        {
+          "id": "browser",
+          "title": "Browser",
+          "participants": ["drawer", "attention"]
+        },
+        {
+          "id": "server",
+          "title": "Web process",
+          "participants": ["api", "rules", "repo"]
+        }
       ],
       "steps": [
         {
@@ -464,6 +552,375 @@
               "to": "api",
               "title": "invalidateAll → GET page model",
               "kind": "call"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "proposed-field-add",
+      "title": "Adding a field is a row, not a migration",
+      "description": "A user field registered from the shell is immediately valid to set, filterable by the query grammar, and offered as a column in the browser, with no schema change and no frontend change.",
+      "status": "proposed",
+      "provenance": "Authored 2026-09-11 from docs/plans/active/ongoing-inventory-redesign.md and ADRs 0005 and 0006. Nothing here is built: the verbs, routes, and registry are the settled design, not observed behaviour.",
+      "participants": [
+        {
+          "id": "shell",
+          "title": "Shell or agent",
+          "color": "#759EB5"
+        },
+        {
+          "id": "cli",
+          "element": "inventory.entry_cli",
+          "title": "ongoing"
+        },
+        {
+          "id": "api",
+          "element": "inventory.entries_api",
+          "title": "Entries API"
+        },
+        {
+          "id": "registry",
+          "element": "inventory.registry",
+          "title": "Field registry"
+        },
+        {
+          "id": "query",
+          "element": "inventory.query",
+          "title": "Query grammar"
+        },
+        {
+          "id": "repo",
+          "element": "catalog.repository",
+          "title": "Repository"
+        },
+        {
+          "id": "table",
+          "element": "inventory.shell",
+          "title": "Inventory shell"
+        }
+      ],
+      "groups": [
+        {
+          "id": "core",
+          "title": "One process",
+          "participants": ["api", "registry", "query", "repo"]
+        }
+      ],
+      "steps": [
+        {
+          "type": "phase",
+          "id": "register",
+          "title": "1. Register the field",
+          "description": "Owner user, so the API may create and delete it; core and provider fields are not editable this way.",
+          "steps": [
+            {
+              "type": "message",
+              "id": "field-add",
+              "from": "shell",
+              "to": "cli",
+              "title": "ongoing field add x.customer --kinds project --type text",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "field-post",
+              "from": "cli",
+              "to": "api",
+              "title": "POST /api/fields { key, kinds, type, label }",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "field-check",
+              "from": "api",
+              "to": "registry",
+              "title": "Validate the definition against the field-property rules",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "field-store",
+              "from": "api",
+              "to": "repo",
+              "title": "Insert the fields row; the registry reloads",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "type": "phase",
+          "id": "assign",
+          "title": "2. Set it on an entry",
+          "description": "The same path a core field takes. There is no second write route for user fields.",
+          "steps": [
+            {
+              "type": "message",
+              "id": "set-cmd",
+              "from": "shell",
+              "to": "cli",
+              "title": "ongoing set acme-site x.customer acme",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "set-patch",
+              "from": "cli",
+              "to": "api",
+              "title": "PATCH /api/entries/project/acme-site { attributes }",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "set-validate",
+              "from": "api",
+              "to": "registry",
+              "title": "validateEntryPatch(registry, 'project', patch)",
+              "kind": "call",
+              "description": "The browser runs this identical pure function before sending, so a bad value never leaves the client."
+            },
+            {
+              "type": "message",
+              "id": "set-write",
+              "from": "api",
+              "to": "repo",
+              "title": "Merge into the entry's attributes document",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "set-ok",
+              "from": "api",
+              "to": "cli",
+              "title": "200 with the stored value",
+              "kind": "return"
+            }
+          ]
+        },
+        {
+          "type": "phase",
+          "id": "use",
+          "title": "3. Filter, sort, and show it",
+          "steps": [
+            {
+              "type": "message",
+              "id": "list-cmd",
+              "from": "shell",
+              "to": "cli",
+              "title": "ongoing list 'x.customer:acme' --columns name,x.customer --json",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "list-get",
+              "from": "cli",
+              "to": "api",
+              "title": "GET /api/entries?q=&columns=",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "list-parse",
+              "from": "api",
+              "to": "query",
+              "title": "Parse the clause; an unknown key errors with the nearest registered field",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "list-read",
+              "from": "api",
+              "to": "repo",
+              "title": "Read entries and project provider metrics into namespaced fields",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "list-rows",
+              "from": "api",
+              "to": "cli",
+              "title": "Matching rows, chosen columns only",
+              "kind": "return"
+            },
+            {
+              "type": "message",
+              "id": "ui-column",
+              "from": "table",
+              "to": "api",
+              "title": "The column chooser offers x.customer with no frontend change",
+              "kind": "call",
+              "description": "Components read the registry, so the browser learns the field the moment it is registered."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "proposed-provider-scan",
+      "title": "A scan on a machine that is not aerie",
+      "description": "No td, no cloc, no GitHub token, no launchd. The scan completes, the missing providers are reported unavailable, and the rules that read their fields stay inert rather than wrong.",
+      "status": "proposed",
+      "provenance": "Authored 2026-09-11 from docs/plans/active/ongoing-inventory-redesign.md and ADR 0007. The manifest, the provider registry, and the host adapter are settled design, not observed behaviour.",
+      "participants": [
+        {
+          "id": "shell",
+          "title": "Shell or agent",
+          "color": "#759EB5"
+        },
+        {
+          "id": "host",
+          "element": "inventory.host",
+          "title": "Host adapter (foreground)"
+        },
+        {
+          "id": "config",
+          "element": "inventory.config",
+          "title": "config.toml"
+        },
+        {
+          "id": "providers",
+          "element": "inventory.providers",
+          "title": "Provider registry"
+        },
+        {
+          "id": "registry",
+          "element": "inventory.registry",
+          "title": "Field registry"
+        },
+        {
+          "id": "scanner",
+          "element": "scanning.scanner",
+          "title": "Scanner"
+        },
+        {
+          "id": "repo",
+          "element": "catalog.repository",
+          "title": "Repository"
+        }
+      ],
+      "groups": [
+        {
+          "id": "proc",
+          "title": "One process",
+          "participants": ["providers", "registry", "scanner", "repo"]
+        }
+      ],
+      "steps": [
+        {
+          "type": "phase",
+          "id": "start",
+          "title": "1. Start without launchd",
+          "steps": [
+            {
+              "type": "message",
+              "id": "host-init",
+              "from": "shell",
+              "to": "host",
+              "title": "ongoing init && ongoing scan",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "host-config",
+              "from": "host",
+              "to": "config",
+              "title": "Read ~/.config/ongoing/config.toml; env vars override",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "config-enabled",
+              "from": "config",
+              "to": "providers",
+              "title": "[providers]: filesystem, git, stack on; td, loc, github off or unavailable",
+              "kind": "async"
+            }
+          ]
+        },
+        {
+          "type": "phase",
+          "id": "declare",
+          "title": "2. Manifests decide what exists",
+          "description": "requires is checked before the provider runs, so unavailability is a reported state rather than a failure.",
+          "steps": [
+            {
+              "type": "message",
+              "id": "manifest-probe",
+              "from": "providers",
+              "to": "registry",
+              "title": "Check each manifest's requires: commands, env, network",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "manifest-register",
+              "from": "providers",
+              "to": "registry",
+              "title": "Register only the enabled providers' namespaced fields",
+              "kind": "call",
+              "description": "No td provider means no td.* fields, so the attention rules that read them find nothing rather than something wrong."
+            },
+            {
+              "type": "message",
+              "id": "manifest-set",
+              "from": "providers",
+              "to": "scanner",
+              "title": "The enabled provider set, in schedule order",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "type": "phase",
+          "id": "run",
+          "title": "3. Run what is available",
+          "steps": [
+            {
+              "type": "message",
+              "id": "scan-discover",
+              "from": "scanner",
+              "to": "repo",
+              "title": "filesystem provider: upsert entries and entry_sources for each root",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "scan-collect",
+              "from": "scanner",
+              "to": "repo",
+              "title": "git and stack write their namespaced fields; unavailable providers write nothing",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "scan-finish",
+              "from": "scanner",
+              "to": "repo",
+              "title": "finishScanRun(completed) — a missing tool is never a failed scan",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "type": "phase",
+          "id": "explain",
+          "title": "4. Say what is missing",
+          "steps": [
+            {
+              "type": "message",
+              "id": "providers-ask",
+              "from": "shell",
+              "to": "host",
+              "title": "ongoing providers",
+              "kind": "call"
+            },
+            {
+              "type": "message",
+              "id": "providers-report",
+              "from": "providers",
+              "to": "shell",
+              "title": "Each provider: enabled, available, last run, contributed fields",
+              "kind": "return"
             }
           ]
         }

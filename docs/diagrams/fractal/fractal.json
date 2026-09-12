@@ -3,12 +3,12 @@
   "id": "ongoing",
   "title": "Ongoing",
   "description": "Which local projects deserve attention: one API, two clients, a cache-first scanner, and an app-owned catalog.",
-  "provenance": "Authored 2026-09-11 from the Ongoing source tree, ADRs, README, AGENTS.md, deployment and website docs. Every component cites the files inspected. The catalog repository is modeled as one component rather than per table; the Svelte component tree and the test suites are intentionally shallow. The tech radar subsystem is a proposal from docs/plans/tech-radar.md and is not built.",
+  "provenance": "Authored 2026-09-11 from the Ongoing source tree, ADRs, README, AGENTS.md, deployment and website docs. Every current component cites the files inspected. The catalog repository is modeled as one component rather than per table; the Svelte component tree and the test suites are intentionally shallow. The 'Software inventory' and 'Tech radar' subsystems are proposed, not built: they are drawn from docs/plans/active/ongoing-inventory-redesign.md and ADRs 0005-0008, settled on 2026-09-11, and their evidence paths are plans rather than code.",
   "boundaries": [
     {
       "id": "api-parity",
       "title": "Same HTTP contract",
-      "description": "Both clients go through the JSON API. A capability reachable only through the browser would be a design bug.",
+      "description": "Both clients go through the JSON API. A capability reachable only through the browser would be a design bug. The proposed entries API extends the same contract to fields, relations, and saved views.",
       "kind": "parity",
       "members": [
         "cli.client",
@@ -21,7 +21,12 @@
         "web.hidden",
         "service.projects_api",
         "service.scan_api",
-        "service.website_api"
+        "service.website_api",
+        "inventory.entry_cli",
+        "inventory.entries_api",
+        "inventory.shell",
+        "inventory.palette",
+        "inventory.entry_page"
       ],
       "color": "#759EB5"
     },
@@ -36,14 +41,16 @@
     {
       "id": "pure-domain",
       "title": "Pure rules, no I/O",
-      "description": "Functions of normalized data only. The browser re-runs attention classification after an optimistic edit without repository access.",
+      "description": "Functions of normalized data only. The browser re-runs attention classification after an optimistic edit, and will validate a patch and parse a query with the same code the server runs.",
       "kind": "ownership",
       "members": [
         "domain.attention",
         "domain.stack",
         "domain.project",
         "domain.website",
-        "domain.contracts"
+        "domain.contracts",
+        "inventory.registry",
+        "inventory.query"
       ],
       "color": "#89A579"
     },
@@ -93,7 +100,8 @@
         "catalog.repository",
         "catalog.sqlite",
         "ops.release",
-        "ops.smoke"
+        "ops.smoke",
+        "inventory.entries"
       ],
       "color": "#B59669"
     },
@@ -104,6 +112,21 @@
       "kind": "ownership",
       "members": ["domain.website", "service.website_api", "cli.edit_cmds", "external.opentangle"],
       "color": "#A69B8C"
+    },
+    {
+      "id": "adapter-seams",
+      "title": "Proposed: switchable seams",
+      "description": "Every assumption that is currently baked in — where repositories live, who hosts them, who tracks issues, who counts lines, what runs the service, where it deploys — declared in a manifest or an adapter and switchable in one TOML file. This is what lets Ongoing run on a machine that is not aerie.",
+      "kind": "ownership",
+      "members": [
+        "inventory.providers",
+        "inventory.config",
+        "inventory.host",
+        "inventory.profile",
+        "radar.signatures",
+        "scanning.wiring"
+      ],
+      "color": "#9A91C4"
     }
   ],
   "scenes": [
@@ -165,13 +188,34 @@
       "lens": "trust"
     },
     {
-      "id": "proposed-tech-radar",
-      "title": "Proposal: technologies as catalog entries",
-      "description": "A sketched second entry kind with rings and project edges, detected by the stack collector and exposed through ongoing tech.",
-      "expanded": ["scanning", "radar", "cli", "catalog"],
+      "id": "proposed-inventory",
+      "title": "Proposal: Ongoing as a software inventory",
+      "description": "Settled and unbuilt: one entries table behind a field registry, one query grammar for the CLI, the API and the browser, collectors declared as providers behind a host adapter, and a keyboard-first shell over all of it.",
+      "expanded": ["inventory"],
       "proposed": true,
       "lens": "structure",
-      "theme": "graphite"
+      "theme": "graphite",
+      "scope": "inventory"
+    },
+    {
+      "id": "proposed-tech-radar",
+      "title": "Proposal: technologies and the radar",
+      "description": "Phase 3: a second entry kind with rings, uses relations detected by a tech-signatures provider, and ongoing tech verbs that regenerate the project-standards tables. Its links into the entries, the registry, and the scanner are drawn in the inventory proposal scene.",
+      "expanded": ["radar"],
+      "proposed": true,
+      "lens": "structure",
+      "theme": "graphite",
+      "scope": "radar"
+    },
+    {
+      "id": "proposed-seams",
+      "title": "Proposal: seams and boundaries",
+      "description": "The same proposed subsystem under the trust lens: which parts share the one HTTP contract, which are pure rules the browser re-runs, what the durable state is, and which pieces exist so that discovery, hosting, issues, the serving host, and the deploy target stop being assumptions.",
+      "expanded": ["inventory"],
+      "proposed": true,
+      "lens": "trust",
+      "theme": "graphite",
+      "scope": "inventory"
     }
   ]
 }
