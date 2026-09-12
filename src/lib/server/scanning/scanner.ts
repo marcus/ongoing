@@ -11,8 +11,7 @@ import {
 import { collectGitMetrics, type GitMetrics } from '$lib/server/collectors/git';
 import { collectLocMetrics, type LocCollectionResult } from '$lib/server/collectors/loc';
 import { collectTdMetrics } from '$lib/server/collectors/td';
-import { collectStackDeclarations } from '$lib/server/collectors/stack';
-import type { DeclaredStack } from '$lib/domain/stack';
+import { collectStack, type StackCollection } from '$lib/server/collectors/stack';
 import { discoverAndReconcile, type ReconciledDiscovery } from '$lib/server/collectors/discover';
 import { createConcurrencyLimit } from './limit';
 import { scanProgress, type ScanProgressBus } from './progress';
@@ -81,7 +80,7 @@ export interface ScannerDependencies {
   collectStack?: (
     repositoryPath: string,
     options: { signal: AbortSignal }
-  ) => Promise<DeclaredStack[]>;
+  ) => Promise<StackCollection>;
   refreshReleaseBaselines?: (
     repository: CatalogRepository,
     options: { force: boolean; signal: AbortSignal; lease: ScanLeaseOwnership }
@@ -177,7 +176,7 @@ export class Scanner {
         collectTdMetrics(path, { now: () => new Date(this.now()), signal: options.signal }));
     this.collectStack =
       dependencies.collectStack ??
-      ((path, options) => collectStackDeclarations(path, { signal: options.signal }));
+      ((path, options) => collectStack(path, { signal: options.signal }));
     this.refreshReleaseBaselines = dependencies.refreshReleaseBaselines;
     this.collectHosting = dependencies.collectHosting;
   }
@@ -409,15 +408,23 @@ export class Scanner {
             // which in turn silently disables the Upgrade view's freshness gate.
             try {
               if (signal.aborted) throw new ScanLeaseLostError(runId);
-              const stacks = await this.collectStack(project.canonicalPath, { signal });
-              await this.repository.replaceProjectStacks(project.id, stacks, lease);
+              const collected = await this.collectStack(project.canonicalPath, { signal });
+              await this.repository.replaceProjectStacks(project.id, collected.stacks, lease);
+              // The tech-signatures provider owns these edges: they are rewritten whole on every
+              // scan, so a dependency dropped from a manifest loses its edge here, while declared
+              // edges a person wrote are left alone.
+              await this.repository.replaceDetectedTechnologyUsage(
+                project.id,
+                collected.technologies,
+                lease
+              );
               await this.repository.updateMetrics(
                 project.id,
                 { stackScannedAt: this.now() },
                 lease
               );
               await this.repository.resolveCollectionError(project.id, 'stack', this.now(), lease);
-              if (stacks.length > 0) updated = true;
+              if (collected.stacks.length > 0) updated = true;
               this.progress.publish({
                 runId,
                 type: 'collector-completed',

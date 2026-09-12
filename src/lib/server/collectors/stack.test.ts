@@ -2,7 +2,8 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { collectStackDeclarations } from './stack';
+import { signatureManifestFiles } from '$lib/domain/technology';
+import { collectStack, collectStackDeclarations, DEPENDENCY_PARSERS } from './stack';
 
 const directories: string[] = [];
 
@@ -216,5 +217,110 @@ describe('failure handling', () => {
     await expect(collectStackDeclarations(path, { signal: controller.signal })).rejects.toThrow(
       /scan cancelled/
     );
+  });
+});
+
+describe('technology signatures', () => {
+  it('detects manifest dependencies with the version the manifest declares', async () => {
+    const path = await project({
+      'package.json': JSON.stringify({
+        dependencies: { '@sveltejs/kit': '^2.70.1', 'better-sqlite3': '11.0.0' },
+        devDependencies: { tailwindcss: '^4.0.0' }
+      })
+    });
+    const { technologies } = await collectStack(path);
+    expect(technologies).toEqual([
+      { slug: 'sqlite', version: '11.0.0', sourceFile: 'package.json', matched: 'better-sqlite3' },
+      {
+        slug: 'sveltekit',
+        version: '^2.70.1',
+        sourceFile: 'package.json',
+        matched: '@sveltejs/kit'
+      },
+      { slug: 'tailwind', version: '^4.0.0', sourceFile: 'package.json', matched: 'tailwindcss' },
+      { slug: 'typescript', version: null, sourceFile: 'package.json', matched: 'node' }
+    ]);
+  });
+
+  it('reads go.mod requires, including indirect ones', async () => {
+    const path = await project({
+      'go.mod': [
+        'module x',
+        '',
+        'go 1.27',
+        '',
+        'require (',
+        '\tmodernc.org/sqlite v1.34.1',
+        '\tgolang.org/x/oauth2 v0.23.0 // indirect',
+        ')',
+        '',
+        'require github.com/spf13/cobra v1.8.1'
+      ].join('\n')
+    });
+    const { technologies } = await collectStack(path);
+    expect(technologies).toEqual([
+      { slug: 'go', version: '1.27', sourceFile: 'go.mod', matched: 'go' },
+      {
+        slug: 'google-auth',
+        version: 'v0.23.0',
+        sourceFile: 'go.mod',
+        matched: 'golang.org/x/oauth2'
+      },
+      { slug: 'sqlite', version: 'v1.34.1', sourceFile: 'go.mod', matched: 'modernc.org/sqlite' }
+    ]);
+  });
+
+  it('treats a marker file as a versionless signature', async () => {
+    const path = await project({
+      '.todos/config.json': '{}',
+      'mise.toml': '[tools]\ngo = "1.27"\n'
+    });
+    const { technologies } = await collectStack(path);
+    expect(technologies).toEqual([
+      { slug: 'go', version: '1.27', sourceFile: 'mise.toml', matched: 'go' },
+      { slug: 'mise', version: null, sourceFile: 'mise.toml', matched: 'mise.toml' },
+      { slug: 'td', version: null, sourceFile: '.todos/config.json', matched: '.todos/config.json' }
+    ]);
+  });
+
+  it('reads gems and crates the same way', async () => {
+    expect(
+      (await collectStack(await project({ Gemfile: 'gem "sqlite3", "~> 2.0"\n' }))).technologies
+    ).toContainEqual({
+      slug: 'sqlite',
+      version: '~> 2.0',
+      sourceFile: 'Gemfile',
+      matched: 'sqlite3'
+    });
+    expect(
+      (
+        await collectStack(
+          await project({
+            'Cargo.toml':
+              '[package]\nname = "x"\n\n[dependencies]\nrusqlite = { version = "0.32" }\n'
+          })
+        )
+      ).technologies
+    ).toContainEqual({
+      slug: 'sqlite',
+      version: '0.32',
+      sourceFile: 'Cargo.toml',
+      matched: 'rusqlite'
+    });
+  });
+
+  it('says nothing about a project whose dependencies nobody catalogued', async () => {
+    const path = await project({
+      'package.json': JSON.stringify({ dependencies: { lodash: '4' } })
+    });
+    expect((await collectStack(path)).technologies).toEqual([
+      { slug: 'typescript', version: null, sourceFile: 'package.json', matched: 'node' }
+    ]);
+  });
+
+  // A signature naming a manifest with no parser would silently never match.
+  it('parses every manifest the signature table names', () => {
+    for (const file of signatureManifestFiles)
+      expect(DEPENDENCY_PARSERS[file]).toBeTypeOf('function');
   });
 });

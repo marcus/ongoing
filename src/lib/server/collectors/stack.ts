@@ -6,6 +6,15 @@ import {
   type DeclaredStack,
   type Toolchain
 } from '$lib/domain/stack';
+import {
+  languageUsage,
+  matchDependencies,
+  matchMarker,
+  mergeDetections,
+  signatureManifestFiles,
+  signatureMarkerFiles,
+  type DetectedTechnology
+} from '$lib/domain/technology';
 
 export interface StackCollectionOptions {
   /** Injected for tests; defaults to reading UTF-8 from disk. */
@@ -256,25 +265,170 @@ async function read(
   }
 }
 
+/* ------------------------------------------------------------ tech signatures */
+
+/** Dependency names to their declared version or range, as one manifest states them. */
+type Dependencies = Record<string, string>;
+
+function jsonDependencies(text: string, sections: readonly string[]): Dependencies {
+  const document = JSON.parse(text) as Record<string, unknown>;
+  const dependencies: Dependencies = {};
+  for (const section of sections) {
+    const block = document[section];
+    if (!block || typeof block !== 'object') continue;
+    for (const [name, value] of Object.entries(block as Record<string, unknown>))
+      if (typeof value === 'string') dependencies[name] ??= value;
+  }
+  return dependencies;
+}
+
+/** `require (…)` blocks and single-line requires; `// indirect` modules count as dependencies. */
+function goModDependencies(text: string): Dependencies {
+  const dependencies: Dependencies = {};
+  let inBlock = false;
+  for (const line of text.split('\n')) {
+    const trimmed = line
+      .trim()
+      .replace(/\/\/.*$/, '')
+      .trim();
+    if (!trimmed) continue;
+    if (inBlock) {
+      if (trimmed === ')') inBlock = false;
+      else {
+        const [module, version] = trimmed.split(/\s+/);
+        if (module) dependencies[module] ??= version ?? '';
+      }
+      continue;
+    }
+    if (/^require\s*\($/.test(trimmed)) inBlock = true;
+    else {
+      const match = /^require\s+(\S+)(?:\s+(\S+))?/.exec(trimmed);
+      if (match?.[1]) dependencies[match[1]] ??= match[2] ?? '';
+    }
+  }
+  return dependencies;
+}
+
+/** `gem "name", "~> 1.2"` — the first quoted argument is the gem, the second its constraint. */
+function gemfileDependencies(text: string): Dependencies {
+  const dependencies: Dependencies = {};
+  for (const line of text.split('\n')) {
+    const match = /^\s*gem\s+["']([^"']+)["'](?:\s*,\s*["']([^"']+)["'])?/.exec(line);
+    if (match?.[1]) dependencies[match[1]] ??= match[2] ?? '';
+  }
+  return dependencies;
+}
+
+/** `[dependencies]` tables, with both `name = "1.0"` and `name = { version = "1.0" }`. */
+function cargoDependencies(text: string): Dependencies {
+  const dependencies: Dependencies = {};
+  let inSection = false;
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (line.startsWith('[')) {
+      inSection = /^\[(?:\w+\.)?(?:dev-|build-)?dependencies\]$/.test(line);
+      continue;
+    }
+    if (!inSection || !line || line.startsWith('#')) continue;
+    const match = /^([\w-]+)\s*=\s*(.+)$/.exec(line);
+    if (!match?.[1]) continue;
+    const inline = /version\s*=\s*["']([^"']+)["']/.exec(match[2]);
+    const literal = /^["']([^"']+)["']/.exec(match[2]);
+    dependencies[match[1]] ??= inline?.[1] ?? literal?.[1] ?? '';
+  }
+  return dependencies;
+}
+
 /**
- * Read every toolchain a project declares at its root.
- *
- * A manifest that cannot be parsed is skipped rather than failed — a half-written `package.json`
- * says nothing about the project's stack and should not mark the whole project as broken. Errors
- * are reserved for files that exist but cannot be read at all.
+ * One parser per manifest the signature table names. A signature for a file with no parser would
+ * silently never match, so `stack.test.ts` asserts this map covers `signatureManifestFiles`.
  */
-export async function collectStackDeclarations(
+export const DEPENDENCY_PARSERS: Readonly<Record<string, (text: string) => Dependencies>> = {
+  'package.json': (text) =>
+    jsonDependencies(text, [
+      'dependencies',
+      'devDependencies',
+      'peerDependencies',
+      'optionalDependencies'
+    ]),
+  'go.mod': goModDependencies,
+  Gemfile: gemfileDependencies,
+  'Cargo.toml': cargoDependencies,
+  'composer.json': (text) => jsonDependencies(text, ['require', 'require-dev'])
+};
+
+/** What one pass over a project's manifests yields: its toolchains and its technology edges. */
+export interface StackCollection {
+  stacks: DeclaredStack[];
+  /** Detected `uses` edges, already merged to one per technology. */
+  technologies: DetectedTechnology[];
+}
+
+/**
+ * Read every toolchain a project declares at its root, and the technologies its manifests give it
+ * away as using.
+ *
+ * Both halves are one pass: the same files answer "which Go version" and "which dependencies", and
+ * reading them twice would double the cost of the cheapest collector for nothing. A manifest that
+ * cannot be parsed is skipped rather than failed — a half-written `package.json` says nothing about
+ * the project's stack and should not mark the whole project as broken. Errors are reserved for
+ * files that exist but cannot be read at all.
+ */
+export async function collectStack(
   projectPath: string,
   options: StackCollectionOptions = {}
-): Promise<DeclaredStack[]> {
+): Promise<StackCollection> {
   const reader = options.readFile ?? ((path: string) => readFile(path, 'utf8'));
+  const texts = new Map<string, Promise<string | null>>();
+  const readOnce = (file: string): Promise<string | null> => {
+    const cached = texts.get(file);
+    if (cached) return cached;
+    const pending = read(join(projectPath, file), file, reader);
+    texts.set(file, pending);
+    return pending;
+  };
+  const abortIfCancelled = () => {
+    if (options.signal?.aborted)
+      throw options.signal.reason ?? new Error('Stack collector aborted');
+  };
+
+  const stacks = await collectDeclarations(readOnce, abortIfCancelled);
+  const detections: DetectedTechnology[] = [];
+  for (const file of signatureManifestFiles) {
+    abortIfCancelled();
+    const text = await readOnce(file);
+    const parse = DEPENDENCY_PARSERS[file];
+    if (text === null || !parse) continue;
+    try {
+      detections.push(...matchDependencies(file, parse(text)));
+    } catch {
+      continue;
+    }
+  }
+  for (const file of signatureMarkerFiles) {
+    abortIfCancelled();
+    if ((await readOnce(file)) !== null) detections.push(...matchMarker(file));
+  }
+
+  return {
+    stacks,
+    // Languages come for free from the declarations rather than from a second parse of the same
+    // manifests, which is what the radar means by "languages read from project_stacks".
+    technologies: mergeDetections([...detections, ...languageUsage(stacks)])
+  };
+}
+
+/** The toolchain half, kept as its own function so the two passes read independently. */
+async function collectDeclarations(
+  readOnce: (file: string) => Promise<string | null>,
+  abortIfCancelled: () => void
+): Promise<DeclaredStack[]> {
   const stacks: DeclaredStack[] = [];
   const seen = new Set<string>();
 
   for (const detector of DETECTORS) {
-    if (options.signal?.aborted)
-      throw options.signal.reason ?? new Error('Stack collector aborted');
-    const text = await read(join(projectPath, detector.file), detector.file, reader);
+    abortIfCancelled();
+    const text = await readOnce(detector.file);
     if (text === null) continue;
 
     let declarations: Declaration[];
@@ -299,4 +453,12 @@ export async function collectStackDeclarations(
     stacks.filter(({ declared }) => declared).map(({ toolchain }) => toolchain)
   );
   return stacks.filter(({ toolchain, declared }) => declared || !versioned.has(toolchain));
+}
+
+/** The toolchain half on its own, for callers that want the stack and not the radar. */
+export async function collectStackDeclarations(
+  projectPath: string,
+  options: StackCollectionOptions = {}
+): Promise<DeclaredStack[]> {
+  return (await collectStack(projectPath, options)).stacks;
 }

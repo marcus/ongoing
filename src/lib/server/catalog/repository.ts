@@ -51,6 +51,11 @@ import {
   type Project,
   type ProjectDecisionUpdate
 } from '$lib/domain/project';
+import {
+  TECH_SIGNATURES_PROVIDER,
+  TECHNOLOGY_KIND,
+  type DetectedTechnology
+} from '$lib/domain/technology';
 import type {
   DeclaredStack,
   Toolchain,
@@ -319,6 +324,14 @@ function withLease<T>(
     return operation();
   });
   return transaction.immediate();
+}
+
+/** Stable per edge, so rewriting a detected relation reuses its row rather than churning ids. */
+function relationId(fromId: string, toId: string, kind: string, evidence: string): string {
+  return `relation_${createHash('sha256')
+    .update(`${fromId}:${toId}:${kind}:${evidence}`)
+    .digest('hex')
+    .slice(0, 24)}`;
 }
 
 export function stableProjectId(canonicalPath: string): string {
@@ -614,10 +627,7 @@ export class CatalogRepository {
       evidence,
       note: input.note
     });
-    const id = `relation_${createHash('sha256')
-      .update(`${from.id}:${to.id}:${input.kind}:${evidence}`)
-      .digest('hex')
-      .slice(0, 24)}`;
+    const id = relationId(from.id, to.id, input.kind, evidence);
     return this.catalog.write((database) => {
       const timestamp = this.now();
       database
@@ -651,6 +661,65 @@ export class CatalogRepository {
       if (!row) throw new Error('Failed to persist relation');
       return relationFromRow(row);
     });
+  }
+
+  /**
+   * Rewrite one provider's detected edges out of a project. Detected rows belong to the provider
+   * that wrote them (ADR 0005), so the whole set is replaced rather than merged, and a technology
+   * that no longer appears in a manifest loses its edge on the next scan. Declared edges are not
+   * touched: the same pair may hold both, and a person's note survives every scan.
+   *
+   * A detection for a technology the catalog does not hold is dropped, which is the radar's rule
+   * that a signature only counts for a technology somebody catalogued.
+   */
+  async replaceDetectedTechnologyUsage(
+    projectId: string,
+    detections: readonly DetectedTechnology[],
+    lease?: ScanLeaseOwnership
+  ): Promise<number> {
+    const technologies = new Map(
+      this.listEntries({ kind: TECHNOLOGY_KIND, includeHidden: true }).map((entry) => [
+        entry.slug,
+        entry
+      ])
+    );
+    const edges = detections
+      .map((detection) => ({ detection, technology: technologies.get(detection.slug) }))
+      .filter(
+        (edge): edge is { detection: DetectedTechnology; technology: Entry } => !!edge.technology
+      );
+
+    await this.catalog.write((database) => {
+      withLease(database, lease, () => {
+        database
+          .query(
+            `DELETE FROM relations
+             WHERE from_id = ? AND kind = 'uses' AND evidence = 'detected' AND provider = ?`
+          )
+          .run(projectId, TECH_SIGNATURES_PROVIDER);
+        const insert = database.query(
+          `INSERT INTO relations (
+             id, from_id, to_id, kind, evidence, provider, attributes, note, created_at, updated_at
+           ) VALUES (?, ?, ?, 'uses', 'detected', ?, ?, NULL, ?, ?)`
+        );
+        const timestamp = this.now();
+        for (const { detection, technology } of edges)
+          insert.run(
+            relationId(projectId, technology.id, 'uses', 'detected'),
+            projectId,
+            technology.id,
+            TECH_SIGNATURES_PROVIDER,
+            JSON.stringify({
+              version: detection.version,
+              sourceFile: detection.sourceFile,
+              matched: detection.matched
+            }),
+            timestamp,
+            timestamp
+          );
+      });
+    });
+    return edges.length;
   }
 
   async removeRelation(id: string): Promise<void> {

@@ -554,13 +554,15 @@ describe('resilient scan orchestration', () => {
     let run = 0;
     const collectStack = vi
       .fn()
-      .mockResolvedValueOnce([
-        { toolchain: 'go', declared: '1.22', raw: '1.22', sourceFile: 'go.mod' }
-      ])
+      .mockResolvedValueOnce({
+        stacks: [{ toolchain: 'go', declared: '1.22', raw: '1.22', sourceFile: 'go.mod' }],
+        technologies: []
+      })
       .mockRejectedValueOnce(new Error('Stack collector could not read go.mod: permission denied'))
-      .mockResolvedValueOnce([
-        { toolchain: 'go', declared: '1.24', raw: '1.24', sourceFile: 'go.mod' }
-      ]);
+      .mockResolvedValueOnce({
+        stacks: [{ toolchain: 'go', declared: '1.24', raw: '1.24', sourceFile: 'go.mod' }],
+        technologies: []
+      });
     const scanner = new Scanner(repository, config, {
       now: () => now,
       createRunId: () => `scan_stack_${++run}`,
@@ -593,6 +595,71 @@ describe('resilient scan orchestration', () => {
     expect(repository.listCollectionErrors(projects[0].id, true)).toEqual([]);
   });
 
+  it('rewrites detected technology edges every scan and leaves declared ones alone', async () => {
+    const { repository, projects } = await fixture();
+    const sveltekit = await repository.createEntry({
+      kind: 'technology',
+      name: 'SvelteKit',
+      slug: 'sveltekit',
+      attributes: { technology_kind: 'framework', ring: 'hot' }
+    });
+    const tailwind = await repository.createEntry({
+      kind: 'technology',
+      name: 'Tailwind CSS',
+      slug: 'tailwind',
+      attributes: { technology_kind: 'library', ring: 'warm' }
+    });
+    await repository.addRelation({
+      fromId: projects[0].id,
+      toId: tailwind.id,
+      kind: 'uses',
+      note: 'configured by hand in the theme'
+    });
+
+    let run = 0;
+    const collectStack = vi
+      .fn()
+      .mockResolvedValueOnce({
+        stacks: [],
+        technologies: [
+          { slug: 'sveltekit', version: '^2.70.1', sourceFile: 'package.json', matched: 'kit' },
+          // A technology nobody catalogued is invisible, as the radar requires.
+          { slug: 'nextjs', version: '15', sourceFile: 'package.json', matched: 'next' }
+        ]
+      })
+      .mockResolvedValueOnce({ stacks: [], technologies: [] });
+    const scanner = new Scanner(repository, config, {
+      now: () => now,
+      createRunId: () => `scan_tech_${++run}`,
+      discover: discovery(projects),
+      collectGit: async () => gitMetrics,
+      collectStack
+    });
+
+    await scanner.scan({ reason: 'scheduled', refresh: 'cheap' });
+    const detected = repository
+      .listRelations({ entryId: projects[0].id })
+      .filter((relation) => relation.evidence === 'detected');
+    expect(detected).toHaveLength(1);
+    expect(detected[0]).toMatchObject({
+      toId: sveltekit.id,
+      kind: 'uses',
+      provider: 'tech-signatures',
+      attributes: { version: '^2.70.1', sourceFile: 'package.json' }
+    });
+
+    // The dependency is gone from the manifest, so its edge goes with it — but the hand-written
+    // one survives untouched.
+    await scanner.scan({ reason: 'scheduled', refresh: 'cheap' });
+    const remaining = repository.listRelations({ entryId: projects[0].id });
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]).toMatchObject({
+      toId: tailwind.id,
+      evidence: 'declared',
+      note: 'configured by hand in the theme'
+    });
+  });
+
   it('refreshes release baselines once per scan without failing the run', async () => {
     const { repository, projects } = await fixture();
     const refresh = vi
@@ -606,7 +673,7 @@ describe('resilient scan orchestration', () => {
       discover: discovery(projects),
       collectGit: async () => gitMetrics,
       collectLoc: async () => ({ status: 'unchanged', fingerprint: 'same' }),
-      collectStack: async () => [],
+      collectStack: async () => ({ stacks: [], technologies: [] }),
       refreshReleaseBaselines: refresh
     });
 
