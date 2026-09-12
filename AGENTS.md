@@ -26,11 +26,13 @@ Consequence: the same-origin/CSRF check in `src/hooks.server.ts` is also skipped
 was blocking legitimate LAN requests (e.g. the favorites toggle, when accessed via a hostname that doesn't match
 the configured `APP_ORIGIN`).
 
-## There is an active redesign, and it is settled
+## The redesign is implemented, and it is the shape of the app
 
-[docs/plans/active/ongoing-inventory-redesign.md](docs/plans/active/ongoing-inventory-redesign.md) turns Ongoing
-from a projects dashboard into a software inventory: typed entries over a field registry, one query grammar for
-every surface, collectors declared as providers behind a host adapter, and a rebuilt frontend. The reasoning is in
+[docs/plans/implemented/ongoing-inventory-redesign.md](docs/plans/implemented/ongoing-inventory-redesign.md) turned
+Ongoing from a projects dashboard into a software inventory: typed entries over a field registry, one query grammar
+for every surface, collectors declared as providers behind a host adapter, and a rebuilt frontend. All six phases
+are built; each section carries the handoff for what it left behind, and the closing Handoff lists what a person
+still has to do by hand. The reasoning is in
 ADRs [0005](docs/adr/0005-entry-model-and-field-registry.md), [0006](docs/adr/0006-one-query-grammar.md),
 [0007](docs/adr/0007-provider-manifests-and-host-adapters.md), and
 [0008](docs/adr/0008-frontend-design-system.md). Each phase has a td epic named in its section of the plan.

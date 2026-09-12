@@ -187,7 +187,8 @@ API, and the browser are thin shells over it, and the domain rules are pure so t
 re-run them. [DESIGN.md](DESIGN.md) is the house style — tokens, components, and the keyboard map
 with each key's CLI equivalent. The architecture decisions are in [docs/adr/](docs/adr/):
 app-owned storage, provider boundaries, cache-first scanning, toolchain baselines, and the entry,
-query, provider, and design-system decisions behind the current shape.
+query, provider, and design-system decisions behind the current shape. How that shape was arrived at,
+phase by phase, is [docs/plans/implemented/](docs/plans/implemented/).
 
 Full CLI reference: [docs/cli.md](docs/cli.md). Operational notes for agents working in this
 repository: [AGENTS.md](AGENTS.md).

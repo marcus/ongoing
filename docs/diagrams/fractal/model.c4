@@ -275,7 +275,7 @@ model {
 
   inventory = subsystem 'Software inventory' {
     description 'The catalog as typed entries. The whole redesign is built: the entries store, the field registry, the query grammar, the entries API, the CLI over them, the keyboard-first browser shell that builds the same query string, the seams — provider manifests, one TOML configuration, the host adapter, the deployment and export profiles, and the CLI transport — and Phase 6: completeness from the registry, repositories with no local checkout, and an install that is two commands on a machine nobody has configured.'
-    metadata { uid 'inventory' fractalColor '#7FA8C9' evidence ['docs/plans/active/ongoing-inventory-redesign.md', 'src/lib/server/catalog/repository.ts'] }
+    metadata { uid 'inventory' fractalColor '#7FA8C9' evidence ['docs/plans/implemented/ongoing-inventory-redesign.md', 'src/lib/server/catalog/repository.ts'] }
 
     entries = store 'entries, fields, relations' {
       #current
@@ -381,7 +381,7 @@ model {
 
   radar = subsystem 'Tech radar' {
     description 'Phases 3 and 4 of the inventory redesign, built: technologies as a second entry kind with rings, uses relations that are detected or declared, radar attention reasons, generated project-standards tables, and the radar page that edits a ring on the chip.'
-    metadata { uid 'radar' fractalColor '#C4A0B8' evidence ['docs/plans/implemented/tech-radar.md', 'docs/plans/active/ongoing-inventory-redesign.md'] }
+    metadata { uid 'radar' fractalColor '#C4A0B8' evidence ['docs/plans/implemented/tech-radar.md', 'docs/plans/implemented/ongoing-inventory-redesign.md'] }
 
     model = component 'Radar model & signatures' {
       #current

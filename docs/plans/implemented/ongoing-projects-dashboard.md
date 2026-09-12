@@ -2,7 +2,7 @@
 
 **Status:** implemented, 2026-09-11. This is the plan the shipped dashboard was built from and the
 reference for behaviour that must not regress. New work belongs in
-[the inventory redesign](../active/ongoing-inventory-redesign.md), which supersedes this document's
+[the inventory redesign](ongoing-inventory-redesign.md), which supersedes this document's
 model, surfaces, and roadmap while keeping the attention views it defines.
 
 ## Summary

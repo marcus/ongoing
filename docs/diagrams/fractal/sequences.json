@@ -623,7 +623,7 @@
       "title": "Adding a field is a row, not a migration",
       "description": "A user field registered from the shell is immediately valid to set on an entry and visible everywhere the catalog is read \u2014 no schema change, no frontend change. Filtering on it by name arrives with the query grammar in Phase 2.",
       "status": "current",
-      "provenance": "Authored 2026-09-11 from docs/plans/active/ongoing-inventory-redesign.md and ADRs 0005 and 0006; rewritten the same day against the shipped Phase 1 code (bin/ongoing.ts, src/routes/api/fields/+server.ts, src/routes/api/entries, src/lib/domain/fields.ts) and exercised end to end in tests/e2e/entries.test.ts.",
+      "provenance": "Authored 2026-09-11 from docs/plans/implemented/ongoing-inventory-redesign.md and ADRs 0005 and 0006; rewritten the same day against the shipped Phase 1 code (bin/ongoing.ts, src/routes/api/fields/+server.ts, src/routes/api/entries, src/lib/domain/fields.ts) and exercised end to end in tests/e2e/entries.test.ts.",
       "participants": [
         {
           "id": "shell",

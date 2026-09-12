@@ -1,12 +1,16 @@
 # Ongoing as a software inventory
 
-**Status:** active, in implementation. Decisions 1 through 5 and every open question are settled
-(Phase 0, 2026-09-11). Phases 1 and 2 are built: the catalog is entries over a field registry, with
-relations and saved views, and one query grammar reads it from every surface. Phases 3 through 6 are
-unbuilt. Each phase has a td epic, listed in its section.
+**Status:** implemented, 2026-09-12. Every phase is built and pushed: the catalog is entries over a
+field registry with relations and saved views, one query grammar reads it from every surface,
+technologies and their rings are entries too, the browser is a keyboard-first inventory shell, every
+collector is a provider behind a manifest with a host adapter and a deployment profile under it, and
+Phase 6 added completeness, repositories with no local checkout, `ongoing init`, and everything the
+repository needed to be readable by somebody who did not write it. Each phase has a td epic, listed
+in its section, and a handoff at the end of it. What is left for a person is in the Handoff at the
+bottom of this document.
 
 Inputs: the running dashboard and its Fractal model (`docs/diagrams/fractal/`), the tech radar
-model (`implemented/tech-radar.md`, this plan's Phase 3 companion), the project-standards brief
+model (`tech-radar.md`, this plan's Phase 3 companion), the project-standards brief
 (`~/code/clara-home/docs/plans/active/agentic-sdlc-project-standards.md`), the `project-standards`
 skill, td-c757bc, td-3a561b, and what LeanIX gets right and wrong.
 
@@ -440,7 +444,7 @@ server on 5199 failed all fifteen tests with 404s). Naming a port now turns reus
 
 Depends on Phase 1. Runs alongside Phase 2 or 4.
 
-Detailed model: [tech-radar.md](../implemented/tech-radar.md) — ring vocabulary, signature detection, the `uses`
+Detailed model: [tech-radar.md](tech-radar.md) — ring vocabulary, signature detection, the `uses`
 edge, the surfaces, and the steel thread. It is this phase's specification, rewritten onto the
 entry model; where the two disagree, this plan wins.
 
@@ -668,7 +672,7 @@ generatedAt }`.
 `scripts/scan.ts`, which are now shims; the next deploy can point them at `src/lib/host/` and delete
 the shims. Production still needs the rebuild and reseed Phase 3's handoff describes.
 
-### Phase 6: inventory uses and open-source release — td-daa20f
+### Phase 6: inventory uses and open-source release — done (td-daa20f)
 
 Depends on Phases 2 through 5.
 
@@ -678,9 +682,9 @@ Depends on Phases 2 through 5.
   have no local checkout.
 - Fleet sweeps as composition, not a feature: document `ongoing list 'tech:go stack.go<1.26'
 --paths | xargs ...` patterns; add `ongoing each <query> -- <command>` only if the pattern
-  proves painful.
+  proves painful. It did not: the section in docs/cli.md is the answer, and no verb was added.
 - `ongoing init`, `ongoing serve`, single-binary spike with `bun build --compile`, Homebrew tap
-  if the spike holds.
+  if the spike holds. It half-holds — see the handoff — so no tap.
 - License, README rewrite for a stranger, CI on GitHub Actions, removal of every remaining
   Marcus-specific string from the core, and only then the repository goes public. The repository
   stays private until the Phase 6 evidence below passes on a machine that is not aerie; publishing
@@ -688,6 +692,92 @@ Depends on Phases 2 through 5.
 
 Evidence: a fresh macOS account installs, inits, scans a directory, and edits an entry from the
 browser and the CLI, with no aerie or Marcus configuration present.
+
+**Handoff (2026-09-12).** Built and pushed. Everything above is implemented; the plan is the
+record, not the backlog.
+
+**Step 1 first: Phases 4 and 5 were verified by running them, not by reading their reports.** The
+frontend evidence holds — 15 Playwright tests jump, edit inline, save a view, edit a ring, check the
+providers screen against `GET /api/providers`, and drive `bin/ongoing` against the same server for
+every mutation; the 100 ms budget passes both in the page and over 500 synthetic entries. Phase 5's
+seams hold too: a scan on a temporary `--data-dir` with only `git` and `bun` on PATH completed with
+one project discovered, zero warnings, and `td`, `loc`, and `github` reported unavailable; TOML
+precedence, `ongoing providers`, both export profiles, and the `foreground` host all behaved. Four
+defects came out of it, all fixed in the first commit: the in-process transport answered **501 for
+`favorite` and `hide`**, so "the CLI works with no service running" was true of reads and false of
+the two verbs people reach for first; the project projection dropped `slug`, so `ongoing favorite td`
+resolved by name while `ongoing set td` resolved by slug; the production server bound `0.0.0.0` by
+default while `loadConfig` decided authentication from a `127.0.0.1` default, which meant `ongoing
+serve` on an unconfigured machine served an unauthenticated app to the LAN; and `ongoing serve`
+ignored `[server] port`, so `ongoing init --port 7801` wrote a port nothing honoured.
+
+**The Fractal model was never lost.** `fractal validate --directory docs/diagrams/fractal` takes a
+_relative_ path against Fractal's own checkout, so it validates Fractal's model and reports 13
+elements where ours has 85. AGENTS.md now says to pass an absolute path, and why.
+
+The parts to build on:
+
+`src/lib/domain/completeness.ts` is a count, not a concept. `entryCompleteness(registry, kind,
+fields)` divides the required fields an entry carries by the required fields its kind declares, and
+the read model projects the result as `complete`. A field marked `required` — built in, or added
+with `ongoing field add --required` — starts counting the moment it is registered, which is why
+there is no completeness configuration anywhere. **`next_action` became required beside `intent`**,
+because with `intent` the only required project field an entry marked `invest` is complete by
+construction and the attention reason the plan asked for could never fire. A project is complete
+when someone has said what it is for and what is next; `complete<100` finds the rest, `incomplete`
+is a built-in saved view, and an `invest` project with gaps is an attention reason naming the
+missing keys in the usual reason/input/comparison/threshold shape.
+
+Remote-only entries are `src/lib/server/github/discovery.ts` (one GraphQL query that resolves users
+and organisations alike) and `src/lib/server/collectors/github-discovery.ts` (the reconciliation).
+`[providers.github] discover = ["acme"]` — empty by default, because a scan should not start listing
+somebody's account on its own — makes each unclaimed repository an entry with a `github` source and
+**no filesystem source**, which is the shape Phase 1 left room for: no `path`, no local metrics, and
+`repository.listProjects()` does not carry it, so `ongoing show` points at `ongoing get` rather than
+inventing a directory. GitHub's own fields are collected exactly as for a local project, because
+`collectGitHubEnrichment` now keys on entry id and takes its remotes from the source row when there
+is no working copy to read `git config` in. What this provider creates it owns, like the
+`tech-signatures` edges: a repository since cloned locally or gone loses its entry on the next pass,
+unless somebody wrote a note or a tag on it, and a pass whose listing failed removes nothing.
+
+`ongoing init` writes one commented TOML file from `renderConfigFile`, a pure template the
+configuration parser itself accepts (asserted), makes the data directory, and opens the catalog once
+so the migrations run. It refuses to overwrite an existing file. `init` + `scan` + `serve` is the
+whole installation, and `tests/integration/fresh-install.test.ts` executes exactly that against a
+temporary HOME with Bun and git on PATH and nothing else, then edits the entry from the CLI and
+through the API and checks each surface sees the other's change.
+
+Four judgment calls worth knowing. **`ongoing each` is not being added** — a query that prints paths
+composes with xargs, parallel, a `while` loop and `git -C`, and reaches further than a verb would;
+docs/cli.md has a "Fleet sweeps" section instead. **The launchd agent labels are discovered rather
+than written down**: the adapter reads `~/Library/LaunchAgents` for the definitions that serve and
+scan Ongoing, whatever reverse-DNS prefix their installer chose, with `[host] label` to name them
+outright — that prefix belongs to whoever installed them, not to the application. **The host adapter
+now defaults to `launchd` on macOS and `foreground` everywhere else.** And **`~/code` stays the
+default scan root**: it is a convention rather than one machine's path, `ongoing init` writes it
+into the generated configuration where a stranger can see and change it, and the seam table above
+says "as today".
+
+**Single-binary spike.** `bun build --compile bin/ongoing.ts` fails out of the box: the six
+`./migrations/*.sql?raw` imports use Vite's suffix, which Bun's bundler does not resolve (Bun's own
+`with { type: 'text' }` compiles fine — verified on a two-file reproduction). A ~20-line `Bun.build`
+plugin that resolves `?raw` to a `text` loader fixes it and produces a **63 MB** binary that runs
+with no Bun on PATH: `list`, `get`, `set`, `providers`, `views`, `tech`, `export`, and `init` all
+work in-process against a real catalog. What does not work is everything that shells back into the
+repository — `repo` prints `/$bunfs`, and `scan`, `serve`, `restart`, `build`, and `dev` spawn
+`process.execPath` against files under `repositoryRoot`, which inside a compiled binary is Bun's
+virtual filesystem. The server is not a candidate at all: the HTTP boundary imports adapter-node's
+`build/handler.js`, so compiling it yields a binary that still needs the build output beside it.
+A single-binary CLI is close and worth doing later; it needs the `?raw` plugin (or the SQL moved
+into TypeScript constants) and `commandScan` falling back to the in-process `POST /api/scan` route
+when there is no repository to spawn into. No Homebrew tap was created, and no repository was made
+or had its visibility changed.
+
+Not done, deliberately: **the repository is still private.** Everything the plan made a condition of
+publishing is done — the licence, the CI workflow, the README, the fresh-machine evidence, and a
+core with no machine-specific strings in it (`tests/foundation.test.ts` fails the build if one
+reappears under `src/`, `bin/`, `scripts/`, or `tests/`) — but flipping visibility is Marcus's call,
+not a phase agent's. See the Handoff at the end of this document.
 
 ## Cross-cutting rules
 
@@ -713,6 +803,15 @@ Settled in Phase 0 on 2026-09-11. Reopen one only with a reason written down her
 
 ## Changelog
 
+- 2026-09-12: Phase 6 — completeness is a count over the registry's `required` fields projected as
+  `complete`, with `incomplete` as a saved view and an attention reason for an `invest` project with
+  gaps; the `github` provider can catalogue repositories in configured orgs and users that have no
+  local checkout, as entries with a `github` source and no path; `ongoing init` plus `ongoing serve`
+  is the whole installation and an integration test runs it against a fresh HOME; fleet sweeps are
+  documented as composition rather than added as a verb; the launchd labels, the deployment runbook,
+  the seed prose, and the test fixtures lost the one machine they named, and a test now fails the
+  build if it comes back; and the repository gained an MIT licence, a GitHub Actions workflow, and a
+  README written for a stranger.
 - 2026-09-12: Phase 5 — every collector is a provider with a manifest and the scanner iterates the
   enabled ones in dependency order, the field registry is built from those manifests so a disabled
   or unavailable provider contributes nothing, configuration is one TOML file with environment
@@ -747,3 +846,45 @@ list`, `views`, and `stacks` rewritten on it with every old flag kept as a claus
   one validated patch path serves the API, the CLI, and the browser; `/api/entries`, `/api/fields`,
   `/api/relations`, and `/api/views` shipped with the CLI verbs over them; the production catalog
   migrates losslessly on a real copy; the existing dashboard runs unchanged on the new model.
+
+## Handoff
+
+The plan is implemented and every phase is pushed to `main`. What is left needs a person, or a
+machine only Marcus has.
+
+1. **Restart production on the new bundle.** The service has been running a pre-Phase-1 bundle
+   against an already-migrated catalog for several phases. From the checkout:
+
+   ```sh
+   bun run build
+   launchctl bootout gui/$(id -u)/com.marcusvorwaller.ongoing
+   launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist
+   curl --fail --silent http://127.0.0.1:7766/api/health
+   ```
+
+   `ongoing restart --build` does the same through the host adapter.
+
+2. **Update the installed plists.** They still name `scripts/production-server.ts` and
+   `scripts/scan.ts`, which are two-line shims. Point both `ProgramArguments` at
+   `src/lib/host/production-server.ts` and `src/lib/host/scan-command.ts`, delete the shims, and
+   bootstrap from the edited files (`kickstart -k` does not reload a plist). The committed
+   `.plist.example` files still name the shim paths, so nothing breaks before the edit.
+   `deploy/aerie/README.md` has the full runbook.
+
+3. **Seed and scan production.** `ongoing tech seed` has only ever run against the dev catalog:
+
+   ```sh
+   ongoing tech seed
+   ongoing scan --full --wait
+   ```
+
+   The scan is what fills the detected `uses` edges.
+
+4. **Decide about going public.** Every condition the plan set is met — MIT licence, CI workflow,
+   README for a stranger, `ongoing init` proved against a fresh HOME by an integration test, and a
+   core with no machine-specific strings that a test now enforces — but changing the repository's
+   visibility is yours to do. Nothing in this work created a repository or changed a visibility
+   setting. If you do publish: `deploy/aerie/` names your host, your paths and your agent labels,
+   which is by design (it is the worked example of a profile), and the `opentangle` export profile
+   names your site. Both are intentional and neither carries a secret; the access secret lives only
+   in the installed plist, which is not in the repository.

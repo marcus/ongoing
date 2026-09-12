@@ -1,7 +1,7 @@
 # Tech radar: technologies as catalog entries
 
 **Status:** implemented — this was the detailed model for Phase 3 of
-[the inventory redesign](../active/ongoing-inventory-redesign.md) (td-1155ba), and Phase 3 shipped
+[the inventory redesign](ongoing-inventory-redesign.md) (td-1155ba), and Phase 3 shipped
 it on 2026-09-12. The model below is what got built, with three differences recorded in the
 changelog: the seed list is wider than six, `tech seed` and `tech show` joined the CLI surface, and
 the radar web page did not ship (Phase 4 owns it). `docs/cli.md` is the current reference.
