@@ -9,7 +9,7 @@
   import { formatValue, relativeAge } from './format';
   import Icon from './Icon.svelte';
   import Sparkline from './Sparkline.svelte';
-  import { attentionTone, VIEW_LABELS } from './views';
+  import { attentionTone, providerLabel, VIEW_LABELS } from './views';
 
   /**
    * The fact sheet, used whole by the entry pages and by the inventory's detail panel. Every field
@@ -176,7 +176,7 @@
 
   {#each panels as panel (panel.provider)}
     <section class="block">
-      <h3>{panel.provider}</h3>
+      <h3>{providerLabel(panel.provider)}</h3>
       <dl class="kv">
         {#each panel.fields as field (field.key)}
           <dt title={field.description ?? field.key}>{field.label}</dt>

@@ -56,3 +56,22 @@ export function viewIcon(name: string): IconName {
   if (name === 'technologies') return 'package';
   return 'list';
 }
+
+/**
+ * Provider names as a fact sheet says them. The read model projects derived values under pseudo
+ * providers (`relations`, `radar`, `attention`, `collector`, `filesystem`) so the query grammar
+ * cannot tell them from collected ones; a panel heading should still say which is which — and a
+ * panel called "relations" sitting under the Relations section reads like a mistake.
+ */
+const PROVIDER_LABELS: Readonly<Record<string, string>> = {
+  attention: 'derived · attention',
+  collector: 'derived · collector warnings',
+  filesystem: 'derived · discovery',
+  radar: 'derived · radar',
+  relations: 'derived · relation roll-ups',
+  stack: 'stack (toolchains)'
+};
+
+export function providerLabel(name: string): string {
+  return PROVIDER_LABELS[name] ?? name;
+}
