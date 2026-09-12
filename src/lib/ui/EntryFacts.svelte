@@ -229,7 +229,9 @@
 
   .kv {
     display: grid;
-    grid-template-columns: minmax(88px, 38%) 1fr;
+    /* A cap rather than a percentage: the same rows read well in the 400px panel and on a
+       full fact sheet, instead of stretching a label column across half the page. */
+    grid-template-columns: minmax(88px, 200px) 1fr;
     gap: 2px var(--space-2);
     margin: 0;
     font-size: var(--text-xs);

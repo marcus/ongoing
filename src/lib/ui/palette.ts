@@ -37,6 +37,11 @@ export function fuzzyScore(haystack: string, needle: string): number | null {
   return score - text.length * 0.02;
 }
 
+/**
+ * Rank every item, then gather the survivors back into their groups, in the order the best match
+ * in each group appeared. Relevance decides which group is at the top; grouping decides what the
+ * list looks like — interleaving them turns the headings into noise.
+ */
 export function rankPalette(items: readonly PaletteItem[], query: string): PaletteItem[] {
   if (!query.trim()) return [...items];
   const scored: { item: PaletteItem; score: number }[] = [];
@@ -47,5 +52,16 @@ export function rankPalette(items: readonly PaletteItem[], query: string): Palet
     );
     if (Number.isFinite(score)) scored.push({ item, score });
   }
-  return scored.sort((left, right) => right.score - left.score).map((entry) => entry.item);
+  scored.sort((left, right) => right.score - left.score);
+
+  const groups: string[] = [];
+  const byGroup = new Map<string, PaletteItem[]>();
+  for (const { item } of scored) {
+    if (!byGroup.has(item.group)) {
+      groups.push(item.group);
+      byGroup.set(item.group, []);
+    }
+    byGroup.get(item.group)!.push(item);
+  }
+  return groups.flatMap((group) => byGroup.get(group)!);
 }

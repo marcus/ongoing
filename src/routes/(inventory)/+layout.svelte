@@ -3,6 +3,7 @@
   import { page } from '$app/state';
   import { onMount } from 'svelte';
   import type { EntryView } from '$lib/domain/entry-view';
+  import { filterRows, parseQuery } from '$lib/domain/query';
   import { TECHNOLOGY_KIND } from '$lib/domain/technology';
   import { Catalog, githubUrl } from '$lib/ui/catalog.svelte';
   import { setCatalogContext } from '$lib/ui/context';
@@ -43,6 +44,11 @@
     return projects.filter((entry) => entry.views.includes(query)).length;
   }
 
+  /** What a saved view would show, run locally — the same evaluator the list and the CLI run. */
+  function savedCount(view: { query: string }): number {
+    return filterRows(catalog.entries, parseQuery(view.query), catalog.registry).length;
+  }
+
   let sections = $derived<RailSection[]>([
     {
       title: 'Catalog',
@@ -78,10 +84,16 @@
       title: 'Saved views',
       items: catalog.views
         .filter((view) => !(view.name in VIEW_LABELS))
-        .map((view) => ({
+        .map((view) => ({ view, matches: savedCount(view) }))
+        // A toolchain view ships for every toolchain Ongoing knows; showing the eleven this
+        // machine has nothing in would bury the ones it does. They come back the moment a scan
+        // finds one, and `ongoing views` still lists them all.
+        .filter(({ view, matches }) => matches > 0 || !view.name.startsWith('stack-'))
+        .map(({ view, matches }) => ({
           label: view.name,
           href: `/?saved=${encodeURIComponent(view.name)}`,
           icon: viewIcon(view.name),
+          count: matches,
           active: inventory.saved === view.name
         }))
     },
@@ -237,6 +249,36 @@
     return items;
   });
 
+  let scanning = $state(false);
+
+  /**
+   * Start a scan. `ongoing scan` is the same POST; the CLI is where a run is followed live, since
+   * the shell has no use for a progress ticker it would only glance at.
+   */
+  async function startScan() {
+    scanning = true;
+    try {
+      const response = await fetch('/api/scan', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      if (!response.ok) {
+        const body = (await response.json()) as { error?: string };
+        throw new Error(body.error ?? 'The scan was refused');
+      }
+      catalog.message = { text: 'Scan started — `ongoing scan --wait` follows it', tone: 'info' };
+      await catalog.refresh();
+    } catch (error) {
+      catalog.message = {
+        text: error instanceof Error ? error.message : 'The scan was refused',
+        tone: 'error'
+      };
+    } finally {
+      scanning = false;
+    }
+  }
+
   function applyTheme(next: (typeof THEMES)[number]) {
     theme = next;
     if (next === 'system') delete document.documentElement.dataset.theme;
@@ -306,11 +348,20 @@
   <Rail {sections}>
     {#snippet footer()}
       <div class="footer-row">
-        <span
-          >{data.scan
-            ? `scanned ${relativeAge(data.scan.finishedAt, now)} ago`
-            : 'no scan yet'}</span
+        <button
+          class="button button-ghost"
+          type="button"
+          disabled={scanning}
+          onclick={startScan}
+          title="Refresh the catalog — the same run as `ongoing scan`"
         >
+          <Icon name="refresh" size={12} />
+          {scanning
+            ? 'scanning…'
+            : data.scan
+              ? `scanned ${relativeAge(data.scan.finishedAt, now)} ago`
+              : 'no scan yet'}
+        </button>
         <span class="themes" role="group" aria-label="Theme">
           {#each THEMES as option (option)}
             <button

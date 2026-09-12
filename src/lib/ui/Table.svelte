@@ -81,6 +81,9 @@
             </button>
           </th>
         {/each}
+        <!-- A spacer that absorbs the slack, so every real column is the width of its content
+             rather than a share of the viewport. -->
+        <th class="spacer" scope="col"><span class="sr-only">Spacer</span></th>
       </tr>
     </thead>
     <tbody>
@@ -125,6 +128,7 @@
               {/if}
             </td>
           {/each}
+          <td class="spacer"></td>
         </tr>
       {/each}
     </tbody>
@@ -139,8 +143,10 @@
 
   .table {
     width: 100%;
+    table-layout: auto;
     border-collapse: collapse;
     font-size: var(--text-sm);
+    white-space: nowrap;
   }
 
   thead th {
@@ -194,6 +200,11 @@
 
   tbody tr[data-active='true'] {
     background: var(--bg-selected);
+  }
+
+  .spacer {
+    width: 100%;
+    padding: 0;
   }
 
   td {

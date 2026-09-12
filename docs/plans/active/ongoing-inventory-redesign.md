@@ -504,7 +504,7 @@ edges. The production service is still running the pre-Phase-1 bundle against an
 catalog (`ongoing status` reports `no such table: projects`); it needs `bun run build` and a launchd
 bootout/bootstrap, which is Marcus's call rather than a phase agent's.
 
-### Phase 4: frontend redesign — td-d843f6
+### Phase 4: frontend redesign — done (td-d843f6)
 
 Depends on Phase 2 for the table; the design-system spike can start during Phase 1.
 
@@ -518,6 +518,55 @@ Depends on Phase 2 for the table; the design-system spike can start during Phase
 
 Evidence: every browser mutation has a CLI equivalent test; Lighthouse-style interaction under
 100 ms for list operations at 500 entries; screenshots in `docs/qa/`.
+
+**Handoff (2026-09-12).** Built. The browser is the inventory now: `src/routes/(inventory)/` is one
+route group over one `+layout.server.ts` that reads the whole catalog once, and `/`, `/p/<slug>`,
+`/t/<slug>`, `/radar` and `/providers` live inside it. `dashboard.css`, the ticker, the flyout, the
+drawer, the project list and row, the theme picker, the activity bars, and `/hidden` are gone;
+`?saved=hidden` is the hidden shelf, and manual rank is a palette command rather than a drag.
+
+The shape to build on. `src/lib/ui/` is the design system — `Table`, `FieldEditor` (one editor per
+registered type), `Palette`, `Panel`, `Rail`, `Badge`, `Sparkline`, `Icon`, plus the pure modules
+`query-state.ts`, `facts.ts`, `palette.ts`, `format.ts`, `providers.ts`, `views.ts` and the client
+store `catalog.svelte.ts`, which is the one place a mutation happens. Everything resolves to a token
+in `tokens.css`; **no component declares a font size or a colour literal**, which is the rule that
+makes an app-wide change one edit instead of 1,468. `DESIGN.md` at the repo root documents the
+tokens, the components, the keyboard map with each key's CLI equivalent, and the deliberate drift
+from the Linear patterns. Columns and fact-sheet sections are driven by field definitions, so a
+field added by `ongoing field add` renders and edits with no frontend change.
+
+Three judgment calls worth knowing. **The whole catalog is loaded once and filtered in the
+browser.** `filterRows` and `sortRows` are pure and already shipped, so a filter, a sort, or a
+column change is a local recompute rather than a fetch — which is what actually meets the 100 ms
+budget, and what makes the layout load deliberately independent of `url` so SvelteKit does not
+re-run it on every query change. **`listDefaultClauses` moved into `src/lib/domain/query.ts` and is
+now shared with `ongoing list`**: both prepend `kind:project` and `is_hidden:false` when the query
+has not spoken about them, because a URL and a CLI invocation that "mostly agree" is worse than
+either rule alone; the filter box shows the effective query, defaults included. And **`EntryView`
+moved to `src/lib/domain/entry-view.ts` and gained `metrics` and `attention`** — the browser cannot
+import `$lib/server`, and re-running `classifyAttentionViews` after an optimistic edit needs the
+metric row and the reasons. That is the only change to a Phase 1–3 contract.
+
+Evidence. 15 Playwright tests in `tests/e2e/inventory.test.ts` jump to an entry, edit a field
+inline, save a view, edit a ring on a radar chip, and confirm `bin/ongoing` sees each against the
+same server through `tests/e2e/cli.ts`; a refused edit rolls back with the API's own message; one
+test times a sort inside the page with a `MutationObserver` and `src/lib/domain/query.perf.test.ts`
+asserts the same list operations under 100 ms over 500 synthetic entries. `optimistic.test.ts` and
+`query-state.test.ts` cover the pure rules. Screens are in `docs/qa/screens/`, dark and light,
+regenerated with `QA_SCREENSHOTS=1 E2E_PORT=7801 bun run test:e2e tests/e2e/screenshots.test.ts`.
+The Playwright suite now runs on one worker: it shares one seeded catalog and several tests mutate
+it, so parallel workers made `is_favorite:true` mean whatever another worker was mid-way through.
+
+Not done, deliberately. **`GET /api/providers` does not exist** — Phase 5 adds it — so
+`src/lib/ui/providers.ts` declares the typed `ProviderStatus` shape the screen renders and falls
+back to what the field registry knows, marking availability and last run unknown rather than
+guessing; the TODO there names the route and the epic. **Live scan progress left the browser**: the
+rail has a scan button that POSTs `/api/scan` and re-reads the catalog, but the SSE ticker is gone
+and `ongoing scan --wait` is where a run is followed. **`svelte/no-navigation-without-resolve` is
+off** in `eslint.config.js`, with the reasoning beside it: every URL the shell builds is computed
+and the rule only sees a literal `resolve()`. The Fractal model has the shell, the palette, the fact
+sheet, the design system and the radar page as current, a new `inventory-shell` scene, and a
+rewritten `decision-edit` journey; `fractal validate` is clean and the changed scenes are exported.
 
 ### Phase 5: providers as adapters and the host seam — td-c5dc7d
 
@@ -584,6 +633,14 @@ Settled in Phase 0 on 2026-09-11. Reopen one only with a reason written down her
 
 ## Changelog
 
+- 2026-09-12: Phase 4 — the browser is the inventory: a rail, a table over chosen columns with an
+  inline editor per registered field type, a detail panel on `Enter`, fact sheets at `/p/<slug>` and
+  `/t/<slug>`, the radar page, a providers screen, and `Cmd+K`; dark-first LCH tokens and
+  `src/lib/ui/` replace `dashboard.css`, the ticker, the flyout, the drawer, and drag reorder;
+  the URL carries the same query string `ongoing list` sends, defaults included; edits are
+  optimistic with undo, re-running the registry and the attention rules in the browser; and every
+  browser mutation is proved against `bin/ongoing` in Playwright. `DESIGN.md` records the house
+  style.
 - 2026-09-12: Phase 3 — technologies are entries with rings, `uses` edges are detected inside the
   stack collector's pass or declared by hand, `ongoing tech list|show|add|set|seed|export` is the
   radar's surface, an `out` technology in use and a stale ring are attention reasons, and the
