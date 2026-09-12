@@ -22,7 +22,17 @@ import {
   type FieldDefinition,
   type FieldRegistry
 } from '../src/lib/domain/fields';
+import {
+  filterRows,
+  formatSort,
+  legacyParamsToQuery,
+  parseColumns,
+  parseQuery,
+  parseSortInput,
+  validateQuery
+} from '../src/lib/domain/query';
 import { relationKinds } from '../src/lib/domain/relation';
+import type { AttributeValue } from '../src/lib/domain/entry';
 
 const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
 const SERVICE = 'com.marcusvorwaller.ongoing';
@@ -230,7 +240,9 @@ function parseArgs(argv: string[]): Args {
     'columns',
     'note',
     'slug',
-    'evidence'
+    'evidence',
+    'saved',
+    'tech'
   ]);
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -464,21 +476,6 @@ class Client {
 
 /* ------------------------------------------------------------ project lookup */
 
-async function fetchPage(client: Client, args: Args, hidden = false): Promise<PageModel> {
-  return client.request<PageModel>('/api/projects', {
-    query: {
-      hidden: hidden ? 'true' : undefined,
-      view: choice(option(args, 'view'), VIEWS, '--view'),
-      filter: choice(option(args, 'filter'), FILTERS, '--filter'),
-      sort: choice(option(args, 'sort'), SORTS, '--sort'),
-      stack: choice(option(args, 'stack'), TOOLCHAINS, '--stack'),
-      dir: flag(args, 'asc') ? 'asc' : flag(args, 'desc') ? 'desc' : undefined,
-      q: option(args, 'search', 'q'),
-      group: flag(args, 'no-group') ? 'none' : undefined
-    }
-  });
-}
-
 function matches(project: Project, token: string): boolean {
   const needle = token.toLocaleLowerCase('en');
   return (
@@ -543,45 +540,135 @@ function realpathSafe(value: string): string {
 
 /* ---------------------------------------------------------------- commands */
 
+/**
+ * Builds the query string `ongoing list` sends. Everything a flag used to mean becomes a clause:
+ * one grammar, one place it is assembled, and `--json` on the result shows exactly what ran.
+ * `kind:project` and the hidden shelf are added only when the query has not already spoken about
+ * them, so `ongoing list 'kind:technology'` and `ongoing list 'is_hidden:true'` do what they say.
+ */
+function buildListQuery(args: Args): string {
+  const parts = [
+    args.positional.join(' '),
+    legacyParamsToQuery({
+      kind: option(args, 'kind'),
+      view: choice(option(args, 'view'), VIEWS, '--view'),
+      filter: choice(option(args, 'filter'), FILTERS, '--filter'),
+      stack: choice(option(args, 'stack'), TOOLCHAINS, '--stack'),
+      tech: option(args, 'tech'),
+      search: option(args, 'search', 'q')
+    })
+  ].filter(Boolean);
+  const spoken = new Set(
+    parseQuery(parts.join(' '))
+      .clauses.filter((clause) => clause.type === 'field')
+      .map((clause) => clause.field)
+  );
+  const defaults: string[] = [];
+  if (!spoken.has('kind')) defaults.push('kind:project');
+  if (!spoken.has('is_hidden'))
+    defaults.push(flag(args, 'hidden') ? 'is_hidden:true' : 'is_hidden:false');
+  return [...defaults, ...parts].join(' ');
+}
+
+/**
+ * Favourites float to the top unless `--no-group`, which is the old `group=favorites` behaviour
+ * expressed as a leading sort key rather than a second pass over the rows.
+ */
+function buildListSort(args: Args): string {
+  const direction = flag(args, 'asc') ? 'asc' : flag(args, 'desc') ? 'desc' : undefined;
+  const requested = option(args, 'sort');
+  const keys = requested
+    ? parseSortInput(requested, direction)
+    : parseSortInput('git.latestCommit', direction ?? 'desc');
+  const grouped =
+    flag(args, 'no-group') || keys.some((key) => key.field === 'is_favorite')
+      ? keys
+      : [{ field: 'is_favorite', direction: 'desc' as const }, ...keys];
+  return formatSort(grouped);
+}
+
+function columnValue(entry: EntryView, column: string): string {
+  if (column === 'id') return entry.id;
+  const value = entry.fields[column];
+  if (column.endsWith('latestCommit') && typeof value === 'string') return `${age(value)} ago`;
+  return formatValue(value);
+}
+
 async function commandList(client: Client, args: Args): Promise<void> {
-  const hidden = flag(args, 'hidden');
-  const page = await fetchPage(client, args, hidden);
-  let projects = page.visibleProjects;
-  const limit = Number(option(args, 'limit', 'n') ?? NaN);
-  if (Number.isFinite(limit)) projects = projects.slice(0, Math.max(0, limit));
+  const saved = option(args, 'saved');
+  const limit = option(args, 'limit', 'n');
+  const columns = parseColumns(option(args, 'columns') ?? '');
+  const page = await fetchEntryPage(client, {
+    q: buildListQuery(args),
+    sort: buildListSort(args),
+    columns: columns.length ? columns.join(',') : undefined,
+    saved,
+    limit
+  });
+  const entries = page.entries;
 
-  if (flag(args, 'json')) return printJson(projects);
-  if (flag(args, 'paths')) return void projects.forEach((project) => out(project.canonicalPath));
-  if (flag(args, 'ids')) return void projects.forEach((project) => out(project.id));
+  if (flag(args, 'count')) return out(String(page.total));
+  if (flag(args, 'paths')) return void entries.forEach((entry) => entry.path && out(entry.path));
+  if (flag(args, 'ids')) return void entries.forEach((entry) => out(entry.id));
+  if (flag(args, 'json')) {
+    const chosen = columns.length ? columns : page.columns;
+    if (!chosen.length) return printJson(entries);
+    return printJson(
+      entries.map((entry) =>
+        Object.fromEntries([
+          ['id', entry.id],
+          ['entry', entryLabel(entry)],
+          ...chosen.map((column) => [column, entry.fields[column] ?? null])
+        ])
+      )
+    );
+  }
 
-  if (!projects.length) {
-    out(dim(hidden ? 'No hidden projects.' : 'No projects match.'));
+  if (!entries.length) {
+    out(dim(`No entries match ${page.query ? bold(page.query) : 'the catalog'}.`));
     return;
   }
 
-  const nameWidth = Math.min(32, Math.max(12, ...projects.map((project) => project.name.length)));
+  const chosen = columns.length ? columns : page.columns;
+  if (chosen.length) {
+    const widths = chosen.map((column) =>
+      Math.min(
+        40,
+        Math.max(column.length, ...entries.map((entry) => width(columnValue(entry, column))))
+      )
+    );
+    out(dim(chosen.map((column, index) => pad(column, widths[index])).join('  ')));
+    for (const entry of entries)
+      out(chosen.map((column, index) => pad(columnValue(entry, column), widths[index])).join('  '));
+  } else {
+    const nameWidth = Math.min(32, Math.max(12, ...entries.map((entry) => entry.name.length)));
+    out(
+      dim(
+        `  ${pad('entry', nameWidth)} ${padStart('last', 5)} ${padStart('30d', 4)} ` +
+          `${padStart('loc', 6)} ${padStart('td', 4)} ${padStart('★', 6)}  views`
+      )
+    );
+    for (const entry of entries) {
+      const marker = entry.isFavorite ? yellow('★') : ' ';
+      const name = entry.isMissing ? red(entry.name) : bold(entry.name);
+      const views = (entry.views ?? [])
+        .map((view) => VIEW_STYLE[view](VIEW_LABEL[view]))
+        .join(', ');
+      out(
+        `${marker} ${pad(name, nameWidth)} ${padStart(age(entry.fields['git.latestCommit'] as string), 5)} ` +
+          `${padStart(count(entry.fields['git.commits30d'] as number), 4)} ` +
+          `${padStart(count(entry.fields['loc.code'] as number), 6)} ` +
+          `${padStart(count(entry.fields['td.total'] as number), 4)} ` +
+          `${padStart(count(entry.fields['github.stars'] as number), 6)}  ${views}`
+      );
+    }
+  }
   out(
     dim(
-      `  ${pad('project', nameWidth)} ${padStart('last', 5)} ${padStart('30d', 4)} ` +
-        `${padStart('loc', 6)} ${padStart('td', 4)} ${padStart('★', 6)}  views`
+      `\n${entries.length} of ${page.catalogTotal} · ${page.hiddenCount} hidden · ` +
+        `scanned ${age(page.scan?.finishedAt ?? page.scan?.startedAt)} ago`
     )
   );
-  for (const project of projects) {
-    const metrics = project.metrics;
-    const marker = project.isFavorite ? yellow('★') : ' ';
-    const name = project.isMissing ? red(project.name) : bold(project.name);
-    const views = project.views.map((view) => VIEW_STYLE[view](VIEW_LABEL[view])).join(', ');
-    out(
-      `${marker} ${pad(name, nameWidth)} ${padStart(age(metrics?.latestCommitAt), 5)} ` +
-        `${padStart(count(metrics?.commits30d), 4)} ${padStart(count(metrics?.locCode), 6)} ` +
-        `${padStart(count(metrics?.tdTotalNonClosedCount), 4)} ` +
-        `${padStart(count(metrics?.githubStars), 6)}  ${views}`
-    );
-  }
-  const summary = hidden
-    ? `${projects.length} hidden`
-    : `${projects.length} of ${page.totalCount} projects · ${page.hiddenCount} hidden`;
-  out(dim(`\n${summary} · scanned ${age(page.scan?.finishedAt ?? page.scan?.startedAt)} ago`));
 }
 
 async function commandShow(client: Client, args: Args): Promise<void> {
@@ -714,29 +801,57 @@ function describeStack(stack: Stack): string {
   return STACK_STYLE[stack.status](`${stack.toolchain} ${version}${target}`);
 }
 
+/**
+ * `ongoing views` — the saved views, built-in and user-defined alike, with how many entries each
+ * one currently matches. The counts are evaluated locally with the same pure evaluator the server
+ * runs, so listing thirty views costs one request rather than thirty.
+ */
 async function commandViews(client: Client, args: Args): Promise<void> {
-  const page = await client.request<PageModel>('/api/projects');
-  if (flag(args, 'json')) return printJson(page.viewCounts);
-  for (const view of VIEWS)
+  const [saved, page] = await Promise.all([
+    client.request<{ views: SavedView[] }>('/api/views'),
+    fetchEntryPage(client)
+  ]);
+  const registry = createFieldRegistry(page.fields.filter((field) => field.owner === 'user'));
+  const rows = saved.views.map((view) => {
+    try {
+      const parsed = parseQuery(view.query);
+      validateQuery(parsed, registry);
+      return { ...view, count: filterRows(page.entries, parsed, registry).length, error: null };
+    } catch (error) {
+      return { ...view, count: 0, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+  const shown = flag(args, 'all') ? rows : rows.filter((row) => row.count > 0 || !row.builtin);
+  if (flag(args, 'json')) return printJson(flag(args, 'all') ? rows : shown);
+  if (!shown.length) return out(dim('No saved view matches anything — try `ongoing views --all`.'));
+
+  const nameWidth = Math.max(...shown.map((row) => row.name.length));
+  for (const row of shown)
     out(
-      `${VIEW_STYLE[view](pad(VIEW_LABEL[view], 16))} ${padStart(String(page.viewCounts[view]), 4)}`
+      `${bold(pad(row.name, nameWidth))} ${padStart(String(row.count), 5)}  ` +
+        `${dim(row.query || '(everything)')}${row.builtin ? '' : cyan(' ·user')}` +
+        (row.error ? ` ${red(row.error)}` : '')
     );
-  out(dim(`\n${page.totalCount} projects · ${page.hiddenCount} hidden`));
+  out(dim(`\n${page.catalogTotal} entries · ${page.hiddenCount} hidden`));
 }
 
 /**
  * `ongoing stacks` — the catalog-wide toolchain roll-up, and `ongoing stacks <toolchain>` for the
- * per-project breakdown. Computed from the same page payload the dashboard renders, so `--view`,
- * `--filter`, and `--search` narrow it exactly as they narrow `ongoing list`.
+ * per-project breakdown. It reads `/api/entries` through the query model, so any clause or flag
+ * that narrows `ongoing list` narrows this the same way (`ongoing stacks go 'intent:invest'`).
  */
 async function commandStacks(client: Client, args: Args): Promise<void> {
   const toolchain = choice(args.positional[0], TOOLCHAINS, 'toolchain');
-  const page = await fetchPage(client, args, flag(args, 'hidden'));
+  if (toolchain) args.positional.shift();
+  const page = await fetchEntryPage(client, {
+    q: buildListQuery(args),
+    sort: buildListSort(args)
+  });
   const outdatedOnly = flag(args, 'outdated');
   const isOutdated = (stack: Stack) => stack.status === 'behind' || stack.status === 'eol';
 
   if (toolchain) {
-    const rows = page.visibleProjects
+    const rows = page.entries
       .flatMap((project) =>
         project.stacks
           .filter((stack) => stack.toolchain === toolchain && (!outdatedOnly || isOutdated(stack)))
@@ -772,7 +887,7 @@ async function commandStacks(client: Client, args: Args): Promise<void> {
     Toolchain,
     { projects: Set<string>; outdated: Set<string>; versions: Map<string, Set<string>> }
   >();
-  for (const project of page.visibleProjects)
+  for (const project of page.entries)
     for (const stack of project.stacks) {
       if (outdatedOnly && !isOutdated(stack)) continue;
       const entry = summary.get(stack.toolchain) ?? {
@@ -1237,18 +1352,64 @@ interface EntryView {
   isFavorite: boolean;
   isHidden: boolean;
   reviewAfter: string | null;
-  attributes: Record<string, unknown>;
-  fields: Record<string, unknown>;
+  path: string | null;
+  isMissing: boolean;
+  attributes: Record<string, AttributeValue>;
+  fields: Record<string, AttributeValue>;
+  views: ViewKey[];
+  stacks: Stack[];
+  errors: { collector: string; message: string; occurredAt: string }[];
   sources: EntrySourceView[];
   relations: { outgoing: RelationView[]; incoming: RelationView[] };
   updatedAt: string;
 }
 
+interface SavedView {
+  id: string;
+  name: string;
+  kind: string | null;
+  query: string;
+  columns: string[];
+  position: number;
+  builtin: boolean;
+}
+
+/** `GET /api/entries` — the one read endpoint, the same one the browser uses. */
+interface EntriesPage {
+  query: string;
+  sort: string;
+  columns: string[];
+  saved: SavedView | null;
+  entries: EntryView[];
+  total: number;
+  returned: number;
+  catalogTotal: number;
+  hiddenCount: number;
+  fields: FieldDefinition[];
+  baselines: {
+    toolchain: Toolchain;
+    availability: string;
+    fetchedAt: string;
+    message: string | null;
+  }[];
+  scan: ScanRun | null;
+  generatedAt: string;
+}
+
+interface EntryQuery {
+  q?: string;
+  sort?: string;
+  columns?: string;
+  saved?: string;
+  limit?: string;
+}
+
+async function fetchEntryPage(client: Client, query: EntryQuery = {}): Promise<EntriesPage> {
+  return client.request<EntriesPage>('/api/entries', { query: { ...query } });
+}
+
 async function fetchEntries(client: Client, kind?: string): Promise<EntryView[]> {
-  const page = await client.request<{ entries: EntryView[] }>('/api/entries', {
-    query: { kind }
-  });
-  return page.entries;
+  return (await fetchEntryPage(client, kind ? { q: `kind:${kind}` } : {})).entries;
 }
 
 /**
@@ -1546,15 +1707,14 @@ async function commandLink(client: Client, args: Args, remove: boolean): Promise
 async function commandView(client: Client, args: Args): Promise<void> {
   const action = args.positional[0] ?? 'list';
   if (action === 'list') {
-    const { views } = await client.request<{
-      views: { name: string; query: string; kind: string | null; columns: string[] }[];
-    }>('/api/views');
+    const { views } = await client.request<{ views: SavedView[] }>('/api/views');
     if (flag(args, 'json')) return printJson(views);
     if (!views.length) return out(dim('(no saved views)'));
     const width = Math.max(...views.map((view) => view.name.length));
     for (const view of views)
       out(
-        `${pad(view.name, width)}  ${view.query || dim('(everything)')} ${dim(view.columns.join(','))}`
+        `${pad(view.name, width)}  ${view.query || dim('(everything)')} ` +
+          `${dim(view.columns.join(','))}${view.builtin ? dim(' built-in') : cyan(' user')}`
       );
     return;
   }
@@ -1603,21 +1763,36 @@ ${bold('Usage')}
   ongoing <command> [arguments]
 
 ${bold('Reading')}
-  list, ls                              list projects
+  list, ls ['<query>']                  list entries matching a query (projects by default)
+      --sort <[-]field,[-]field>        multiple keys; a leading - sorts descending
+      --columns <a,b,c>                 render (and, with --json, emit) these fields
+      --saved <name>                    start from a saved view's query and columns
+      -n, --limit <count>               show only the first N
+      --count                           print how many match and stop
+      --hidden                          the hidden shelf instead of the dashboard
+      --paths | --ids | --json          machine-readable output
       --view <${VIEWS.join('|')}>
       --filter <${FILTERS.join('|')}>
       --stack <${TOOLCHAINS.join('|')}>
-      --sort <key> --asc|--desc         sort keys: ${SORTS.join(', ')}
-      -q, --search <text>               match name, path, or note
-      -n, --limit <count>               show only the first N
-      --hidden                          list the hidden shelf instead
-      --paths | --ids | --json          machine-readable output
+      --tech <slug> --kind <kind>       the old flags, kept as clause aliases
+      -q, --search <text> --asc|--desc  and the old sort keys, still accepted:
+                                        ${SORTS.join(', ')}
   show <project>                        one project in full, with attention reasons
   get <entry> [field]                   every field an entry carries, or one value on stdout
-  views                                 attention view counts
-  stacks [toolchain] [--outdated]       declared toolchains, versions, and upgrade pressure
+  views [--all]                         saved views, built-in and user, with match counts
+  stacks [toolchain] ['<query>'] [--outdated]
+                                        declared toolchains, versions, and upgrade pressure
   status                                service, scan, and catalog health
   path <project>                        print the project directory
+
+${bold('Query')} clauses are ANDed: ${dim('field:value')} equals any of a comma list, ${dim('field!:value')} and a
+leading ${dim('-')} negate, ${dim('> >= < <=')} compare, ${dim(':~')} contains, ${dim('*')} means "has a value" and
+${dim('none')} means "has none". ${dim('tag:')} ${dim('view:')} ${dim('tech:')} ${dim('kind:')} name their fields; anything else
+is text matched against name, slug, path, and note.
+
+  ongoing list 'intent:invest,maintain github.stars>=100 -tag:archived' --sort -git.commits30d,name
+  ongoing list 'view:upgrade tech:go' --columns name,stack.go,git.latestCommit --json
+  ongoing list --saved oss-momentum
 
 ${bold('Changing')}
   favorite, fav <project> [--off]       favorite or unfavorite

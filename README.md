@@ -41,15 +41,18 @@ available to a shell or an agent exactly as they are to the UI:
 
 ```sh
 ongoing                                   # every project, dashboard ordering
-ongoing list --view attention --json      # machine-readable attention view
+ongoing list 'view:attention' --json      # machine-readable attention view
 ongoing show .                            # the repo you are standing in, with attention reasons
 ongoing set td --intent invest            # the same fields the drawer edits
 ongoing get td                            # every field this entry carries, stored and collected
 ongoing field add x.customer --type text  # a new field, no migration, editable everywhere
 ongoing stacks                            # declared toolchains, versions in use, upgrade pressure
-ongoing list --stack go --view upgrade    # Go projects whose toolchain is behind or end-of-life
+ongoing list 'view:upgrade stack.go:*' --sort -git.commits30d --columns name,stack.go
 ongoing scan --full --wait
 ```
+
+Filtering, sorting, and column selection are one query grammar — the same string the CLI argument,
+the `?q=` parameter, and a saved view all carry, over every registered field.
 
 Full reference: [docs/cli.md](docs/cli.md).
 

@@ -38,6 +38,13 @@ value — register a field. `validateEntryPatch(registry, kind, patch)` in `src/
 path from an untrusted patch to stored values, and the API, the CLI, and (from Phase 4) the browser all call it.
 `/api/projects` is now the project projection of the same entries and stays until the new shell ships.
 
+**Phase 2 has landed.** Reading the catalog is one query grammar: `src/lib/domain/query.ts` parses and
+evaluates it, `GET /api/entries?q=&sort=&columns=&saved=` is the single read endpoint, and `ongoing list`
+is a thin shell over it. Do not add a list parameter — add a clause, or a field for one to address. The
+old `view`/`filter`/`stack`/`search`/`sort` parameters survive as clause aliases through
+`legacyParamsToQuery`, whose table is printed in [docs/cli.md](docs/cli.md) and asserted in
+`src/lib/domain/query.test.ts`. Saved views ship built-in, declared in `src/lib/domain/view.ts`.
+
 ## Keep the architecture model current
 
 `docs/diagrams/fractal/` holds the Fractal model of this system (`model.c4`, `fractal.json`,

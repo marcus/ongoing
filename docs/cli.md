@@ -45,21 +45,22 @@ ongoing get sveltekit         # a technology, by slug
 ## Commands
 
 ```
-ongoing [list]                        list projects (the default command)
-  --view <attention|rising|quickwin|opportunity|momentum|dormant|upgrade>
-  --filter <all|favorites|missing|warnings|local>
-  --stack <go|node|bun|deno|python|ruby|rust|php|elixir|dotnet|java|swift|postgresql>
-  --sort <key> [--asc|--desc]         any sort key the dashboard offers
-  -q, --search <text>                 name, path, or note
-  -n, --limit <count>
+ongoing [list] ['<query>']            list entries matching a query (projects by default)
+  --sort <[-]field,[-]field>          multiple keys; a leading - sorts descending
+  --columns <a,b,c>                   render (and, with --json, emit) these fields
+  --saved <name>                      start from a saved view's query and columns
+  -n, --limit <count>                 show only the first N
+  --count                             print how many match and stop
   --hidden                            the hidden shelf instead of the dashboard
   --paths | --ids | --json            machine-readable output
+  --view | --filter | --stack | --tech | --kind | -q, --search | --asc | --desc
+                                      the pre-query flags, kept as clause aliases (table below)
 ongoing show <project>                everything, including why each attention view matched
 ongoing get <entry> [field]           every field an entry carries; one field prints its value
-ongoing views                         attention view counts
-ongoing stacks [toolchain]            declared toolchains, versions in use, upgrade pressure
+ongoing views [--all]                 saved views, built-in and user, with how many each matches
+ongoing stacks [toolchain] ['<query>']  declared toolchains, versions in use, upgrade pressure
   --outdated                          only declarations that are behind or end-of-life
-  plus every `list` narrowing flag (--view, --filter, --search, --hidden)
+  plus every `list` narrowing flag and any query clause
 ongoing status                        service, agent, scan, and catalog health
 ongoing path <project>                print the directory (`cd $(ongoing path td)`)
 
@@ -95,15 +96,125 @@ ongoing stop [--scan]
 ongoing build | dev | repo | login
 ```
 
+## Querying the inventory
+
+Filtering, sorting, and column selection are **one grammar**, parsed and evaluated by pure
+functions in `src/lib/domain/query.ts` and shared verbatim by the CLI, `GET /api/entries`, and the
+browser ([ADR 0006](adr/0006-one-query-grammar.md)). The same string works as a CLI argument, a
+`?q=` parameter, and the body of a saved view.
+
+```
+filter   := clause (' ' clause)*
+clause   := ['-'] (field op value | 'tag:' value | 'view:' value | 'tech:' slug | 'kind:' kind | text)
+op       := ':' | '!:' | '>' | '>=' | '<' | '<=' | ':~'
+value    := token | token ',' token ...
+sort     := ['-'] field (',' ['-'] field)*
+```
+
+Clauses combine with **and**; a comma inside a value is **or**; a leading `-` negates a clause.
+There are no parentheses and no `or` between clauses: a question that needs them is a saved view or
+a `jq` pipeline over `--json`.
+
+| Operator    | Means          | Example                            |
+| ----------- | -------------- | ---------------------------------- |
+| `:`         | equals any of  | `intent:invest,maintain`           |
+| `!:` or `-` | does not equal | `intent!:archive`, `-tag:archived` |
+| `>` `>=`    | greater than   | `github.stars>=100`                |
+| `<` `<=`    | less than      | `git.commits30d<5`                 |
+| `:~`        | contains       | `note:~"parser cleanup"`           |
+| `:*`        | has any value  | `stack.go:*`                       |
+| `:none`     | has no value   | `intent:none`                      |
+
+Field types drive the comparison, so `git.commits30d>9` is arithmetic rather than alphabetical:
+`number` and `integer` compare numerically, `date` chronologically, `enum` and `multi_enum` are
+equals-any, `boolean` reads `true`/`yes`/`1`, and `text` is exact for `:` and substring for `:~`.
+A token with a space or a comma in it goes in quotes. Anything that is not a `field op value` clause
+is **bare text**, matched against `name`, `slug`, `path`, and `note`.
+
+Every key is a key in the field registry — stored, user-added, and provider-projected alike — so an
+unknown one is an error naming the closest registered key rather than an empty result:
+
+```
+$ ongoing list 'intnet:invest'
+error GET /api/entries failed (400): Unknown field: intnet — did you mean intent?
+```
+
+`--sort` takes several keys, each optionally prefixed with `-` for descending, and missing values
+always sort last. Favourites float to the top of `ongoing list` unless `--no-group`.
+
+```sh
+ongoing list 'intent:invest,maintain github.stars>=100 -tag:archived' --sort -git.commits30d,name
+ongoing list 'view:upgrade tech:go' --columns name,stack.go,git.latestCommit --json
+ongoing list 'is_missing:true' --paths
+ongoing list --saved oss-momentum
+ongoing list 'kind:technology ring:hot' --columns name,technology_kind
+```
+
+### The old flags, as clauses
+
+Every pre-query flag and `/api/entries` parameter still works and is translated into exactly this
+clause before anything is evaluated (`legacyParamsToQuery` in `src/lib/domain/query.ts`; each row is
+asserted in `src/lib/domain/query.test.ts`).
+
+| Old flag / parameter    | Clause               | Note                                                        |
+| ----------------------- | -------------------- | ----------------------------------------------------------- |
+| `--view attention`      | `view:attention`     | any attention view key                                      |
+| `--filter all`          | _(nothing)_          |                                                             |
+| `--filter favorites`    | `is_favorite:true`   |                                                             |
+| `--filter missing`      | `is_missing:true`    |                                                             |
+| `--filter warnings`     | `warnings>0`         | narrower: also use `view:attention` for the other half      |
+| `--filter local`        | `github.repoId:none` | no repository on the hosting provider                       |
+| `--stack go`            | `stack.go:*`         | declares a version for that toolchain                       |
+| `--tech go`             | `tech:go`            | linked to that technology by `uses` or `provides`           |
+| `--kind technology`     | `kind:technology`    | `ongoing list` adds `kind:project` when you name none       |
+| `-q`, `--search <text>` | `<text>`             | bare text over name, slug, path, note                       |
+| `--hidden`              | `is_hidden:true`     | the default is `is_hidden:false`                            |
+| `--sort latestCommit`   | `-git.latestCommit`  | the old sort keys below; they keep their descending default |
+| `--asc` / `--desc`      | direction            | applies to keys with no `-` prefix                          |
+| `--no-group`            | drops `-is_favorite` | favourites are a leading sort key, not a second pass        |
+
+| Old sort key             | Field                                                      |
+| ------------------------ | ---------------------------------------------------------- |
+| `manual`                 | `manual_rank`                                              |
+| `latestCommit`           | `git.latestCommit`                                         |
+| `commits30d`             | `git.commits30d`                                           |
+| `activeDays30d`          | `git.activeDays30d`                                        |
+| `linesOfCode`            | `loc.code`                                                 |
+| `lifetimeCommits`        | `git.commitCount`                                          |
+| `openTdIssues`           | `td.total`                                                 |
+| `githubStars`            | `github.stars`                                             |
+| `githubStarsGained30d`   | `github.starsGained30d`                                    |
+| `githubOpenPrs`          | `github.openPrs`                                           |
+| `githubOldestExternalPr` | `github.oldestExternalPr`                                  |
+| `githubTraffic`          | `github.trafficViews`                                      |
+| `stackLag`               | `stack.lag`                                                |
+| `name`                   | `name` — and so sorts A→Z, not Z→A as `?sort=name` used to |
+
+One deliberate difference: `--filter warnings` used to match a project with a collector warning
+**or** one in the attention view. The grammar has no `or` between clauses, so `warnings>0` is the
+first half and `view:attention` is the second. Everything else behaves as it did.
+
+### Derived fields the query model added
+
+These are computed by the read model rather than stored, and are filterable and sortable like any
+other field: `path`, `is_missing`, `views` (the attention views an entry is in — `view:` is its
+alias), `warnings` (unresolved collector errors), `tech` (technologies linked by `uses`/`provides`),
+`stack.lag`, `github.starsGained30d`, and `github.trafficViewsDelta30d`. `kind` is a field too.
+
 `--json` works on every command that reads or changes catalog data, and colour is dropped when
 stdout is not a TTY or `NO_COLOR` is set, so the CLI composes:
 
 ```sh
-ongoing list --view attention --json | jq -r '.[] | select(.errors | length > 0) | .name'
-ongoing list --stack go --view upgrade --paths        # every Go project that needs a bump
+ongoing list 'view:attention' --json | jq -r '.[] | select(.errors | length > 0) | .name'
+ongoing list 'view:upgrade stack.go:*' --paths        # every Go project that needs a bump
 ongoing stacks --json | jq -r '.[] | "\(.toolchain) \(.outdated)/\(.projects) outdated"'
-for path in $(ongoing list --filter favorites --paths); do git -C "$path" fetch --quiet; done
+for path in $(ongoing list 'is_favorite:true' --paths); do git -C "$path" fetch --quiet; done
+ongoing list 'intent:invest review_after<2026-10-01' --count
 ```
+
+`ongoing list --json` emits the full entry views. With `--columns` (or a saved view that carries
+them) it emits one object per entry holding just `id`, `entry`, and the chosen fields, which is
+usually what a script wants.
 
 ## Notes
 
@@ -130,8 +241,11 @@ for path in $(ongoing list --filter favorites --paths); do git -C "$path" fetch 
   use `hide` for those.
 - `forget` and `prune --yes` return 409 while a scan is running, since removing a row underneath a
   scan would fail the run. Each forgotten project is logged to the service log by name and path.
-- `ongoing list --hidden` relies on `GET /api/projects?hidden=true`, added so the hidden shelf is
-  not a UI-only capability.
+- `ongoing list --hidden` is the clause `is_hidden:true`, so the hidden shelf is reachable from
+  every surface rather than only from the `/hidden` page.
+- `ongoing list` reads `GET /api/entries`, which is the whole read contract. `/api/projects` is the
+  project projection the current browser still renders, and it keeps its own parameters until the
+  Phase 4 shell replaces it.
 
 ## Fields, relations, and views
 
@@ -169,26 +283,32 @@ ongoing get sveltekit                      # shows the incoming edge
 ongoing unlink ongoing uses sveltekit
 ```
 
-A saved view is a name for a query plus the columns to show. Phase 2 of the inventory redesign gives
-the query string its grammar; today it is stored and handed back verbatim.
+A saved view is a name for a query plus the columns to show — a bookmark, not a second query
+language. Ongoing ships a set of built-in views declared in code (`all`, `favorites`, `hidden`,
+`missing`, `warnings`, one per attention view, one per toolchain as `stack-<toolchain>`, and
+`technologies`), so a fresh database and an upgraded one agree without a migration. Saving a view
+with a built-in's name shadows it; deleting a built-in is refused.
 
 ```sh
+ongoing views                              # every view with how many entries it matches
 ongoing view save oss-momentum 'intent:invest github.stars>=100' --columns name,github.stars
-ongoing view list
+ongoing list --saved oss-momentum
+ongoing list --saved stack-go --columns name,stack.go
 ongoing view delete oss-momentum
 ```
 
 ## HTTP endpoints behind these verbs
 
-| Verb                              | Endpoint                                               |
-| --------------------------------- | ------------------------------------------------------ |
-| `list`, `show`, `views`, `stacks` | `GET /api/projects` (the entry projection)             |
-| `get`, `entry list`               | `GET /api/entries`, `GET /api/entries/:kind/:slug`     |
-| `set`, `tag`, `untag`             | `PATCH /api/entries/:kind/:slug`                       |
-| `entry add`, `entry remove`       | `POST /api/entries`, `DELETE /api/entries/:kind/:slug` |
-| `field list                       | add                                                    | remove` | `GET/POST/DELETE /api/fields`      |
-| `link`, `unlink`                  | `GET/POST/DELETE /api/relations`                       |
-| `view list                        | save                                                   | delete` | `GET/POST/PATCH/DELETE /api/views` |
+| Verb                        | Endpoint                                               |
+| --------------------------- | ------------------------------------------------------ |
+| `list`, `views`, `stacks`   | `GET /api/entries?q=&sort=&columns=&saved=`            |
+| `show`, `status`            | `GET /api/projects` (the entry projection)             |
+| `get`, `entry list`         | `GET /api/entries`, `GET /api/entries/:kind/:slug`     |
+| `set`, `tag`, `untag`       | `PATCH /api/entries/:kind/:slug`                       |
+| `entry add`, `entry remove` | `POST /api/entries`, `DELETE /api/entries/:kind/:slug` |
+| `field list/add/remove`     | `GET/POST/DELETE /api/fields`                          |
+| `link`, `unlink`            | `GET/POST/DELETE /api/relations`                       |
+| `view list/save/delete`     | `GET/POST/PATCH/DELETE /api/views`                     |
 
 ## Website selection and public copy
 
