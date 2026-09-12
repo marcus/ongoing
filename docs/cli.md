@@ -255,7 +255,7 @@ usually what a script wants.
 - `scan` starts a run through the API, which means the web LaunchAgent's environment runs the
   collectors — the same as the dashboard's rescan button. Both plists now set the same `PATH`, so
   `cloc`, `td`, `gh`, and `git` all resolve; that PATH is `PRODUCTION_SCAN_PATH` in
-  `scripts/release-config.ts` and is asserted by `tests/release.test.ts`. Keep the two plists in
+  `deploy/aerie/release-config.ts` and is asserted by `tests/release.test.ts`. Keep the two plists in
   sync when it changes.
 - `forget` removes one project; `prune` removes every entry whose directory has been gone long
   enough. Both are permanent — the note, favourite, intent, and manual rank go with the row — so

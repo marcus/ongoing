@@ -18,7 +18,7 @@ It is set in the installed launchd plist:
 ```
 
 - Installed plist: `~/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist`
-- Template: `config/ongoing.plist.example`
+- Template: `deploy/aerie/config/ongoing.plist.example`
 
 ## How it works
 

@@ -239,15 +239,15 @@ model {
     }
     release = component 'Deploy & rollback' {
       description 'Client validates the pinned runtime, then the remote worker fast-forwards main, quiesces both agents, backs up SQLite, builds, migrates once, reinstalls definitions, and waits for health on 7766.'
-      metadata { uid 'ops.release' fractalColor '#9FA8B3' evidence ['scripts/release-client.ts', 'deploy/aerie/remote-release.ts', 'scripts/rollback.ts'] }
+      metadata { uid 'ops.release' fractalColor '#9FA8B3' evidence ['deploy/aerie/release-client.ts', 'deploy/aerie/remote-release.ts', 'deploy/aerie/rollback.ts'] }
     }
     smoke = component 'Smoke & migrate' {
       description 'Authenticated LAN smoke against the configured origin, production-server tests, and the standalone migration runner.'
-      metadata { uid 'ops.smoke' fractalColor '#9FA8B3' evidence ['scripts/smoke.ts', 'scripts/production-smoke.ts', 'scripts/migrate.ts'] }
+      metadata { uid 'ops.smoke' fractalColor '#9FA8B3' evidence ['scripts/smoke.ts', 'deploy/aerie/production-smoke.ts', 'scripts/migrate.ts'] }
     }
     provision = component 'Runtime provisioning' {
       description 'Installs the exact Bun version into an app-scoped mise data directory without touching the user runtime.'
-      metadata { uid 'ops.provision' fractalColor '#9FA8B3' evidence ['scripts/provision-runtime.sh', 'AGENTS.md'] }
+      metadata { uid 'ops.provision' fractalColor '#9FA8B3' evidence ['deploy/aerie/provision-runtime.sh', 'AGENTS.md'] }
     }
   }
 

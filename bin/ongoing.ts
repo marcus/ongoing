@@ -1245,10 +1245,28 @@ function describe(body: Record<string, unknown>): string {
     .join(' ');
 }
 
+/**
+ * A scan is the service's job when a service is running — it holds the lease and streams progress
+ * to the browser. With nothing running, it is the **host's** job, and the host runs exactly what the
+ * scheduled agent runs, so a machine with no daemon and a machine with one refresh identically.
+ */
 async function commandScan(client: ApiClient, args: Args): Promise<void> {
   const token = args.positional[0];
   const project = token ? await resolveProject(client, token) : null;
   const refresh = flag(args, 'full') ? 'full' : flag(args, 'cheap') ? 'cheap' : undefined;
+  if (client.transport === 'local') {
+    // Release this process's handle first: the host runs the scan the way the agent does, in a
+    // process of its own that opens and closes the catalog itself.
+    client.close();
+    const host = await hostAdapter(args);
+    const status = await host.scan({
+      projectId: project?.id,
+      full: refresh === 'full',
+      cheap: refresh === 'cheap'
+    });
+    if (status !== 0) process.exitCode = status;
+    return;
+  }
   const started = await client.request<{ runId: string; status: string }>('/api/scan', {
     method: 'POST',
     body: { projectId: project?.id, refresh }
