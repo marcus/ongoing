@@ -329,6 +329,28 @@ export function validateSort(
   }
 }
 
+/**
+ * The clauses a *list* prepends when the query has not spoken about them: the catalog is mostly
+ * projects, and the hidden shelf is a deliberate opt-in. They are added rather than assumed, so the
+ * echoed query is still a query a caller could have typed, and `kind:technology` or `is_hidden:true`
+ * simply wins.
+ *
+ * `ongoing list` and the browser's inventory both call this, which is what keeps a URL and a CLI
+ * invocation the same command rather than two things that mostly agree.
+ */
+export function listDefaultClauses(
+  query: ParsedQuery,
+  options: { hidden?: boolean } = {}
+): string[] {
+  const spoken = new Set(
+    query.clauses.flatMap((clause) => (clause.type === 'field' ? [clause.field] : []))
+  );
+  const defaults: string[] = [];
+  if (!spoken.has('kind')) defaults.push('kind:project');
+  if (!spoken.has('is_hidden')) defaults.push(`is_hidden:${options.hidden === true}`);
+  return defaults;
+}
+
 export function parseColumns(input: string): string[] {
   return (input ?? '')
     .split(',')

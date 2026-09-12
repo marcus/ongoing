@@ -15,6 +15,13 @@ const environment = `DATABASE_PATH=.data/ongoing-e2e.sqlite SCAN_ROOTS=/private/
 
 export default defineConfig({
   testDir: './tests/e2e',
+  // One worker. Every test in this suite shares one seeded catalog and several of them mutate it —
+  // a favourite, an intent, a saved view — and then check the CLI sees the change against the same
+  // server. Run in parallel and a `is_favorite:true` count means whatever another worker was in the
+  // middle of doing. The suite is seconds long; a shared, mutable fixture is worth more here than
+  // the parallelism.
+  workers: 1,
+  fullyParallel: false,
   use: {
     baseURL: `http://127.0.0.1:${port}`
   },

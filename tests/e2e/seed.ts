@@ -212,6 +212,41 @@ await repository.updateNote(
 );
 await repository.setHidden(secondHidden.id, true);
 
+// Phase 3's radar in miniature: two technologies with rings, one of them past its review date, and
+// the `uses` edges the radar page counts and the fact sheets render.
+const go = await repository.createEntry({
+  kind: 'technology',
+  name: 'Go',
+  slug: 'go',
+  attributes: { technology_kind: 'language', ring: 'hot' },
+  reviewAfter: agoDate(-120)
+});
+const jquery = await repository.createEntry({
+  kind: 'technology',
+  name: 'jQuery',
+  slug: 'jquery',
+  attributes: { technology_kind: 'library', ring: 'out' },
+  reviewAfter: agoDate(30)
+});
+await repository.addRelation({
+  fromId: beta.id,
+  toId: go.id,
+  kind: 'uses',
+  attributes: { version: '1.27', sourceFile: 'go.mod' }
+});
+await repository.addRelation({
+  fromId: unicode.id,
+  toId: go.id,
+  kind: 'uses',
+  attributes: { version: '1.26', sourceFile: 'go.mod' }
+});
+await repository.addRelation({
+  fromId: alpha.id,
+  toId: jquery.id,
+  kind: 'uses',
+  attributes: { version: '3.6.0', sourceFile: 'package.json' }
+});
+
 await repository.createScanRun({
   id: 'scan-e2e',
   reason: 'cli',
