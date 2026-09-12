@@ -189,12 +189,34 @@ test('the radar shows rings with counts, edits a ring, and links into a filtered
   await expect(page.locator('[data-entry-row]')).toHaveCount(2);
 });
 
-test('the providers screen names what contributes to the catalog', async ({ page }) => {
+test('the providers screen renders the same payload ongoing providers prints', async ({ page }) => {
+  const cli = ongoingJson<{
+    providers: { name: string; state: string; schedule: string; fields: string[] }[];
+  }>('providers', '--json');
+  expect(cli.providers.length).toBeGreaterThan(0);
+
   await page.goto('/providers');
   await hydrated(page);
   await expect(page.getByRole('heading', { name: 'Providers' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'github', exact: true })).toBeVisible();
-  await expect(page.getByText('git.commits30d')).toBeVisible();
+  await expect(page.locator('[data-provider]')).toHaveCount(cli.providers.length);
+
+  // Same names, same order, same state — the screen is a projection of GET /api/providers, which
+  // is the payload the CLI reads. There is no second source of provider truth (ADR 0007).
+  const rendered = await page.locator('[data-provider]').evaluateAll((nodes) =>
+    nodes.map((node) => ({
+      name: node.getAttribute('data-provider'),
+      state: node.getAttribute('data-state')
+    }))
+  );
+  expect(rendered).toEqual(
+    cli.providers.map((provider) => ({ name: provider.name, state: provider.state }))
+  );
+
+  const git = cli.providers.find((provider) => provider.name === 'git');
+  expect(git?.fields).toContain('git.commits30d');
+  await expect(
+    page.locator('[data-provider="git"]').getByText('git.commits30d', { exact: true })
+  ).toBeVisible();
 });
 
 test('a list operation stays inside the interaction budget', async ({ page }) => {

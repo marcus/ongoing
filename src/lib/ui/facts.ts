@@ -57,12 +57,3 @@ export function providerPanels(
     .map(([provider, fields]) => ({ provider, fields }))
     .sort((left, right) => left.provider.localeCompare(right.provider, 'en'));
 }
-
-/** Every provider that could contribute to a kind, whether or not it has data on this entry. */
-export function providersForKind(registry: FieldRegistry, kind: string): string[] {
-  const providers = new Set<string>();
-  for (const field of registry.fields)
-    if (field.owner.startsWith('provider:') && fieldAppliesTo(field, kind))
-      providers.add(field.owner.slice('provider:'.length));
-  return [...providers].sort((left, right) => left.localeCompare(right, 'en'));
-}
