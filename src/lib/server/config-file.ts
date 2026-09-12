@@ -202,6 +202,74 @@ export function readConfigFile(path: string): LoadedConfigFile {
   }
 }
 
+export interface ConfigTemplate {
+  /** Where the catalog lives. `ongoing init` puts `ongoing.sqlite` inside it. */
+  dataDir: string;
+  /** Directories the filesystem provider looks in for Git repositories. */
+  scanRoots: readonly string[];
+  port: number;
+  hostAdapter: string;
+}
+
+function tomlStrings(values: readonly string[]): string {
+  return `[${values.map((value) => JSON.stringify(value)).join(', ')}]`;
+}
+
+/**
+ * The file `ongoing init` writes: every key a first install actually has an opinion about, with
+ * the rest present as comments so the document itself is the reference. It is a pure function so a
+ * test can read what `init` would write without writing anything.
+ */
+export function renderConfigFile(template: ConfigTemplate): string {
+  return `# Ongoing configuration.
+#
+# Precedence, highest first: environment variable, this file, built-in default.
+# A missing file is not an error — it means "all defaults". An unknown section or key is an
+# error, so a typo fails at start-up rather than silently doing nothing.
+# Reference: docs/cli.md
+
+[server]
+# The catalog. A directory nobody has written to becomes one on first open.
+database = ${JSON.stringify(`${template.dataDir}/ongoing.sqlite`)}
+port = ${template.port}
+# host = "127.0.0.1"          # "0.0.0.0" needs ONGOING_ACCESS_SECRET, or auth turned off on purpose
+# origin = "http://localhost:${template.port}"
+
+[scan]
+# Where to look for Git repositories.
+roots = ${tomlStrings(template.scanRoots)}
+# max_depth = 3
+# ignore = ["**/node_modules/**", "**/build/**", "**/dist/**"]
+# scheduler = true            # the service's own five-minute refresh
+
+# Every shipped provider is on unless configuration turns it off.
+# \`enabled\` narrows the list; \`disabled\` subtracts from whatever is left.
+[providers]
+# enabled = ["filesystem", "git", "td", "stack", "tech-signatures", "loc", "endoflife", "github"]
+disabled = []
+
+[providers.filesystem]
+# forget_missing_after_days = 7
+
+[providers.github]
+# Owners — users or organisations — whose repositories are catalogued even when nothing local
+# claims them. Empty means "only what is checked out here".
+discover = []
+# include_forks = false
+# include_archived = false
+
+[providers.endoflife]
+# max_age_hours = 24
+
+[host]
+# How \`serve\`, \`scan\`, \`restart\`, \`stop\`, and \`logs\` reach the machine.
+adapter = ${JSON.stringify(template.hostAdapter)}
+
+[export]
+# profile = "json"
+`;
+}
+
 /** The settings written under `[providers.<name>]`, or an empty table. */
 export function providerSettings(file: FileConfig, provider: string): ProviderSettings {
   const value = file.providers?.[provider];

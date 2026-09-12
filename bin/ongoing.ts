@@ -8,7 +8,7 @@
  * Reached through `bin/ongoing`, normally symlinked onto PATH as `ongoing`.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve as resolvePath } from 'node:path';
@@ -267,7 +267,9 @@ function parseArgs(argv: string[]): Args {
     'host',
     'transport',
     'profile',
-    'config'
+    'config',
+    'scan-root',
+    'roots'
   ]);
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -1468,7 +1470,79 @@ async function commandServe(args: Args): Promise<void> {
   );
 }
 
-/* -------------------------------------------------------------------- shell */
+/* --------------------------------------------------------------------- init */
+
+/**
+ * `ongoing init` — the whole of "install it somewhere else".
+ *
+ * It writes one commented configuration file, makes the data directory, and opens the catalog once
+ * so the migrations run; after that `ongoing scan` and `ongoing serve` work with no further
+ * ceremony. It refuses to overwrite a configuration file that already exists, because the file is
+ * the one place a person's choices live.
+ */
+async function commandInit(args: Args): Promise<void> {
+  const { configPathFrom, renderConfigFile } = await import('../src/lib/server/config-file');
+  const configPath = option(args, 'config')
+    ? resolvePath(expandHome(option(args, 'config')!))
+    : configPathFrom();
+  const dataDir = resolvePath(
+    expandHome(option(args, 'data-dir') ?? args.positional[0] ?? '~/.local/share/ongoing')
+  );
+  const roots = (option(args, 'scan-root') ?? option(args, 'roots') ?? '~/code')
+    .split(',')
+    .map((root) => resolvePath(expandHome(root.trim())))
+    .filter(Boolean);
+  const port = Number(option(args, 'port') ?? 4173);
+  if (!Number.isInteger(port) || port < 1 || port > 65_535)
+    throw new CliError('--port must be a valid TCP port');
+
+  if (existsSync(configPath) && !flag(args, 'force'))
+    throw new CliError(
+      `${configPath} already exists. Edit it, point somewhere else with --config, or pass --force to replace it.`
+    );
+
+  mkdirSync(dirname(configPath), { recursive: true });
+  mkdirSync(dataDir, { recursive: true });
+  writeFileSync(
+    configPath,
+    renderConfigFile({
+      dataDir,
+      scanRoots: roots,
+      port,
+      // A fresh install supervises nothing. Whoever installs a service adapter says so afterwards.
+      hostAdapter: 'foreground'
+    }),
+    { mode: 0o600 }
+  );
+
+  // Opening the catalog once is what turns an empty directory into one, so the first `scan` has
+  // nothing left to set up.
+  process.env.ONGOING_CONFIG = configPath;
+  const client = await LocalClient.open();
+  try {
+    await client.request('/api/health');
+  } finally {
+    client.close();
+  }
+
+  if (flag(args, 'json'))
+    return printJson({
+      config: configPath,
+      dataDir,
+      database: join(dataDir, 'ongoing.sqlite'),
+      scanRoots: roots,
+      port
+    });
+  out(`${green('✓')} configuration ${bold(configPath)}`);
+  out(`${green('✓')} catalog       ${bold(join(dataDir, 'ongoing.sqlite'))}`);
+  out(`  scan roots    ${roots.join(', ')}`);
+  out();
+  out(dim('next:'));
+  out(`  ongoing scan          ${dim('# find the repositories under those roots')}`);
+  out(`  ongoing list          ${dim('# what it found')}`);
+  out(`  ongoing serve         ${dim(`# the browser, on http://127.0.0.1:${port}`)}`);
+}
+
 /* -------------------------------------------------------------------- shell */
 
 /* ------------------------------------------------------------------ entries */
@@ -2473,6 +2547,8 @@ ${bold('Providers and export')}
       [--drafts] [--kind <kind>] [--compact]
 
 ${bold('Local')}
+  init [<data-dir>] [--scan-root a,b]   write a commented config.toml and make the catalog
+      [--config <file>] [--port N] [--force]
   serve [--data-dir <dir>] [--port N]   run the application in the foreground on this machine
       [--bind <host>] [--no-build]      (a fresh --data-dir is a fresh install)
   open [project] [--terminal|--github]  open the dashboard, or reveal a project
@@ -2565,6 +2641,8 @@ async function main(argv: string[]): Promise<void> {
       return commandRestart(args);
     case 'stop':
       return commandStop(args);
+    case 'init':
+      return commandInit(args);
     case 'serve':
       return commandServe(args);
     // A session cookie is an HTTP thing: there is nothing to log in to in this process.

@@ -527,9 +527,27 @@ and never writes a collector warning.
 
 ## Running the application
 
-`serve`, `scan`, `restart`, `stop`, and `logs` go through a **host adapter**. `launchd` drives the
-two user LaunchAgents on aerie; `foreground` supervises nothing and runs the application in the
-terminal. `[host] adapter` chooses it, `ONGOING_HOST_ADAPTER` and `--host` override.
+Two commands are the whole installation:
+
+```sh
+ongoing init                       # a commented config.toml, a data directory, and a catalog
+ongoing scan                       # find the repositories under the configured roots
+ongoing serve                      # the browser, in this terminal
+```
+
+`init` writes `~/.config/ongoing/config.toml` (`--config` puts it elsewhere), makes the data
+directory, and opens the catalog once so the migrations run. It refuses to overwrite an existing
+configuration file unless `--force`, because that file is where a person's choices live.
+
+```sh
+ongoing init ~/.local/share/ongoing --scan-root ~/code,~/work --port 7801
+ongoing init --config ./ongoing.toml --data-dir ./.ongoing --json
+```
+
+`serve`, `scan`, `restart`, `stop`, and `logs` go through a **host adapter**. `foreground`
+supervises nothing and runs the application in the terminal — it is what `init` writes and what a
+machine with no service manager uses. `launchd` drives two user LaunchAgents on macOS.
+`[host] adapter` chooses it, `ONGOING_HOST_ADAPTER` and `--host` override.
 
 ```sh
 ongoing serve --data-dir ~/.local/share/ongoing --port 7766   # foreground, fresh catalog
@@ -537,6 +555,34 @@ ongoing scan --full --wait
 ongoing restart --build            # launchd reloads the plist rather than kickstarting the job
 ongoing logs -f --scan
 ```
+
+## Fleet sweeps
+
+There is no `ongoing each`. A query that prints paths and a shell that runs commands over them
+already compose, and the composition is more useful than a verb would be: `xargs`, `parallel`,
+a `for` loop, `git -C`, and every tool that takes a directory all work unchanged.
+
+```sh
+# every Go project on a version behind the baseline, upgraded one at a time
+ongoing list 'tech:go stack.go<1.26' --paths | xargs -I{} -n1 go -C {} get -u ./...
+
+# fetch everything you have said you are investing in
+ongoing list 'intent:invest' --paths | xargs -P4 -I{} git -C {} fetch --quiet
+
+# run a command in each project and keep going when one fails
+ongoing list 'view:attention' --paths | while read -r path; do
+  ( cd "$path" && bun run lint ) || echo "lint failed in $path"
+done
+
+# the gaps, as a checklist
+ongoing list 'complete<100' --columns name,intent,next_action --json | jq -r '.[] | .name'
+
+# ids, for anything that wants the catalog's own handle
+ongoing list 'is_favorite:true' --ids | xargs -n1 ongoing get
+```
+
+`--paths` prints nothing for an entry with no local checkout, so a sweep over remote-only entries
+is a no-op rather than an error. `--ids` and `--json` carry them like any other entry.
 
 A `--data-dir` nobody has written to becomes a catalog on first open, which is all a new install
 needs: no launchd, no deployment profile, no configuration file.

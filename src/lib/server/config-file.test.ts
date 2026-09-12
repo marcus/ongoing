@@ -2,7 +2,13 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { configPathFrom, parseConfigFile, providerSettings, readConfigFile } from './config-file';
+import {
+  configPathFrom,
+  parseConfigFile,
+  providerSettings,
+  readConfigFile,
+  renderConfigFile
+} from './config-file';
 import { loadConfig, resolveEnabledProviders } from './config';
 
 const directory = mkdtempSync(join(tmpdir(), 'ongoing-config-'));
@@ -99,5 +105,33 @@ describe('the configuration file', () => {
   it('names the file in the error when it cannot be parsed', () => {
     const path = write('broken.toml', '[scan]\nroots = 3\n');
     expect(() => readConfigFile(path)).toThrow(new RegExp(`${path}: `));
+  });
+
+  /** What `ongoing init` writes has to parse as the configuration it claims to be. */
+  it('renders a template this same parser accepts, with the choices a first install makes', () => {
+    const text = renderConfigFile({
+      dataDir: '/srv/ongoing',
+      scanRoots: ['/srv/src', '/srv/work'],
+      port: 7801,
+      hostAdapter: 'foreground'
+    });
+    const parsed = parseConfigFile(text);
+    expect(parsed.server).toMatchObject({
+      database: '/srv/ongoing/ongoing.sqlite',
+      port: 7801
+    });
+    expect(parsed.scan?.roots).toEqual(['/srv/src', '/srv/work']);
+    expect(parsed.host?.adapter).toBe('foreground');
+    expect(providerSettings(parsed, 'github').discover).toEqual([]);
+    expect(loadConfig({}, parsed, '/etc/ongoing.toml')).toMatchObject({
+      databasePath: '/srv/ongoing/ongoing.sqlite',
+      port: 7801,
+      hostAdapter: 'foreground',
+      scanRoots: ['/srv/src', '/srv/work'],
+      githubDiscoverOwners: []
+    });
+    // Every key it does not choose is present as a comment, so the file is its own reference.
+    expect(text).toContain('# max_depth = 3');
+    expect(text).toContain('# include_forks = false');
   });
 });
