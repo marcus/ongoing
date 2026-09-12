@@ -128,6 +128,12 @@ source directly** — editing `src/` does nothing to the running service until y
 ongoing restart --build     # the launchd host adapter does the bootout/bootstrap dance
 ```
 
+**`bun run build` on its own takes the running service down.** Vite writes new hash-named chunks and
+deletes the old ones, and SvelteKit imports them lazily, so the live process keeps a manifest
+pointing at files that no longer exist and every route but `/api/health` answers 500 with
+`Cannot find module './entries/…'`. Build and restart together, or do not build against a running
+agent.
+
 or, by hand:
 
 ```sh

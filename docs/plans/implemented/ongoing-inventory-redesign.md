@@ -852,8 +852,13 @@ list`, `views`, and `stacks` rewritten on it with every old flag kept as a claus
 The plan is implemented and every phase is pushed to `main`. What is left needs a person, or a
 machine only Marcus has.
 
-1. **Restart production on the new bundle.** The service has been running a pre-Phase-1 bundle
-   against an already-migrated catalog for several phases. From the checkout:
+1. **Restart production on the new bundle — do this first, the service is down until you do.**
+   `bun run build` at the end of this phase rewrote `build/server/chunks/` while the web agent was
+   running, and SvelteKit imports those hash-named chunks lazily: the live process still holds a
+   manifest pointing at files the rebuild deleted, so everything except `/api/health` answers 500
+   with `Cannot find module './entries/...'`. A restart loads the new manifest and clears it. (The
+   service had also been running a pre-Phase-1 bundle against an already-migrated catalog for
+   several phases, so it needed this regardless.) From the checkout:
 
    ```sh
    bun run build
