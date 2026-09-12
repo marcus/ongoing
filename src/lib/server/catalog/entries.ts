@@ -5,6 +5,13 @@ import type { ProjectIntent } from '$lib/domain/project';
 import { projectProviderFields } from '$lib/domain/provider-fields';
 import type { Relation } from '$lib/domain/relation';
 import {
+  isRingStale,
+  sortUsedTechnologies,
+  TECHNOLOGY_KIND,
+  usedTechnology,
+  type UsedTechnology
+} from '$lib/domain/technology';
+import {
   resolveStack,
   stackLag,
   type DeclaredStack,
@@ -43,6 +50,8 @@ export interface EntryView {
   views: string[];
   stacks: ResolvedStack[];
   errors: CollectionError[];
+  /** Technologies a project uses, resolved through its `uses` edges. Empty for other kinds. */
+  technologies: UsedTechnology[];
   sources: EntrySource[];
   relations: { outgoing: RelationView[]; incoming: RelationView[] };
   createdAt: string;
@@ -73,7 +82,42 @@ interface Derived {
   views: string[];
   stacks: ResolvedStack[];
   errors: CollectionError[];
+  technologies: UsedTechnology[];
   fields: Record<string, AttributeValue>;
+}
+
+/**
+ * The technologies behind a project's `uses` edges, with the version the edge carries and the ring
+ * the technology entry carries. Resolving them here is what lets the attention rules stay pure and
+ * lets the browser re-run them after an optimistic edit.
+ */
+function usedTechnologies(
+  relations: { outgoing: RelationView[] },
+  entries: ReadonlyMap<string, Entry>
+): UsedTechnology[] {
+  const used: UsedTechnology[] = [];
+  for (const relation of relations.outgoing) {
+    if (relation.kind !== 'uses') continue;
+    const technology = relation.other ? entries.get(relation.other.id) : undefined;
+    if (!technology || technology.kind !== TECHNOLOGY_KIND) continue;
+    used.push(usedTechnology(technology, relation));
+  }
+  return sortUsedTechnologies(used);
+}
+
+/** `used_by`, `provided_by`, and `ring_stale` — what a technology entry is asked about. */
+function technologyFields(
+  entry: Entry,
+  relations: { incoming: RelationView[] },
+  now: number
+): Record<string, AttributeValue> {
+  const incoming = relations.incoming.filter((relation) => relation.other?.kind === 'project');
+  const provider = incoming.find((relation) => relation.kind === 'provides');
+  return {
+    used_by: incoming.filter((relation) => relation.kind === 'uses').length,
+    ring_stale: isRingStale(entry.reviewAfter, now),
+    ...(provider?.other ? { provided_by: provider.other.slug } : {})
+  };
 }
 
 /**
@@ -89,6 +133,7 @@ function derive(
   declarations: readonly DeclaredStack[],
   releases: ReadonlyMap<Toolchain, ToolchainRelease[]>,
   relations: { outgoing: RelationView[]; incoming: RelationView[] },
+  entries: ReadonlyMap<string, Entry>,
   now: number
 ): Derived {
   const filesystem = sources.find((source) => source.provider === FILESYSTEM_PROVIDER);
@@ -109,8 +154,13 @@ function derive(
   }
   if (tech.length) fields.tech = tech;
 
+  if (entry.kind === TECHNOLOGY_KIND)
+    Object.assign(fields, technologyFields(entry, relations, now));
+
   if (entry.kind !== 'project')
-    return { path, isMissing, views: [], stacks: [], errors: [], fields };
+    return { path, isMissing, views: [], stacks: [], errors: [], technologies: [], fields };
+
+  const technologies = usedTechnologies(relations, entries);
 
   const metrics = repository.getMetrics(entry.id);
   const snapshots = repository.listSnapshots(entry.id);
@@ -138,6 +188,7 @@ function derive(
       metrics,
       stacks,
       errors,
+      technologies,
       githubStarsGained30d,
       githubTrafficViewsDelta30d,
       githubTrafficClonesDelta30d: metricDelta30d(
@@ -165,6 +216,7 @@ function derive(
     views: [...views],
     stacks,
     errors,
+    technologies,
     fields: { ...fields, ...projectProviderFields(metrics, declarations) }
   };
 }
@@ -192,6 +244,7 @@ function entryView(
     views: derived.views,
     stacks: derived.stacks,
     errors: derived.errors,
+    technologies: derived.technologies,
     sources,
     relations,
     createdAt: entry.createdAt,
@@ -240,7 +293,16 @@ export function readEntryViews(
     return entryView(
       entry,
       entrySources,
-      derive(repository, entry, entrySources, stacks.get(entry.id) ?? [], releases, edges, now),
+      derive(
+        repository,
+        entry,
+        entrySources,
+        stacks.get(entry.id) ?? [],
+        releases,
+        edges,
+        byId,
+        now
+      ),
       edges
     );
   });
@@ -266,6 +328,7 @@ export function readEntryView(
       repository.listProjectStacks(entry.id),
       repository.listToolchainReleases(),
       edges,
+      byId,
       now.getTime()
     ),
     edges

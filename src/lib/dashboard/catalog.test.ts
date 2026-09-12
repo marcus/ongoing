@@ -48,7 +48,8 @@ function project(
     githubTrafficClonesDelta30d: null,
     stacks: options.stacks ?? [],
     errors: [],
-    snapshots: []
+    snapshots: [],
+    technologies: []
   };
   const now = Date.parse('2026-07-19T00:00:00Z');
   const attention = classifyAttentionViews(base, now);

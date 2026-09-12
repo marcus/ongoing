@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ProjectMetrics } from './metrics';
 import type { ResolvedStack } from './stack';
 import { ATTENTION_THRESHOLDS, classifyAttentionViews, type AttentionInput } from './attention';
+import type { UsedTechnology } from './technology';
 
 const NOW = Date.parse('2026-07-19T12:00:00Z');
 const fresh = '2026-07-19T11:00:00Z';
@@ -249,6 +250,67 @@ describe('the upgrade view', () => {
     expect(flagged.reasons.map(({ input: key }) => key)).toEqual([
       'stack.go.cyclesBehind',
       'stack.node.cyclesBehind'
+    ]);
+  });
+});
+
+describe('the radar rules', () => {
+  const technology = (overrides: Partial<UsedTechnology> = {}): UsedTechnology => ({
+    slug: 'jquery',
+    name: 'jQuery',
+    ring: 'out',
+    reviewAfter: null,
+    version: '3.7.1',
+    evidence: 'detected',
+    sourceFile: 'package.json',
+    ...overrides
+  });
+
+  const classify = (technologies: UsedTechnology[]) =>
+    classifyAttentionViews(input({}, { technologies }), NOW);
+
+  it('puts an out technology in the upgrade view with its version', () => {
+    const upgrade = classify([technology()]).upgrade;
+    expect(upgrade.member).toBe(true);
+    expect(upgrade.reasons[0]).toMatchObject({
+      source: 'tech',
+      input: 'tech.jquery.ring',
+      value: 'out',
+      comparison: '=',
+      threshold: 'out'
+    });
+    expect(upgrade.reasons[0].message).toContain('jQuery 3.7.1');
+  });
+
+  it('asks for attention once a ring is past its review date', () => {
+    const stale = classify([technology({ ring: 'hot', reviewAfter: '2026-07-18' })]).attention;
+    expect(stale.reasons[0]).toMatchObject({
+      source: 'tech',
+      input: 'tech.jquery.reviewAfter',
+      value: '2026-07-18',
+      comparison: '<',
+      threshold: '2026-07-19'
+    });
+    // The review date is inclusive: a ring due today is not yet stale.
+    expect(
+      classify([technology({ ring: 'hot', reviewAfter: '2026-07-19' })]).attention.member
+    ).toBe(false);
+  });
+
+  it('stays silent for a catalog with no radar data', () => {
+    expect(classifyAttentionViews(input(), NOW).upgrade.member).toBe(false);
+    expect(classify([technology({ ring: 'hot' })]).upgrade.member).toBe(false);
+    expect(classify([technology({ ring: null })]).attention.member).toBe(false);
+  });
+
+  it('reports one reason per technology, ordered by slug', () => {
+    const flagged = classify([
+      technology({ slug: 'zulu', name: 'Zulu' }),
+      technology({ slug: 'alpha', name: 'Alpha' })
+    ]).upgrade;
+    expect(flagged.reasons.map(({ input: key }) => key)).toEqual([
+      'tech.alpha.ring',
+      'tech.zulu.ring'
     ]);
   });
 });

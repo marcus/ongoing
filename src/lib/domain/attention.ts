@@ -1,6 +1,7 @@
 import type { CollectionError, ProjectMetrics } from './metrics';
 import type { ProjectIntent } from './project';
 import type { ResolvedStack } from './stack';
+import { isRingStale, type UsedTechnology } from './technology';
 
 export const attentionViewKeys = [
   'attention',
@@ -41,13 +42,18 @@ export interface AttentionInput {
   metrics: ProjectMetrics | null;
   stacks: readonly ResolvedStack[];
   errors: readonly CollectionError[];
+  /**
+   * Technologies this project holds a `uses` edge to. Absent means "the radar has nothing to say",
+   * which is how a catalog with no technologies in it stays silent rather than wrong.
+   */
+  technologies?: readonly UsedTechnology[];
   githubStarsGained30d: number | null;
   githubTrafficViewsDelta30d: number | null;
   githubTrafficClonesDelta30d: number | null;
 }
 
 export interface AttentionReason {
-  source: 'catalog' | 'git' | 'td' | 'github' | 'traffic' | 'decision' | 'stack';
+  source: 'catalog' | 'git' | 'td' | 'github' | 'traffic' | 'decision' | 'stack' | 'tech';
   message: string;
   input: string;
   value: string | number | boolean | null;
@@ -485,6 +491,41 @@ export function classifyAttentionViews(
         );
       }
     }
+  }
+
+  /**
+   * The radar's two reasons. A technology edge is a catalog fact rather than a measurement — a
+   * declared edge was written by hand and a detected one is the last thing the manifests said — so
+   * these are ungated, like `isMissing` and collector warnings, rather than sitting behind a
+   * collector's freshness window. A ring that has been in `out` since before the last scan is still
+   * a true statement about the project today.
+   */
+  for (const technology of [...(project.technologies ?? [])].sort((left, right) =>
+    left.slug.localeCompare(right.slug, 'en')
+  )) {
+    const version = technology.version ? ` ${technology.version}` : '';
+    if (technology.ring === 'out')
+      upgrade.push(
+        reason(
+          'tech',
+          `Uses ${technology.name}${version}, which is ring out`,
+          `tech.${technology.slug}.ring`,
+          'out',
+          '=',
+          'out'
+        )
+      );
+    if (isRingStale(technology.reviewAfter, now))
+      attention.push(
+        reason(
+          'tech',
+          `${technology.name}’s ring was due for review on ${technology.reviewAfter}`,
+          `tech.${technology.slug}.reviewAfter`,
+          technology.reviewAfter,
+          '<',
+          today
+        )
+      );
   }
 
   return {

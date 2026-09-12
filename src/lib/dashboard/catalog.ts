@@ -23,6 +23,12 @@ import {
   type ToolchainBaselineStatus,
   type ToolchainRelease
 } from '$lib/domain/stack';
+import {
+  sortUsedTechnologies,
+  TECHNOLOGY_KIND,
+  usedTechnology,
+  type UsedTechnology
+} from '$lib/domain/technology';
 import type { CatalogRepository } from '$lib/server/catalog/repository';
 
 export const viewKeys = attentionViewKeys;
@@ -36,6 +42,8 @@ export type GroupKey = (typeof groupKeys)[number];
 export interface DashboardProject extends SortableProject {
   errors: CollectionError[];
   snapshots: MetricSnapshot[];
+  /** Radar edges, carried so the browser re-runs the same attention rules the server ran. */
+  technologies: UsedTechnology[];
   views: ViewKey[];
   attention: AttentionClassifications;
   githubTrafficViewsDelta30d: number | null;
@@ -73,7 +81,8 @@ function dashboardProject(
   project: ReturnType<CatalogRepository['listProjects']>[number],
   now: Date,
   releases: ReadonlyMap<Toolchain, ToolchainRelease[]>,
-  declarations: ReadonlyMap<string, ReturnType<CatalogRepository['listProjectStacks']>>
+  declarations: ReadonlyMap<string, ReturnType<CatalogRepository['listProjectStacks']>>,
+  technologies: ReadonlyMap<string, UsedTechnology[]>
 ): DashboardProject {
   const metrics = repository.getMetrics(project.id);
   const snapshots = repository.listSnapshots(project.id);
@@ -81,6 +90,7 @@ function dashboardProject(
     ...project,
     metrics,
     snapshots,
+    technologies: technologies.get(project.id) ?? [],
     // Resolved here rather than persisted so the classifier stays a pure function of the project
     // and can be re-run in the browser after an optimistic edit.
     stacks: (declarations.get(project.id) ?? []).map((stack) =>
@@ -157,14 +167,40 @@ export function classifyProject(
   return viewKeys.filter((key) => classifications[key].member);
 }
 
+/**
+ * The `uses` edges of every project, grouped, so the radar's attention reasons cost one pass over
+ * the relations table rather than a lookup per project.
+ */
+function usedTechnologiesByProject(repository: CatalogRepository): Map<string, UsedTechnology[]> {
+  const byProject = new Map<string, UsedTechnology[]>();
+  const technologies = new Map(
+    repository
+      .listEntries({ kind: TECHNOLOGY_KIND, includeHidden: true })
+      .map((entry) => [entry.id, entry])
+  );
+  if (!technologies.size) return byProject;
+  for (const relation of repository.listRelations({ kind: 'uses' })) {
+    const technology = technologies.get(relation.toId);
+    if (!technology) continue;
+    const used = byProject.get(relation.fromId) ?? [];
+    used.push(usedTechnology(technology, relation));
+    byProject.set(relation.fromId, used);
+  }
+  for (const [projectId, used] of byProject) byProject.set(projectId, sortUsedTechnologies(used));
+  return byProject;
+}
+
 function readCatalog(repository: CatalogRepository, hidden: boolean, now: Date): DashboardCatalog {
   const allProjects = repository.listProjects({ includeHidden: true });
-  // Release cycles and declarations are read once for the whole catalog rather than per project.
+  // Release cycles, declarations, and radar edges are read once for the whole catalog.
   const releases = repository.listToolchainReleases();
   const declarations = repository.listAllProjectStacks();
+  const technologies = usedTechnologiesByProject(repository);
   const projects = allProjects
     .filter((project) => project.isHidden === hidden)
-    .map((project) => dashboardProject(repository, project, now, releases, declarations));
+    .map((project) =>
+      dashboardProject(repository, project, now, releases, declarations, technologies)
+    );
   return {
     projects,
     hiddenCount: hidden ? projects.length : allProjects.length - projects.length,

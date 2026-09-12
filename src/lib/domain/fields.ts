@@ -6,6 +6,7 @@ import {
   type AttributeValue
 } from './entry';
 import { providerFieldDefinitions } from './provider-fields';
+import { technologyKinds, technologyRings } from './technology';
 
 /**
  * The field registry. Every value an entry carries — in a column, in its `attributes` document, or
@@ -249,7 +250,7 @@ export const builtinFields: readonly FieldDefinition[] = [
     key: 'technology_kind',
     kinds: ['technology'],
     type: 'enum',
-    options: { values: ['language', 'framework', 'library', 'service', 'tool', 'platform'] },
+    options: { values: technologyKinds },
     label: 'Technology kind',
     sortable: true,
     filterable: true,
@@ -261,9 +262,9 @@ export const builtinFields: readonly FieldDefinition[] = [
     key: 'ring',
     kinds: ['technology'],
     type: 'enum',
-    options: { values: ['hot', 'warm', 'cool', 'out'] },
+    options: { values: technologyRings },
     label: 'Ring',
-    description: 'How much this technology is the default choice today',
+    description: 'How much this technology is the default choice today; `review_after` ages it',
     sortable: true,
     filterable: true,
     editable: true,

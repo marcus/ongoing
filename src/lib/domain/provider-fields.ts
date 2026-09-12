@@ -128,6 +128,18 @@ export const derivedFieldDefinitions: readonly FieldDefinition[] = [
     sortable: false,
     description: 'Slugs of the technologies this entry uses or provides'
   }),
+  projected('used_by', 'relations', 'integer', 'Projects using it', {
+    kinds: ['technology'],
+    description: 'How many projects hold a `uses` edge to this technology'
+  }),
+  projected('provided_by', 'relations', 'text', 'Provided by', {
+    kinds: ['technology'],
+    description: 'Slug of the managed project that supplies this technology'
+  }),
+  projected('ring_stale', 'radar', 'boolean', 'Ring is stale', {
+    kinds: ['technology'],
+    description: '`review_after` has passed, so the ring describes a moment that is over'
+  }),
   projected('stack.lag', 'stack', 'integer', 'Stack lag', {
     description: 'Largest number of release cycles any declared toolchain is behind'
   }),
