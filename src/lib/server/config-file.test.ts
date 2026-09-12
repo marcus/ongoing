@@ -26,7 +26,7 @@ const example = `
 port = 7800
 
 [scan]
-roots = ["~/work", "~/code"]
+roots = ["~/work", "~/src"]
 
 [providers]
 enabled = ["filesystem", "git", "stack", "tech-signatures"]
@@ -84,7 +84,7 @@ describe('the configuration file', () => {
 
   it('refuses a section or a key it does not understand', () => {
     expect(() => parseConfigFile('[nonsense]\na = 1\n')).toThrow(/Unknown configuration section/);
-    expect(() => parseConfigFile('[scan]\nroot = "~/code"\n')).toThrow(/Unknown \[scan\] key/);
+    expect(() => parseConfigFile('[scan]\nroot = "~/src"\n')).toThrow(/Unknown \[scan\] key/);
     expect(() => parseConfigFile('[providers]\ngithub = "on"\n')).toThrow(/must be a table/);
     expect(() => parseConfigFile('not = toml = at = all')).toThrow(/not valid TOML/);
   });

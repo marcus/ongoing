@@ -144,7 +144,7 @@ describe('the export', () => {
         entry('go', { ring: 'hot', technology_kind: 'language', review_after: '2026-09-11' }, [
           relation(),
           relation({
-            other: { id: 'project_a', kind: 'project', slug: 'aerie', name: 'aerie' }
+            other: { id: 'project_a', kind: 'project', slug: 'atlas', name: 'atlas' }
           }),
           relation({ kind: 'provides', evidence: 'declared', provider: null })
         ]),
@@ -157,7 +157,7 @@ describe('the export', () => {
     const go = document.technologies[0];
     expect(go.stale).toBe(true);
     expect(go.providedBy).toBe('td');
-    expect(go.projects.map((project) => project.project)).toEqual(['aerie', 'td']);
+    expect(go.projects.map((project) => project.project)).toEqual(['atlas', 'td']);
     expect(go.projects[0]).toMatchObject({ version: '1.27', evidence: 'detected' });
   });
 

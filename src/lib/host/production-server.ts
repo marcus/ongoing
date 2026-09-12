@@ -133,7 +133,7 @@ export async function startProductionServer(): Promise<void> {
   // These defaults are `loadConfig`'s defaults, deliberately: the application decides whether
   // authentication is required from the same HOST value, so a listener that bound every interface
   // while the configuration still read "127.0.0.1" would serve an unauthenticated app to the LAN.
-  // A deployment that means to be reachable says so — aerie's plist sets HOST and PORT explicitly.
+  // A deployment that means to be reachable says so: its service definition names HOST and PORT.
   const host = process.env.HOST || '127.0.0.1';
   const port = Number(process.env.PORT || '4173');
   if (!Number.isSafeInteger(port) || port < 1 || port > 65_535)

@@ -1,19 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import type { CommandResult, HostCommandRunner } from './adapter';
-import { LaunchdHost, parseLaunchdPrint } from './launchd';
+import { findLaunchdLabels, LaunchdHost, parseLaunchdPrint } from './launchd';
 
 /**
- * Captured `launchctl print gui/501/com.marcusvorwaller.ongoing` output. The adapter is tested
- * against this text and an injected runner; it never touches the real agents on this machine.
+ * Captured `launchctl print gui/501/<label>` output, with the machine it came from replaced by an
+ * imaginary one. The adapter is tested against this text and an injected runner; it never touches
+ * the real agents on this machine.
  */
-const runningPrint = `com.marcusvorwaller.ongoing = {
+const runningPrint = `com.example.ongoing = {
 	active count = 1
-	path = /Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist
+	path = /home/pat/Library/LaunchAgents/com.example.ongoing.plist
 	state = running
-	program = /Users/marcus/.local/share/ongoing/bun
+	program = /home/pat/.local/share/ongoing/bun
 	arguments = {
-		/Users/marcus/.local/share/ongoing/bun
-		/Users/marcus/code/ongoing/scripts/production-server.ts
+		/home/pat/.local/share/ongoing/bun
+		/home/pat/src/ongoing/src/lib/host/production-server.ts
 	}
 	default environment = {
 		PATH => /usr/bin:/bin:/usr/sbin:/sbin
@@ -29,9 +30,9 @@ const runningPrint = `com.marcusvorwaller.ongoing = {
 	last exit code = (never exited)
 }`;
 
-const waitingPrint = `com.marcusvorwaller.ongoing.scan = {
+const waitingPrint = `com.example.ongoing.scan = {
 	active count = 0
-	path = /Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.scan.plist
+	path = /home/pat/Library/LaunchAgents/com.example.ongoing.scan.plist
 	state = waiting
 	last exit code = 1
 }`;
@@ -59,11 +60,45 @@ function host(runner: HostCommandRunner): LaunchdHost {
   return new LaunchdHost({
     runner,
     uid: 501,
-    home: '/Users/marcus',
-    root: '/Users/marcus/code/ongoing',
+    home: '/home/pat',
+    root: '/home/pat/src/ongoing',
+    // Named outright so the adapter never reads this machine's real LaunchAgents directory.
+    labels: { web: 'com.example.ongoing', scan: 'com.example.ongoing.scan' },
     wait: async () => {}
   });
 }
+
+describe('launchd agent labels', () => {
+  /**
+   * The reverse-DNS prefix belongs to whoever installed the agents, so the adapter reads it off
+   * the definitions they installed rather than carrying one person's name in the application.
+   */
+  it('takes both labels from the plists a user has installed', () => {
+    expect(
+      findLaunchdLabels([
+        'com.apple.something.plist',
+        'net.example.ongoing.plist',
+        'net.example.ongoing.scan.plist',
+        'README'
+      ])
+    ).toEqual({ web: 'net.example.ongoing', scan: 'net.example.ongoing.scan' });
+  });
+
+  it('derives the missing half from whichever agent is installed', () => {
+    expect(findLaunchdLabels(['org.pat.ongoing.plist'])).toEqual({
+      web: 'org.pat.ongoing',
+      scan: 'org.pat.ongoing.scan'
+    });
+    expect(findLaunchdLabels(['org.pat.ongoing.scan.plist'])).toEqual({
+      web: 'org.pat.ongoing',
+      scan: 'org.pat.ongoing.scan'
+    });
+  });
+
+  it('falls back to a plain name when nothing is installed', () => {
+    expect(findLaunchdLabels([])).toEqual({ web: 'ongoing', scan: 'ongoing.scan' });
+  });
+});
 
 describe('launchd host adapter', () => {
   it('reads state and pid out of launchctl print', () => {
@@ -87,7 +122,7 @@ describe('launchd host adapter', () => {
     });
     await expect(host(runner).status('web')).resolves.toMatchObject({
       adapter: 'launchd',
-      label: 'com.marcusvorwaller.ongoing',
+      label: 'com.example.ongoing',
       state: 'not loaded',
       running: false,
       pid: null
@@ -99,7 +134,7 @@ describe('launchd host adapter', () => {
       'launchctl print': { status: 0, stdout: waitingPrint, stderr: '' }
     });
     await expect(host(runner).status('scan')).resolves.toMatchObject({
-      label: 'com.marcusvorwaller.ongoing.scan',
+      label: 'com.example.ongoing.scan',
       state: 'waiting',
       detail: 'last exit code 1'
     });
@@ -119,13 +154,13 @@ describe('launchd host adapter', () => {
     };
     await expect(host(runner).restart('web')).resolves.toEqual({
       ok: true,
-      message: 'restarted com.marcusvorwaller.ongoing'
+      message: 'restarted com.example.ongoing'
     });
     expect(calls.map((call) => call.join(' '))).toEqual([
-      'launchctl bootout gui/501/com.marcusvorwaller.ongoing',
-      'launchctl print gui/501/com.marcusvorwaller.ongoing',
-      'launchctl print gui/501/com.marcusvorwaller.ongoing',
-      'launchctl bootstrap gui/501 /Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist'
+      'launchctl bootout gui/501/com.example.ongoing',
+      'launchctl print gui/501/com.example.ongoing',
+      'launchctl print gui/501/com.example.ongoing',
+      'launchctl bootstrap gui/501 /home/pat/Library/LaunchAgents/com.example.ongoing.plist'
     ]);
   });
 
@@ -157,19 +192,19 @@ describe('launchd host adapter', () => {
     });
     await expect(host(runner).stop('web')).resolves.toEqual({
       ok: true,
-      message: 'com.marcusvorwaller.ongoing was not loaded'
+      message: 'com.example.ongoing was not loaded'
     });
   });
 
   it('names the log files each service writes', () => {
     const { runner } = recorder({});
     expect(host(runner).logs('web').files).toEqual([
-      '/Users/marcus/Library/Logs/Ongoing/stdout.log',
-      '/Users/marcus/Library/Logs/Ongoing/stderr.log'
+      '/home/pat/Library/Logs/Ongoing/stdout.log',
+      '/home/pat/Library/Logs/Ongoing/stderr.log'
     ]);
     expect(host(runner).logs('scan').files).toEqual([
-      '/Users/marcus/Library/Logs/Ongoing/scan-stdout.log',
-      '/Users/marcus/Library/Logs/Ongoing/scan-stderr.log'
+      '/home/pat/Library/Logs/Ongoing/scan-stdout.log',
+      '/home/pat/Library/Logs/Ongoing/scan-stderr.log'
     ]);
   });
 });

@@ -293,7 +293,13 @@ export function loadConfig(
         providerNames.map((name) => [name, providerSettings(file, name)])
       )
     },
-    hostAdapter: (env.ONGOING_HOST_ADAPTER || file.host?.adapter || 'launchd').trim(),
+    // macOS supervises with user LaunchAgents; anywhere else a host that has not been configured
+    // can still run the application in a terminal.
+    hostAdapter: (
+      env.ONGOING_HOST_ADAPTER ||
+      file.host?.adapter ||
+      (process.platform === 'darwin' ? 'launchd' : 'foreground')
+    ).trim(),
     configPath,
     security: {
       authenticationRequired,

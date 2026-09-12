@@ -1388,7 +1388,7 @@ async function commandStatus(client: ApiClient, args: Args): Promise<void> {
 /* ------------------------------------------------------- machine operations */
 
 /**
- * `restart`, `stop`, `logs`, and `serve` go through a host adapter (ADR 0007): `launchd` on aerie,
+ * `restart`, `stop`, `logs`, and `serve` go through a host adapter (ADR 0007): `launchd` on macOS,
  * `foreground` anywhere else, chosen by `[host] adapter` in the configuration file, overridden by
  * `ONGOING_HOST_ADAPTER` or `--host`. The CLI knows the five verbs; it does not know launchd.
  */
@@ -1398,14 +1398,15 @@ async function hostAdapter(args: Args): Promise<HostAdapter> {
     import('../src/lib/server/config-file')
   ]);
   let configured = option(args, 'host') ?? process.env.ONGOING_HOST_ADAPTER;
-  if (!configured) {
-    try {
-      configured = configFile.readConfigFile(configFile.configPathFrom()).config.host?.adapter;
-    } catch {
-      /* an unreadable configuration file must not stop `ongoing logs` */
-    }
+  let label = process.env.ONGOING_LAUNCHD_LABEL;
+  try {
+    const host = configFile.readConfigFile(configFile.configPathFrom()).config.host;
+    configured ??= host?.adapter;
+    label ??= host?.label;
+  } catch {
+    /* an unreadable configuration file must not stop `ongoing logs` */
   }
-  return createHostAdapter(configured, { root: REPO });
+  return createHostAdapter(configured, { root: REPO, ...(label ? { label } : {}) });
 }
 
 function hostService(args: Args): HostService {
@@ -1443,15 +1444,30 @@ async function commandLogs(args: Args): Promise<void> {
   child.on('exit', (code) => process.exit(code ?? 0));
 }
 
+/** `[server]` as the configuration file has it, for the values the HTTP boundary reads directly. */
+async function configuredServer(): Promise<{ host?: string; port?: number }> {
+  const configFile = await import('../src/lib/server/config-file');
+  try {
+    return configFile.readConfigFile(configFile.configPathFrom()).config.server ?? {};
+  } catch {
+    return {};
+  }
+}
+
 /**
  * Runs the application in the foreground. `--data-dir` is the whole of "a fresh install": a
  * directory nobody has written to becomes a catalog on first open, which is what lets a machine
- * that is not aerie run Ongoing with no deployment profile and no launchd.
+ * with no service manager run Ongoing with no deployment profile at all.
  */
 async function commandServe(args: Args): Promise<void> {
   const host = await hostAdapter(args);
   const dataDir = option(args, 'data-dir');
-  const port = option(args, 'port');
+  // The HTTP boundary reads HOST and PORT from its own environment and nothing else, so the
+  // configuration file's `[server]` values have to be handed to it here — otherwise `ongoing init
+  // --port 7801` would write a port that `ongoing serve` then ignored.
+  const server = await configuredServer();
+  const port =
+    option(args, 'port') ?? (server.port === undefined ? undefined : String(server.port));
   if (port !== undefined && !/^\d+$/.test(port)) throw new CliError('--port must be a number');
   out(
     dim(
@@ -1464,7 +1480,7 @@ async function commandServe(args: Args): Promise<void> {
     await host.serve({
       dataDir: dataDir ? expandHome(dataDir) : undefined,
       port: port ? Number(port) : undefined,
-      host: option(args, 'bind'),
+      host: option(args, 'bind') ?? server.host,
       build: !flag(args, 'no-build')
     })
   );
@@ -2180,7 +2196,7 @@ async function techAdd(client: ApiClient, args: Args): Promise<void> {
   report(args, created, `created technology/${created.slug} (${body.ring})`);
 }
 
-/** `ongoing tech set sveltekit --ring warm` — the ring is the one thing Marcus keeps up to date. */
+/** `ongoing tech set sveltekit --ring warm` — the ring is the field that actually gets revisited. */
 async function techSet(client: ApiClient, args: Args): Promise<void> {
   const token = args.positional[0];
   if (!token)

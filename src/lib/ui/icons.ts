@@ -1,5 +1,5 @@
 /**
- * Icon glyphs taken from roc (`~/code/roc/dist/svg/outline`), the house icon set.
+ * Icon glyphs taken from roc (`dist/svg/outline`), the house icon set.
  *
  * roc is not published to a registry, so the glyphs this UI uses are vendored here as their inner
  * SVG markup rather than pulled in as a dependency: that keeps Ongoing installable by a stranger

@@ -15,7 +15,7 @@ either way. `--remote` forces HTTP, `--local` forces the in-process path, and na
 ## Install
 
 ```sh
-ln -s /Users/marcus/code/ongoing/bin/ongoing ~/.local/bin/ongoing
+ln -s "$PWD/bin/ongoing" ~/.local/bin/ongoing
 ```
 
 `bin/ongoing` is a `/bin/sh` wrapper that resolves the symlink and execs `bin/ongoing.ts` with the
@@ -24,11 +24,11 @@ is nothing to rebuild after editing the CLI — it runs from source.
 
 ## Talking to the right instance
 
-| Source         | Value                                               |
-| -------------- | --------------------------------------------------- |
-| `--url <base>` | highest precedence; always uses the HTTP transport  |
-| `ONGOING_URL`  | e.g. `http://aerie.local:7766` from another machine |
-| default        | `http://127.0.0.1:7766`, then the in-process path   |
+| Source         | Value                                                |
+| -------------- | ---------------------------------------------------- |
+| `--url <base>` | highest precedence; always uses the HTTP transport   |
+| `ONGOING_URL`  | e.g. `http://server.local:7766` from another machine |
+| default        | `http://127.0.0.1:7766`, then the in-process path    |
 
 `--transport auto|http|local` (or `ONGOING_TRANSPORT`) overrides the probe. `ongoing status`
 prints which transport answered, and shows the catalog path rather than a URL when it was local.
@@ -268,7 +268,7 @@ usually what a script wants.
 - `scan` starts a run through the API, which means the web LaunchAgent's environment runs the
   collectors — the same as the dashboard's rescan button. Both plists now set the same `PATH`, so
   `cloc`, `td`, `gh`, and `git` all resolve; that PATH is `PRODUCTION_SCAN_PATH` in
-  `deploy/aerie/release-config.ts` and is asserted by `tests/release.test.ts`. Keep the two plists in
+  the deployment profile's own constants and is asserted by that profile's test. Keep the two plists in
   sync when it changes.
 - `forget` removes one project; `prune` removes every entry whose directory has been gone long
   enough. Both are permanent — the note, favourite, intent, and manual rank go with the row — so
@@ -499,7 +499,7 @@ loc              disabled     when-changed  2h ago         4  disabled in config
 endoflife        active       daily         2h ago         -  Release cycles and end-of-life dates for declared toolchains
 github           active       when-changed  2h ago        17  Stars, pull requests, issues, CI state, releases, and traffic
 
-host adapter: launchd - configuration: /Users/marcus/.config/ongoing/config.toml
+host adapter: launchd - configuration: ~/.config/ongoing/config.toml
 ```
 
 `ongoing providers <name>` prints one manifest in full, and `--json` emits the same payload
@@ -540,7 +540,7 @@ directory, and opens the catalog once so the migrations run. It refuses to overw
 configuration file unless `--force`, because that file is where a person's choices live.
 
 ```sh
-ongoing init ~/.local/share/ongoing --scan-root ~/code,~/work --port 7801
+ongoing init ~/.local/share/ongoing --scan-root ~/src,~/work --port 7801
 ongoing init --config ./ongoing.toml --data-dir ./.ongoing --json
 ```
 

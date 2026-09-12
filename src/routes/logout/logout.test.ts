@@ -15,7 +15,7 @@ describe('logout request body boundary', () => {
     ['chunked', { 'transfer-encoding': 'chunked' }]
   ])('rejects an oversized %s body before clearing the session', async (_name, headers) => {
     const { input, clear } = event(
-      new Request('http://aerie.local:7766/logout', {
+      new Request('http://example.local:7766/logout', {
         method: 'POST',
         headers,
         body: 'x'.repeat(20_000)
@@ -28,7 +28,7 @@ describe('logout request body boundary', () => {
 
   it('clears the session and redirects for a bodyless logout', async () => {
     const { input, clear } = event(
-      new Request('http://aerie.local:7766/logout', { method: 'POST' })
+      new Request('http://example.local:7766/logout', { method: 'POST' })
     );
     await expect(POST(input)).rejects.toMatchObject({ status: 303, location: '/login' });
     expect(clear).toHaveBeenCalledOnce();

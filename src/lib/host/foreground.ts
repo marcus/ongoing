@@ -15,7 +15,8 @@ import { repositoryRoot, scanInForeground, serveInForeground } from './run';
 /**
  * The foreground host: no supervisor at all.
  *
- * This is the second implementation of the host seam and the one a machine that is not aerie runs:
+ * This is the second implementation of the host seam, and the one a machine with no service
+ * manager runs:
  * `ongoing serve --data-dir ./tmp` starts the application in the terminal, `ongoing scan` runs one
  * scan, `stop` signals whatever this host recorded a pid for, and `logs` says plainly that a
  * foreground process logs to the terminal it was started in.

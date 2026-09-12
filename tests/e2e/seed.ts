@@ -4,7 +4,7 @@ import { CatalogDatabase } from '../../src/lib/server/catalog/database';
 import { CatalogRepository } from '../../src/lib/server/catalog/repository';
 
 const path = resolve(process.env.DATABASE_PATH ?? '.data/ongoing-e2e.sqlite');
-const scanRoot = resolve(process.env.SCAN_ROOTS ?? '/private/tmp/ongoing-e2e-unscanned');
+const scanRoot = resolve(process.env.SCAN_ROOTS ?? '.data/e2e-unscanned');
 mkdirSync(scanRoot, { recursive: true });
 rmSync(path, { force: true });
 rmSync(`${path}-shm`, { force: true });

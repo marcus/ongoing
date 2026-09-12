@@ -19,7 +19,7 @@ export const TECHNOLOGY_KIND = 'technology';
 /** The provider that owns detected `uses` edges; they are rewritten on every scan. */
 export const TECH_SIGNATURES_PROVIDER = 'tech-signatures';
 
-/** Marcus's vocabulary, ordered from "default choice" to "do not start new work on it". */
+/** Ordered from "default choice" to "do not start new work on it". Any owner's words fit. */
 export const technologyRings = ['hot', 'warm', 'cool', 'out'] as const;
 
 export type TechnologyRing = (typeof technologyRings)[number];
@@ -100,7 +100,7 @@ export const technologySeeds: readonly TechnologySeed[] = [
     name: 'Ruby',
     technologyKind: 'language',
     ring: 'warm',
-    note: 'Quicker projects, or systems primarily for Marcus.'
+    note: 'Quicker projects, and systems with a single operator.'
   },
   {
     slug: 'bash',
@@ -166,7 +166,7 @@ export const technologySeeds: readonly TechnologySeed[] = [
     ring: 'hot',
     providedBy: 'tasks',
     toolSurface:
-      'Marcus’s personal GTD. Something you noticed rather than were asked for goes in as `tasks propose "text" --note "why"`, never `capture`.'
+      'A personal GTD tracker. Something you noticed rather than were asked for goes in as `tasks propose "text" --note "why"`, never `capture`.'
   },
   {
     slug: 'sidecar',
@@ -201,7 +201,7 @@ export const technologySeeds: readonly TechnologySeed[] = [
     ring: 'hot',
     providedBy: 'fractal',
     toolSurface:
-      'Repository-owned architecture models, interactive presentation and SVG/PNG exports. Skill: `~/code/fractal/skills/fractal/SKILL.md`.'
+      'Repository-owned architecture models, interactive presentation and SVG/PNG exports. Skill: `fractal`.'
   },
   {
     slug: 'ongoing',
@@ -233,7 +233,7 @@ export const technologySeeds: readonly TechnologySeed[] = [
     technologyKind: 'tool',
     ring: 'hot',
     providedBy: 'naturally',
-    toolSurface: 'Run prose that anyone other than Marcus will read through it.'
+    toolSurface: 'Run prose a reader other than its author will see through it.'
   },
   {
     slug: 'roc',
@@ -241,8 +241,7 @@ export const technologySeeds: readonly TechnologySeed[] = [
     technologyKind: 'tool',
     ring: 'hot',
     providedBy: 'roc',
-    toolSurface:
-      'Icon library at `~/code/roc`. Add, publish, and improve icons freely (`roc-icons`).'
+    toolSurface: 'Icon library. Add, publish, and improve icons freely (`roc-icons`).'
   }
 ];
 

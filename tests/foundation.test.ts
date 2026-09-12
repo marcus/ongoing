@@ -28,6 +28,7 @@ describe('application foundation', () => {
       'AGENTS.md',
       'README.md',
       'docs/deployment.md',
+      'deploy/aerie/README.md',
       'docs/cli.md',
       'docs/qa/release-coverage.md'
     ]) {
@@ -42,10 +43,23 @@ describe('application foundation', () => {
    * Deployment is a profile, not part of the application (ADR 0007). `deploy/aerie/` may import the
    * core; the core may never import `deploy/`, or a second machine would have to fork it.
    */
-  it('keeps the core free of the deployment profile', () => {
-    const offenders = ['src', 'bin', 'scripts', 'tests/e2e']
+  it('keeps the core free of every deployment profile', () => {
+    const offenders = ['src', 'bin', 'scripts', 'tests']
       .flatMap(sourceFiles)
-      .filter((path) => /from\s+['"][^'"]*deploy\/aerie/.test(readFileSync(resolve(path), 'utf8')));
+      .filter((path) => /from\s+['"][^'"]*\bdeploy\//.test(readFileSync(resolve(path), 'utf8')));
+    expect(offenders).toEqual([]);
+  });
+
+  /**
+   * The core has to run on a machine that is not the author's. Anything naming one person, one
+   * host, or one home directory belongs in a deployment profile or an export profile.
+   */
+  it('carries no machine-specific strings outside the profiles that own them', () => {
+    const machineSpecific = /marcus|vorwaller|aerie|\/Users\//i;
+    const offenders = ['src', 'bin', 'scripts', 'tests']
+      .flatMap(sourceFiles)
+      .filter((path) => path !== 'tests/foundation.test.ts')
+      .filter((path) => machineSpecific.test(readFileSync(resolve(path), 'utf8')));
     expect(offenders).toEqual([]);
   });
 });

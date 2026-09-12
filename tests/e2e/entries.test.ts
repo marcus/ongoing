@@ -36,22 +36,22 @@ test('a user field added over the API is editable and visible everywhere', async
   // Only the new field is touched: these tests share a seeded catalog with the browser tests, so
   // a decision field left behind here would change what the attention views classify there.
   const patched = await request.patch('/api/entries/project/alpha', {
-    data: { 'x.owner': 'marcus' }
+    data: { 'x.owner': 'alice' }
   });
   expect(patched.ok()).toBe(true);
   const entry = (await patched.json()) as { fields: Record<string, unknown> };
-  expect(entry.fields['x.owner']).toBe('marcus');
+  expect(entry.fields['x.owner']).toBe('alice');
 
   // The dashboard payload carries it too, so `ongoing list --json` sees it without a second read.
   const projects = (await (await request.get('/api/projects')).json()) as {
     projects: { name: string; attributes: Record<string, unknown> }[];
   };
   expect(projects.projects.find((project) => project.name === 'alpha')?.attributes['x.owner']).toBe(
-    'marcus'
+    'alice'
   );
 
   const rejected = await request.patch('/api/entries/project/alpha', {
-    data: { 'x.ownr': 'marcus' }
+    data: { 'x.ownr': 'alice' }
   });
   expect(rejected.status()).toBe(400);
   expect(await rejected.json()).toMatchObject({

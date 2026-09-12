@@ -16,7 +16,7 @@ import {
   PRODUCTION_WEB_LABEL,
   PRODUCTION_WEB_PLIST,
   releasePlan
-} from '../deploy/aerie/release-config';
+} from './release-config';
 
 const required = [
   '--host',
@@ -108,7 +108,9 @@ describe('production LaunchAgent definitions', () => {
   const web = readFileSync(resolve('deploy/aerie/config/ongoing.plist.example'), 'utf8');
   const scan = readFileSync(resolve('deploy/aerie/config/ongoing-scan.plist.example'), 'utf8');
   const provision = readFileSync(resolve('deploy/aerie/provision-runtime.sh'), 'utf8');
-  const deployment = readFileSync(resolve('docs/deployment.md'), 'utf8');
+  // The machine-specific half of the deployment guide moved into this profile's own README;
+  // docs/deployment.md is now the generic one and says nothing about aerie.
+  const deployment = readFileSync(resolve('deploy/aerie/README.md'), 'utf8');
   const packageJson = JSON.parse(readFileSync(resolve('package.json'), 'utf8')) as {
     scripts: Record<string, string>;
   };

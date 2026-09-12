@@ -13,7 +13,7 @@ while [ -L "$target" ]; do
 done
 repo=$(CDPATH= cd -- "$(dirname "$target")/.." && pwd)
 
-# Prefer the app-scoped runtime the service uses (deploy/aerie/provision-runtime.sh keeps it on the
+# Prefer the app-scoped runtime a deployment profile installed for the service (pinned to the
 # version in .bun-version); fall back to whatever bun is on PATH.
 pinned=$HOME/.local/share/ongoing/bun
 if [ -x "$pinned" ]; then

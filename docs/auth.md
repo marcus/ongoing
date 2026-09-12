@@ -11,14 +11,15 @@ to `true`, `loadConfig` forces `authenticationRequired = false`, so
 `hasValidSession` always returns `true` and every route loads without a login
 prompt. The access-secret code paths remain in place — nothing was deleted.
 
-It is set in the installed launchd plist:
+It is set in the service definition a deployment profile installs:
 
 ```xml
 <key>ONGOING_DISABLE_AUTH</key><string>true</string>
 ```
 
-- Installed plist: `~/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist`
-- Template: `deploy/aerie/config/ongoing.plist.example`
+Which file that is belongs to the profile — for the one in this repository, see
+[`deploy/aerie/`](../deploy/aerie/README.md) and its `config/*.plist.example`. `ongoing providers`
+prints the agent labels this machine actually has.
 
 ## How it works
 
@@ -38,7 +39,7 @@ is skipped. The gate itself lives in `src/hooks.server.ts` (routes through
 `hooks.server.ts` also skips the same-origin mutation check
 (`isSameOriginMutation`) when `authenticationRequired` is false. That check
 compares the request's `Origin` header against the configured `APP_ORIGIN`
-(e.g. `http://aerie.local:7766`), so it 403s any mutating request made from a
+(e.g. `http://server.local:7766`), so it 403s any mutating request made from a
 different hostname on the LAN (e.g. `http://localhost:7766` or a raw IP). Since
 `ONGOING_DISABLE_AUTH` already opens every route to anyone on the network, this
 CSRF check adds no protection while it's set, and was blocking legitimate
@@ -46,8 +47,8 @@ requests like the favorites toggle.
 
 ## Re-enabling auth later
 
-1. In `~/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist`, remove the
-   `ONGOING_DISABLE_AUTH` key (or set it to `false`).
+1. In the installed service definition (`~/Library/LaunchAgents/<label>.plist` under the
+   `launchd` host), remove the `ONGOING_DISABLE_AUTH` key, or set it to `false`.
 2. Ensure `ONGOING_ACCESS_SECRET` is a long random string (≥16 chars). Generate
    one and paste it in:
    ```sh
@@ -55,8 +56,7 @@ requests like the favorites toggle.
    ```
 3. Reload the agent:
    ```sh
-   launchctl bootout gui/$(id -u)/com.marcusvorwaller.ongoing
-   launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist
+   ongoing restart          # the host adapter does the bootout/bootstrap dance
    ```
 4. Visit the site and log in at `/login` with that secret.
 

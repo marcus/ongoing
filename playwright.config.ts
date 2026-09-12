@@ -11,7 +11,10 @@ import { defineConfig } from '@playwright/test';
 // about where this run belongs, so it turns reuse off and the collision fails loudly as intended.
 const port = Number(process.env.E2E_PORT ?? 5173);
 const reuseExistingServer = !process.env.CI && !process.env.E2E_PORT;
-const environment = `DATABASE_PATH=.data/ongoing-e2e.sqlite SCAN_ROOTS=/private/tmp/ongoing-e2e-unscanned`;
+// A scan root inside the repository's ignored data directory: the seeded catalog is the fixture,
+// so the filesystem provider must find nothing, and an absolute /private/tmp path would only have
+// meant that on macOS. It does not have to exist.
+const environment = `DATABASE_PATH=.data/ongoing-e2e.sqlite SCAN_ROOTS=.data/e2e-unscanned`;
 
 export default defineConfig({
   testDir: './tests/e2e',

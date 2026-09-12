@@ -1,3 +1,4 @@
+import { readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type {
@@ -25,9 +26,35 @@ import {
  * Everything that reads launchd's output goes through {@link parseLaunchdPrint}, which is a pure
  * function over the text `launchctl print` produces, so the adapter is tested against captured
  * output rather than against the machine's real agents.
+ *
+ * The labels are **discovered, not written down here**. Whoever installed the agents chose a
+ * reverse-DNS prefix of their own, and that choice belongs to the deployment profile rather than to
+ * the application, so the adapter looks in `~/Library/LaunchAgents` for the definitions that serve
+ * and scan Ongoing and uses whatever they are called. `[host] label` or `ONGOING_LAUNCHD_LABEL`
+ * names them outright; the fallback is only what an install that has written nothing would be.
  */
-export const LAUNCHD_WEB_LABEL = 'com.marcusvorwaller.ongoing';
-export const LAUNCHD_SCAN_LABEL = `${LAUNCHD_WEB_LABEL}.scan`;
+export const DEFAULT_LAUNCHD_WEB_LABEL = 'ongoing';
+export const DEFAULT_LAUNCHD_SCAN_LABEL = `${DEFAULT_LAUNCHD_WEB_LABEL}.scan`;
+
+/** The web agent is `<anything>ongoing.plist`; the scan agent is `<anything>ongoing.scan.plist`. */
+export function findLaunchdLabels(
+  fileNames: readonly string[],
+  fallback: Record<HostService, string> = {
+    web: DEFAULT_LAUNCHD_WEB_LABEL,
+    scan: DEFAULT_LAUNCHD_SCAN_LABEL
+  }
+): Record<HostService, string> {
+  const labels = [...fileNames]
+    .filter((name) => name.endsWith('.plist'))
+    .map((name) => name.slice(0, -'.plist'.length))
+    .sort((left, right) => left.localeCompare(right, 'en'));
+  const scan = labels.find((label) => /(^|\.)ongoing\.scan$/i.test(label));
+  const web = labels.find((label) => /(^|\.)ongoing$/i.test(label));
+  return {
+    web: web ?? (scan ? scan.slice(0, -'.scan'.length) : fallback.web),
+    scan: scan ?? `${web ?? fallback.web}.scan`
+  };
+}
 
 export interface LaunchdPrintState {
   state: string;
@@ -62,6 +89,15 @@ export interface LaunchdOptions {
 
 const sleep = (ms: number): Promise<void> => new Promise((done) => setTimeout(done, ms));
 
+/** The agent definitions this user has installed. An unreadable directory means "none". */
+function readAgentDirectory(home: string): string[] {
+  try {
+    return readdirSync(join(home, 'Library/LaunchAgents'));
+  } catch {
+    return [];
+  }
+}
+
 export class LaunchdHost implements HostAdapter {
   readonly name = 'launchd';
   private readonly runner: HostCommandRunner;
@@ -77,7 +113,7 @@ export class LaunchdHost implements HostAdapter {
     this.uid = options.uid ?? userId();
     this.home = options.home ?? homedir();
     this.root = options.root ?? repositoryRoot;
-    this.labels = options.labels ?? { web: LAUNCHD_WEB_LABEL, scan: LAUNCHD_SCAN_LABEL };
+    this.labels = options.labels ?? findLaunchdLabels(readAgentDirectory(this.home));
     this.logDirectory = options.logDirectory ?? join(this.home, 'Library/Logs/Ongoing');
     this.wait = options.wait ?? sleep;
   }

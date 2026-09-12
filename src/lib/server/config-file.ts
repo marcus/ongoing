@@ -40,7 +40,7 @@ export interface FileConfig {
     disabled?: string[];
     [provider: string]: ProviderSettings | string[] | undefined;
   };
-  host?: { adapter?: string };
+  host?: { adapter?: string; label?: string };
   export?: { profile?: string };
 }
 
@@ -157,10 +157,13 @@ export function parseConfigFile(text: string): FileConfig {
 
   if (document.host !== undefined) {
     if (!isPlainObject(document.host)) throw new Error('[host] must be a table');
-    const { adapter, ...rest } = document.host;
+    const { adapter, label, ...rest } = document.host;
     if (Object.keys(rest).length)
       throw new Error(`Unknown [host] key(s): ${Object.keys(rest).join(', ')}`);
-    config.host = adapter === undefined ? {} : { adapter: String(adapter) };
+    config.host = {
+      ...(adapter === undefined ? {} : { adapter: String(adapter) }),
+      ...(label === undefined ? {} : { label: String(label) })
+    };
   }
 
   if (document.export !== undefined) {
@@ -264,6 +267,7 @@ discover = []
 [host]
 # How \`serve\`, \`scan\`, \`restart\`, \`stop\`, and \`logs\` reach the machine.
 adapter = ${JSON.stringify(template.hostAdapter)}
+# label = "com.example.ongoing"   # the launchd adapter's agent label, when it is not discoverable
 
 [export]
 # profile = "json"

@@ -91,6 +91,19 @@ launchd again. Deployment is a profile in `deploy/aerie/` that the core never im
 `tests/foundation.test.ts` fails if it does. `scripts/production-server.ts` and `scripts/scan.ts` are shims
 onto `src/lib/host/` because the installed plists name those paths.
 
+**Phase 6 has landed, and the plan is implemented.** Completeness is a count over the registry's
+`required` fields, projected as `complete` (0–100) — `ongoing list 'complete<100'`, the `incomplete`
+saved view, and an attention reason for a project marked `invest` with gaps. Do not add a
+"completeness" concept anywhere: mark a field `required` and it counts. A project entry does not have
+to be on this disk — `[providers.github] discover` catalogues repositories nothing local claims, and
+those entries have a `github` source and **no path**, so never assume `entry.path` is a string.
+`ongoing init` + `ongoing serve` is the whole installation, and `docs/deployment.md` is now generic:
+anything naming one person, one host, or one home directory belongs in `deploy/<name>/` or the
+`opentangle` export profile, and `tests/foundation.test.ts` fails the build if it appears under
+`src/`, `bin/`, `scripts/`, or `tests/`. A profile's own tests live beside it
+(`deploy/**/*.test.ts` is in the Vitest suite). CI runs the same five commands in
+`.github/workflows/ci.yml`.
+
 ## Keep the architecture model current
 
 `docs/diagrams/fractal/` holds the Fractal model of this system (`model.c4`, `fractal.json`,

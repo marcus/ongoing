@@ -64,46 +64,46 @@ describe('LAN sessions', () => {
   });
 
   it('requires exact origin on every mutation', () => {
-    expect(isSameOriginMutation(new Request('http://aerie.local:4173/api/projects'))).toBe(true);
+    expect(isSameOriginMutation(new Request('http://example.local:4173/api/projects'))).toBe(true);
     expect(
       isSameOriginMutation(
-        new Request('http://aerie.local:4173/api/projects', {
+        new Request('http://example.local:4173/api/projects', {
           method: 'POST',
-          headers: { origin: 'http://aerie.local:4173' }
+          headers: { origin: 'http://example.local:4173' }
         })
       )
     ).toBe(true);
     expect(
       isSameOriginMutation(
-        new Request('http://aerie.local:4173/api/projects', {
+        new Request('http://example.local:4173/api/projects', {
           method: 'POST',
           headers: { origin: 'http://attacker.test' }
         })
       )
     ).toBe(false);
-    const opaqueLogin = new Request('http://aerie.local:4173/login', {
+    const opaqueLogin = new Request('http://example.local:4173/login', {
       method: 'POST',
       headers: { origin: 'null' }
     });
     expect(isSameOriginMutation(opaqueLogin)).toBe(false);
     expect(
       isSameOriginMutation(
-        new Request('http://aerie.local:4173/login', {
+        new Request('http://example.local:4173/login', {
           method: 'POST',
           headers: { 'sec-fetch-site': 'same-origin' }
         })
       )
     ).toBe(true);
     expect(
-      isSameOriginMutation(new Request('http://aerie.local:4173/api/scan', { method: 'POST' }))
+      isSameOriginMutation(new Request('http://example.local:4173/api/scan', { method: 'POST' }))
     ).toBe(false);
     expect(
       isSameOriginMutation(
         new Request('http://127.0.0.1/api/projects', {
           method: 'POST',
-          headers: { origin: 'http://aerie.local:4173' }
+          headers: { origin: 'http://example.local:4173' }
         }),
-        'http://aerie.local:4173'
+        'http://example.local:4173'
       )
     ).toBe(true);
   });
@@ -111,7 +111,7 @@ describe('LAN sessions', () => {
   it('measures actual body bytes when content length is absent or false', async () => {
     expect(
       await bufferRequestBodyWithinLimit(
-        new Request('http://aerie.local/api/scan', {
+        new Request('http://example.local/api/scan', {
           method: 'POST',
           headers: { 'transfer-encoding': 'chunked' },
           body: 'bounded-but-unsupported'
@@ -119,21 +119,21 @@ describe('LAN sessions', () => {
         100
       )
     ).toBeNull();
-    const missing = new Request('http://aerie.local/api/scan', {
+    const missing = new Request('http://example.local/api/scan', {
       method: 'POST',
       body: 'x'.repeat(17)
     });
     missing.headers.delete('content-length');
     expect(await bufferRequestBodyWithinLimit(missing, 16)).toBeNull();
 
-    const lying = new Request('http://aerie.local/api/scan', {
+    const lying = new Request('http://example.local/api/scan', {
       method: 'POST',
       headers: { 'content-length': '1' },
       body: 'x'.repeat(17)
     });
     expect(await bufferRequestBodyWithinLimit(lying, 16)).toBeNull();
     const bounded = await bufferRequestBodyWithinLimit(
-      new Request('http://aerie.local/login', {
+      new Request('http://example.local/login', {
         method: 'POST',
         headers: { 'content-length': '14' },
         body: 'secret=bounded'

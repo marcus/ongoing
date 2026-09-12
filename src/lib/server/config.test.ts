@@ -7,7 +7,7 @@ describe('listener security configuration', () => {
     (host) => expect(isLoopbackHost(host)).toBe(true)
   );
 
-  it.each(['0.0.0.0', '192.168.1.8', 'aerie.local', '128.0.0.1', '127.0.0.999'])(
+  it.each(['0.0.0.0', '192.168.1.8', 'example.local', '128.0.0.1', '127.0.0.999'])(
     'recognizes %s as non-loopback',
     (host) => expect(isLoopbackHost(host)).toBe(false)
   );
@@ -43,7 +43,7 @@ describe('listener security configuration', () => {
     const config = loadConfig({
       HOST: '0.0.0.0',
       ONGOING_ACCESS_SECRET: 'a-sufficiently-long-secret',
-      APP_ORIGIN: 'http://aerie.local:4173'
+      APP_ORIGIN: 'http://example.local:4173'
     });
     expect(config.security).toMatchObject({ authenticationRequired: true, cookieSecure: false });
   });

@@ -1,109 +1,78 @@
-# Private LAN deployment
+# Deployment
 
-Deployment is a **profile**, not part of the application. Everything specific to this machine lives
-in [`deploy/aerie/`](../deploy/aerie/README.md) — the constants, the release client and worker,
-the provisioning script, and both LaunchAgent definitions — and the core never imports it (ADR 0007,
-asserted by `tests/foundation.test.ts`). A different machine writes `deploy/<name>/` beside it, or
-runs with no profile at all through the `foreground` host adapter:
-`ongoing serve --data-dir <dir> --port <port>`.
+Deployment is a **profile**, not part of the application. Everything specific to one machine — its
+host name, its checkout, its database path, its service definitions, its release scripts — lives in
+`deploy/<name>/`, and the core never imports it (ADR 0007, asserted by `tests/foundation.test.ts`).
+This repository ships one profile, [`deploy/aerie/`](../deploy/aerie/README.md), as a worked example
+and as the author's own deployment; a different machine writes its own beside it, or runs with no
+profile at all.
 
-Ongoing is designed for one trusted user on a private LAN. It is not hardened for public exposure. Do not add router forwarding, a public tunnel, or public DNS. Move to HTTPS before using it on a less-trusted network.
+Ongoing is designed for **one trusted user on a private network**. It is not hardened for public
+exposure. Do not add router forwarding, a public tunnel, or public DNS. Move to HTTPS before using
+it on a less-trusted network.
 
-## Fixed production target
+## No profile at all
 
-- private repository: `git@github.com:marcus/ongoing.git` (`https://github.com/marcus/ongoing`)
-- SSH host: `marcus@aerie.local`
-- checkout: `/Users/marcus/code/ongoing`
-- scan root: `/Users/marcus/code`
-- database: `/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite`
-- URL and health: `http://aerie.local:7766` and `http://127.0.0.1:7766/api/health`
-- web agent: `com.marcusvorwaller.ongoing` at `~/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist`
-- daily scan agent: `com.marcusvorwaller.ongoing.scan` at `~/Library/LaunchAgents/com.marcusvorwaller.ongoing.scan.plist`
-- web logs: `~/Library/Logs/Ongoing/stdout.log` and `stderr.log`
-- scan logs: `~/Library/Logs/Ongoing/scan-stdout.log` and `scan-stderr.log`
-- app runtime: `/Users/marcus/.local/share/ongoing/bun` (a symlink into `/Users/marcus/.local/share/ongoing/mise/installs/bun/<version>/`)
-- release record: `/Users/marcus/code/ongoing/.deploy/release.json`
-- database backups: `/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite.backups/` (newest five)
-
-Both agents use that one app-owned Bun executable. `.bun-version` is the only place the Bun version is written down: `deploy/aerie/provision-runtime.sh` installs that release with `/opt/homebrew/bin/mise` scoped to Ongoing's own data directory and points the stable executable at it, and the release worker re-runs provisioning whenever the checkout moves, so bumping Bun is editing `.bun-version`, running `bun install` to refresh `bun.lock`, and deploying. Provisioning does not install into, replace, or select Marcus's `~/.bun` runtime and does not change a global mise default. Release scripts reject different hosts, paths, labels, and health targets. They do not use `sudo`, modify the firewall/router, or touch unrelated services.
-
-The daily agent sets `PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin`, so launchd resolves Homebrew's `gh`, `td`, `cloc`, and `git` without inheriting interactive shell startup files or user runtime shims. Its `ProgramArguments` still selects the absolute app-owned Bun executable. Deployment verifies the committed PATH and all four tools before stopping either agent, then installs the definition atomically and bootstraps the calendar agent from that installed file.
-
-The web process runs the committed `scripts/production-server.ts` boundary in front of adapter-node. **That file is now a two-line shim**: the boundary itself moved to `src/lib/host/production-server.ts`, and `scripts/scan.ts` is likewise a shim onto `src/lib/host/scan-command.ts`. The shims exist only because the installed plists name those paths; the next deploy should update both `ProgramArguments` to `src/lib/host/production-server.ts` and `src/lib/host/scan-command.ts` and then delete `scripts/production-server.ts` and `scripts/scan.ts`. Nothing else has to change: the committed `.plist.example` files, which the release worker installs, still name the shim paths, so a deploy made before that edit keeps working. It counts raw fixed-length and chunked mutation bytes before SvelteKit actions, then forwards bounded requests to a private ephemeral loopback adapter listener. It also has `ONGOING_ENABLE_SCAN_SCHEDULER=false`, so it creates neither the development startup scan nor the five-minute interval. The scan agent invokes the shared `scripts/scan.ts` once at 03:00 local time against the same database and scan root. Its definition has no `RunAtLoad` or `KeepAlive`; registering or restarting it does not cause an immediate scan. A manual or per-project scan remains available, and the durable scan lease prevents overlap.
-
-## One-time setup
-
-First verify that `https://github.com/marcus/ongoing` is private. Clone committed `main` only, then create the user-owned directories:
+Two commands, and a third if you want the browser:
 
 ```sh
-mkdir -p /Users/marcus/code
-git clone --branch main --single-branch git@github.com:marcus/ongoing.git /Users/marcus/code/ongoing
-mkdir -p '/Users/marcus/Library/Application Support/Ongoing' /Users/marcus/Library/Logs/Ongoing /Users/marcus/Library/LaunchAgents
-cd /Users/marcus/code/ongoing
-/bin/zsh deploy/aerie/provision-runtime.sh
+ongoing init                  # a commented config.toml, a data directory, and a catalog
+ongoing scan                  # find the repositories under the configured roots
+ongoing serve                 # the application, in this terminal
 ```
 
-Copy both committed definitions. Replace the placeholder in the web copy with a long random secret and restrict both machine-local files. Never print, log, or commit the secret.
+`ongoing init` writes `[host] adapter = "foreground"`, which supervises nothing. That is the whole
+installation: no service manager, no deployment scripts, no profile directory.
+
+## Binding beyond loopback
+
+`serve` listens on `127.0.0.1` unless `HOST` says otherwise, and the application decides whether
+authentication is required from that same value — so a service that means to be reachable on the
+network has to say so, and then has to say how it is protected:
 
 ```sh
-cp deploy/aerie/config/ongoing.plist.example /Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist
-cp deploy/aerie/config/ongoing-scan.plist.example /Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.scan.plist
-chmod 600 /Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist /Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.scan.plist
+HOST=0.0.0.0 PORT=7766 APP_ORIGIN=http://server.local:7766 \
+  ONGOING_ACCESS_SECRET="$(openssl rand -hex 32)" ongoing serve
 ```
 
-After replacing the web secret, initialize through the exact app runtime:
+A non-loopback `HOST` refuses to start without `ONGOING_ACCESS_SECRET`. The one way around that is
+`ONGOING_DISABLE_AUTH=true`, which is a deliberate choice for a trusted private network and nothing
+else — see [auth.md](auth.md). Plain HTTP on a LAN also needs `SESSION_COOKIE_SECURE=false`, or the
+browser discards the session cookie.
 
-```sh
-ongoing_bun=/Users/marcus/.local/share/ongoing/bun
-"$ongoing_bun" --version
-"$ongoing_bun" install --frozen-lockfile
-"$ongoing_bun" run build
-DATABASE_PATH='/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite' "$ongoing_bun" run scripts/migrate.ts
-SCAN_ROOTS=/Users/marcus/code DATABASE_PATH='/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite' "$ongoing_bun" run scripts/scan.ts
-launchctl bootstrap gui/$(id -u) /Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.scan.plist
-launchctl bootstrap gui/$(id -u) /Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist
-```
+## Running it as a service
 
-Bootstrapping the scan agent merely registers its next calendar event. The initial command above is an explicit one-shot scan. Plain LAN HTTP intentionally uses `SESSION_COOKIE_SECURE=false`; otherwise browsers discard the session cookie. Adapter-node's `ORIGIN` and the application's `APP_ORIGIN` both exactly match `http://aerie.local:7766`. A non-loopback `HOST` refuses to initialize without `ONGOING_ACCESS_SECRET`.
+`serve`, `scan`, `restart`, `stop`, and `logs` go through a **host adapter** (`[host] adapter`):
 
-## Daily refresh behavior
+| Adapter      | What it is                                                                    |
+| ------------ | ----------------------------------------------------------------------------- |
+| `foreground` | No supervisor. The process runs in the terminal that started it. The default. |
+| `launchd`    | Two user LaunchAgents on macOS: one serving, one scanning on a calendar.      |
 
-`StartCalendarInterval` uses aerie's local timezone and requests Hour 3, Minute 0. When aerie is awake with Marcus's GUI domain active, launchd starts one scanner at 03:00. If the Mac is asleep at 03:00, launchd coalesces the missed event and runs it after wake. If the machine is powered off or the user LaunchAgent domain is unavailable, do not rely on catch-up across shutdown/logout; the next regular opportunity is 03:00 after the user domain is active. Run the documented manual scan if an immediate refresh is wanted after an extended outage.
+The `launchd` adapter finds its agents by looking in `~/Library/LaunchAgents` for the definitions
+that serve and scan Ongoing, whatever reverse-DNS label their installer chose; `[host] label` names
+them outright when they cannot be discovered. Another supervisor — systemd, Docker, a process
+manager — is a new file in `src/lib/host/`, not a change to the CLI.
 
-Inspect definitions and live state without starting a scan:
+Whatever starts the service should run `src/lib/host/production-server.ts`. That is the HTTP
+boundary: it counts raw fixed-length and chunked mutation bytes before SvelteKit actions, then
+forwards bounded requests to a private ephemeral loopback adapter listener. A scheduled scan runs
+`src/lib/host/scan-command.ts` against the same database and scan roots. Set
+`ONGOING_ENABLE_SCAN_SCHEDULER=false` on the web process when a scheduler already owns the scan, so
+it creates neither the startup scan nor the five-minute interval. The durable scan lease prevents
+two scans from overlapping however they were started.
 
-```sh
-plutil -lint deploy/aerie/config/ongoing.plist.example deploy/aerie/config/ongoing-scan.plist.example
-env -i HOME=/Users/marcus PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin /opt/homebrew/bin/gh auth status
-env -i HOME=/Users/marcus PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin /opt/homebrew/bin/td --version
-env -i HOME=/Users/marcus PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin /opt/homebrew/bin/cloc --version
-env -i HOME=/Users/marcus PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin /usr/bin/git --version
-launchctl print gui/$(id -u)/com.marcusvorwaller.ongoing
-launchctl print gui/$(id -u)/com.marcusvorwaller.ongoing.scan
-tail -n 100 /Users/marcus/Library/Logs/Ongoing/scan-stderr.log
-```
+## Writing a profile
 
-## Update
+A profile is a directory. Put in it the constants that name your machine, whatever release script
+you want, and your service definitions; import the core from it, never the other way round.
+[`deploy/aerie/`](../deploy/aerie/README.md) is the worked example, including a release worker that
+quiesces the agents, backs up the catalog, builds, migrates, and verifies health before it finishes.
+A profile's own tests live beside it (`deploy/**/*.test.ts` is in the Vitest suite), which is where
+machine-specific strings belong.
 
-Preview every operation locally first:
+## Upgrading Bun
 
-```sh
-bun run deploy --host marcus@aerie.local --checkout /Users/marcus/code/ongoing --database '/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite' --dry-run
-```
-
-Remove `--dry-run` only after review. The client provisions the app-scoped Bun from the current `.bun-version`, then invokes the remote worker with that absolute executable. The worker requires a clean checkout, records the prior SHA, fetches and fast-forwards `main`, re-provisions from the fetched `.bun-version`, quiesces both agents so neither serving nor a calendar scan can overlap backup/migration, takes a consistent SQLite backup, installs the frozen lockfile, builds, migrates once, and preserves the machine-local web secret while installing both committed definitions. It registers the scan calendar without running it, starts the web agent, waits 30 seconds for exact health on port 7766, retains five backups, and records the deployed SHA. Fix failed deployments in Git; never patch the production checkout by hand.
-
-## Smoke and rollback
-
-Keep the secret in the environment, not argv, URLs, logs, or the database:
-
-```sh
-ongoing_bun=/Users/marcus/.local/share/ongoing/bun
-curl --fail --silent http://127.0.0.1:7766/api/health
-ONGOING_ACCESS_SECRET='...' "$ongoing_bun" run scripts/smoke.ts http://aerie.local:7766
-bun run rollback --host marcus@aerie.local --checkout /Users/marcus/code/ongoing --database '/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite' --dry-run
-```
-
-The loopback request above is the host-local minimal health probe. The authenticated smoke must use the configured `APP_ORIGIN` (`http://aerie.local:7766`); substituting the loopback origin intentionally fails the same-origin mutation checks with 403.
-
-Remove `--dry-run` to quiesce both agents, take a new safety backup, rebuild the recorded prior SHA with the pinned runtime, restore both definitions, register the daily job without an unscheduled scan, restart the web process, and verify port 7766 health. Add `--restore-database` only for a non-backward-compatible migration; the database copy and WAL/SHM cleanup happen while both jobs are stopped. A healthy public response is exactly `{"ok":true}`; catalog and mutation endpoints require a valid session. Finish with the LAN smoke from a second machine and confirm both `launchctl print` targets and all four log files.
+`.bun-version` is the only place the Bun version is written down, and
+`tests/foundation.test.ts` fails if anything else restates it. Bumping Bun is editing that file,
+running `bun install` to refresh `bun.lock`, and deploying.
