@@ -13,7 +13,7 @@ export async function runReleaseClient(mode: 'deploy' | 'rollback', args: string
     return;
   }
   const provision = Bun.spawn(
-    ['ssh', config.host, '/bin/zsh', `${config.checkout}/scripts/provision-runtime.sh`],
+    ['ssh', config.host, '/bin/zsh', `${config.checkout}/deploy/aerie/provision-runtime.sh`],
     { stdin: 'inherit', stdout: 'inherit', stderr: 'inherit' }
   );
   const provisionStatus = await provision.exited;
@@ -22,7 +22,7 @@ export async function runReleaseClient(mode: 'deploy' | 'rollback', args: string
   const remoteArgs = [
     config.host,
     config.bunExecutable,
-    `${config.checkout}/scripts/remote-release.ts`,
+    `${config.checkout}/deploy/aerie/remote-release.ts`,
     mode,
     encodeReleaseConfig(config)
   ];

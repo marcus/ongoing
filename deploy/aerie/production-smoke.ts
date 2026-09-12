@@ -1,13 +1,13 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { rateLimitSmoke, smoke } from './smoke';
+import { rateLimitSmoke, smoke } from '../../scripts/smoke';
 
 const directory = await mkdtemp(join(tmpdir(), 'ongoing-production-smoke-'));
 const port = 43_000 + Math.floor(Math.random() * 1_000);
 const origin = `http://127.0.0.1:${port}`;
 const secret = 'production-smoke-secret-only';
-const child = Bun.spawn([process.execPath, 'run', 'scripts/production-server.ts'], {
+const child = Bun.spawn([process.execPath, 'run', 'src/lib/host/production-server.ts'], {
   env: {
     ...process.env,
     HOST: '127.0.0.1',

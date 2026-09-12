@@ -1,6 +1,14 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+
+function sourceFiles(directory: string): string[] {
+  return readdirSync(resolve(directory)).flatMap((entry) => {
+    const path = join(directory, entry);
+    if (statSync(resolve(path)).isDirectory()) return sourceFiles(path);
+    return /\.(ts|svelte|js)$/.test(entry) ? [path] : [];
+  });
+}
 
 describe('application foundation', () => {
   const pinned = readFileSync(resolve('.bun-version'), 'utf8').trim();
@@ -12,11 +20,11 @@ describe('application foundation', () => {
     for (const derived of [
       'package.json',
       'bin/ongoing',
-      'config/ongoing.plist.example',
-      'config/ongoing-scan.plist.example',
-      'scripts/provision-runtime.sh',
-      'scripts/release-config.ts',
-      'scripts/remote-release.ts',
+      'deploy/aerie/config/ongoing.plist.example',
+      'deploy/aerie/config/ongoing-scan.plist.example',
+      'deploy/aerie/provision-runtime.sh',
+      'deploy/aerie/release-config.ts',
+      'deploy/aerie/remote-release.ts',
       'AGENTS.md',
       'README.md',
       'docs/deployment.md',
@@ -28,5 +36,16 @@ describe('application foundation', () => {
         new RegExp(`bun[@/ ]${pinned.replaceAll('.', '\\.')}`, 'i')
       );
     }
+  });
+
+  /**
+   * Deployment is a profile, not part of the application (ADR 0007). `deploy/aerie/` may import the
+   * core; the core may never import `deploy/`, or a second machine would have to fork it.
+   */
+  it('keeps the core free of the deployment profile', () => {
+    const offenders = ['src', 'bin', 'scripts', 'tests/e2e']
+      .flatMap(sourceFiles)
+      .filter((path) => /from\s+['"][^'"]*deploy\/aerie/.test(readFileSync(resolve(path), 'utf8')));
+    expect(offenders).toEqual([]);
   });
 });

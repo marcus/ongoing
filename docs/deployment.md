@@ -1,5 +1,12 @@
 # Private LAN deployment
 
+Deployment is a **profile**, not part of the application. Everything specific to this machine lives
+in [`deploy/aerie/`](../deploy/aerie/README.md) — the constants, the release client and worker,
+the provisioning script, and both LaunchAgent definitions — and the core never imports it (ADR 0007,
+asserted by `tests/foundation.test.ts`). A different machine writes `deploy/<name>/` beside it, or
+runs with no profile at all through the `foreground` host adapter:
+`ongoing serve --data-dir <dir> --port <port>`.
+
 Ongoing is designed for one trusted user on a private LAN. It is not hardened for public exposure. Do not add router forwarding, a public tunnel, or public DNS. Move to HTTPS before using it on a less-trusted network.
 
 ## Fixed production target
@@ -18,11 +25,11 @@ Ongoing is designed for one trusted user on a private LAN. It is not hardened fo
 - release record: `/Users/marcus/code/ongoing/.deploy/release.json`
 - database backups: `/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite.backups/` (newest five)
 
-Both agents use that one app-owned Bun executable. `.bun-version` is the only place the Bun version is written down: `scripts/provision-runtime.sh` installs that release with `/opt/homebrew/bin/mise` scoped to Ongoing's own data directory and points the stable executable at it, and the release worker re-runs provisioning whenever the checkout moves, so bumping Bun is editing `.bun-version`, running `bun install` to refresh `bun.lock`, and deploying. Provisioning does not install into, replace, or select Marcus's `~/.bun` runtime and does not change a global mise default. Release scripts reject different hosts, paths, labels, and health targets. They do not use `sudo`, modify the firewall/router, or touch unrelated services.
+Both agents use that one app-owned Bun executable. `.bun-version` is the only place the Bun version is written down: `deploy/aerie/provision-runtime.sh` installs that release with `/opt/homebrew/bin/mise` scoped to Ongoing's own data directory and points the stable executable at it, and the release worker re-runs provisioning whenever the checkout moves, so bumping Bun is editing `.bun-version`, running `bun install` to refresh `bun.lock`, and deploying. Provisioning does not install into, replace, or select Marcus's `~/.bun` runtime and does not change a global mise default. Release scripts reject different hosts, paths, labels, and health targets. They do not use `sudo`, modify the firewall/router, or touch unrelated services.
 
 The daily agent sets `PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin`, so launchd resolves Homebrew's `gh`, `td`, `cloc`, and `git` without inheriting interactive shell startup files or user runtime shims. Its `ProgramArguments` still selects the absolute app-owned Bun executable. Deployment verifies the committed PATH and all four tools before stopping either agent, then installs the definition atomically and bootstraps the calendar agent from that installed file.
 
-The web process runs the committed `scripts/production-server.ts` boundary in front of adapter-node. It counts raw fixed-length and chunked mutation bytes before SvelteKit actions, then forwards bounded requests to a private ephemeral loopback adapter listener. It also has `ONGOING_ENABLE_SCAN_SCHEDULER=false`, so it creates neither the development startup scan nor the five-minute interval. The scan agent invokes the shared `scripts/scan.ts` once at 03:00 local time against the same database and scan root. Its definition has no `RunAtLoad` or `KeepAlive`; registering or restarting it does not cause an immediate scan. A manual or per-project scan remains available, and the durable scan lease prevents overlap.
+The web process runs the committed `scripts/production-server.ts` boundary in front of adapter-node. **That file is now a two-line shim**: the boundary itself moved to `src/lib/host/production-server.ts`, and `scripts/scan.ts` is likewise a shim onto `src/lib/host/scan-command.ts`. The shims exist only because the installed plists name those paths; the next deploy should update both `ProgramArguments` to `src/lib/host/production-server.ts` and `src/lib/host/scan-command.ts` and then delete `scripts/production-server.ts` and `scripts/scan.ts`. Nothing else has to change: the committed `.plist.example` files, which the release worker installs, still name the shim paths, so a deploy made before that edit keeps working. It counts raw fixed-length and chunked mutation bytes before SvelteKit actions, then forwards bounded requests to a private ephemeral loopback adapter listener. It also has `ONGOING_ENABLE_SCAN_SCHEDULER=false`, so it creates neither the development startup scan nor the five-minute interval. The scan agent invokes the shared `scripts/scan.ts` once at 03:00 local time against the same database and scan root. Its definition has no `RunAtLoad` or `KeepAlive`; registering or restarting it does not cause an immediate scan. A manual or per-project scan remains available, and the durable scan lease prevents overlap.
 
 ## One-time setup
 
@@ -33,14 +40,14 @@ mkdir -p /Users/marcus/code
 git clone --branch main --single-branch git@github.com:marcus/ongoing.git /Users/marcus/code/ongoing
 mkdir -p '/Users/marcus/Library/Application Support/Ongoing' /Users/marcus/Library/Logs/Ongoing /Users/marcus/Library/LaunchAgents
 cd /Users/marcus/code/ongoing
-/bin/zsh scripts/provision-runtime.sh
+/bin/zsh deploy/aerie/provision-runtime.sh
 ```
 
 Copy both committed definitions. Replace the placeholder in the web copy with a long random secret and restrict both machine-local files. Never print, log, or commit the secret.
 
 ```sh
-cp config/ongoing.plist.example /Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist
-cp config/ongoing-scan.plist.example /Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.scan.plist
+cp deploy/aerie/config/ongoing.plist.example /Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist
+cp deploy/aerie/config/ongoing-scan.plist.example /Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.scan.plist
 chmod 600 /Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.plist /Users/marcus/Library/LaunchAgents/com.marcusvorwaller.ongoing.scan.plist
 ```
 
@@ -66,7 +73,7 @@ Bootstrapping the scan agent merely registers its next calendar event. The initi
 Inspect definitions and live state without starting a scan:
 
 ```sh
-plutil -lint config/ongoing.plist.example config/ongoing-scan.plist.example
+plutil -lint deploy/aerie/config/ongoing.plist.example deploy/aerie/config/ongoing-scan.plist.example
 env -i HOME=/Users/marcus PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin /opt/homebrew/bin/gh auth status
 env -i HOME=/Users/marcus PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin /opt/homebrew/bin/td --version
 env -i HOME=/Users/marcus PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin /opt/homebrew/bin/cloc --version

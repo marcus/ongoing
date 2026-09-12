@@ -1,7 +1,11 @@
 import { json } from '@sveltejs/kit';
-import { exportWebsite } from '$lib/domain/website';
+import { runExportProfile } from '$lib/domain/export';
 import type { RequestHandler } from './$types';
 
+/**
+ * The `opentangle` export profile, under the URL OpenTangle's build already calls. The profile
+ * itself lives in `$lib/domain/export`; `/api/export?profile=opentangle` is the same bytes.
+ */
 export const GET: RequestHandler = async ({ url }) => {
   if (
     [...url.searchParams.keys()].some((key) => key !== 'drafts') ||
@@ -10,20 +14,11 @@ export const GET: RequestHandler = async ({ url }) => {
     return json({ error: 'Only drafts=true or drafts=false is supported' }, { status: 400 });
   try {
     const { catalogRepository } = await import('$lib/server/scanning/runtime');
-    // Dashboard hidden/missing flags do not silently change an explicit website selection.
+    const { readExportSource } = await import('$lib/server/catalog/export');
     return json(
-      exportWebsite(
-        [
-          ...catalogRepository.listProjects({ includeHidden: true }).map((project) => ({
-            website: project.website,
-            repositoryVisibility: catalogRepository.getMetrics(project.id)?.githubVisibility
-          })),
-          ...catalogRepository
-            .listWebsitePages()
-            .map((website) => ({ website, repositoryVisibility: null }))
-        ],
-        url.searchParams.get('drafts') === 'true'
-      ),
+      runExportProfile('opentangle', readExportSource(catalogRepository), {
+        drafts: url.searchParams.get('drafts') === 'true'
+      }),
       { headers: { 'cache-control': 'no-store' } }
     );
   } catch (error) {

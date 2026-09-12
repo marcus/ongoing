@@ -112,7 +112,7 @@ function validateInvocation(config: ReleaseConfig): void {
 // before anything is built with it; the release process itself may keep running on the previous Bun.
 async function provisionRuntime(config: ReleaseConfig): Promise<void> {
   await command(
-    ['/bin/zsh', join(config.checkout, 'scripts', 'provision-runtime.sh')],
+    ['/bin/zsh', join(config.checkout, 'deploy', 'aerie', 'provision-runtime.sh')],
     config.checkout
   );
   const pinned = (await readFile(join(config.checkout, '.bun-version'), 'utf8')).trim();
@@ -122,7 +122,7 @@ async function provisionRuntime(config: ReleaseConfig): Promise<void> {
 
 async function validateScanTooling(config: ReleaseConfig): Promise<void> {
   const definition = await readFile(
-    join(config.checkout, 'config', 'ongoing-scan.plist.example'),
+    join(config.checkout, 'deploy', 'aerie', 'config', 'ongoing-scan.plist.example'),
     'utf8'
   );
   const configuredPath = /<key>PATH<\/key>\s*<string>([^<]+)<\/string>/.exec(definition)?.[1];
@@ -161,8 +161,14 @@ async function installDefinition(source: string, destination: string, content?: 
 }
 
 async function installAgentDefinitions(config: ReleaseConfig): Promise<void> {
-  const webSource = join(config.checkout, 'config', 'ongoing.plist.example');
-  const scanSource = join(config.checkout, 'config', 'ongoing-scan.plist.example');
+  const webSource = join(config.checkout, 'deploy', 'aerie', 'config', 'ongoing.plist.example');
+  const scanSource = join(
+    config.checkout,
+    'deploy',
+    'aerie',
+    'config',
+    'ongoing-scan.plist.example'
+  );
   const installedWeb = await readFile(config.webPlist, 'utf8');
   const secret = accessSecret(installedWeb);
   const webDefinition = (await readFile(webSource, 'utf8')).replace(

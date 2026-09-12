@@ -1,47 +1,23 @@
 import { json } from '@sveltejs/kit';
 import { entryKinds, type AttributeValue } from '$lib/domain/entry';
-import { describeField } from '$lib/domain/fields';
-import {
-  filterRows,
-  formatQuery,
-  formatSort,
-  legacyParamsToQuery,
-  parseColumns,
-  parseQuery,
-  parseSortInput,
-  QueryError,
-  sortRows,
-  validateColumns,
-  validateQuery,
-  validateSort
-} from '$lib/domain/query';
+import { QueryError } from '$lib/domain/query';
+import { isEntriesPageError, readEntriesPage } from '$lib/server/api/entries';
 import { failure, readObject } from '$lib/server/api/support';
 import type { RequestHandler } from './$types';
-
-/** The single kind a query pins itself to, when it pins itself to exactly one. */
-function singleKind(query: ReturnType<typeof parseQuery>): string | undefined {
-  const clauses = query.clauses.filter(
-    (clause) => clause.type === 'field' && clause.field === 'kind' && !clause.negated
-  );
-  const values = new Set(
-    clauses.flatMap((clause) => (clause.type === 'field' ? clause.values : []))
-  );
-  return values.size === 1 ? [...values][0] : undefined;
-}
 
 /**
  * The inventory, as entries, read through one query grammar (ADR 0006). `?q=` filters, `?sort=`
  * orders, `?columns=` says what a caller intends to render, and `?saved=` prepends a saved view's
  * query. The pre-Phase-2 parameters — `view`, `filter`, `stack`, `search`, `kind`, `dir` — are
- * translated into clauses by {@link legacyParamsToQuery} and keep working for one release; the
+ * translated into clauses by `legacyParamsToQuery` and keep working for one release; the
  * translation table is documented in docs/cli.md and asserted by the tests.
+ *
+ * The reading itself lives in `readEntriesPage`, which the CLI's in-process transport also calls.
  */
 export const GET: RequestHandler = async ({ url }) => {
   let catalogRepository;
-  let readEntryViews;
   try {
     ({ catalogRepository } = await import('$lib/server/scanning/runtime'));
-    ({ readEntryViews } = await import('$lib/server/catalog/entries'));
   } catch (error) {
     return json(
       { error: error instanceof Error ? error.message : 'The catalog could not be opened' },
@@ -49,63 +25,11 @@ export const GET: RequestHandler = async ({ url }) => {
     );
   }
 
-  const parameter = (name: string): string | null => url.searchParams.get(name);
-  const savedName = parameter('saved');
-  const saved = savedName ? catalogRepository.getSavedView(savedName) : null;
-  if (savedName && !saved)
-    return json({ error: `Unknown saved view: ${savedName}` }, { status: 404 });
-
-  const registry = catalogRepository.registry();
-  const legacy = legacyParamsToQuery({
-    view: parameter('view'),
-    filter: parameter('filter'),
-    stack: parameter('stack'),
-    tech: parameter('tech'),
-    search: parameter('search') ?? parameter('text'),
-    hidden: parameter('hidden') === 'false' ? false : undefined
-  });
-  const base = [saved?.query ?? '', parameter('q') ?? '', legacy].filter(Boolean).join(' ');
-  // `?kind=` and a saved view's kind are shorthand for a `kind:` clause, and are dropped when the
-  // query already pins one, so the echoed query stays the string a caller could have typed.
-  const pinned = singleKind(parseQuery(base));
-  const requestedKind = parameter('kind') ?? saved?.kind ?? undefined;
-
   try {
-    const query = parseQuery(
-      pinned === undefined && requestedKind ? `kind:${requestedKind} ${base}` : base
-    );
-    const kind = pinned ?? requestedKind;
-    validateQuery(query, registry, kind);
-    const sort = parseSortInput(
-      parameter('sort'),
-      parameter('dir') === 'asc' ? 'asc' : parameter('dir') === 'desc' ? 'desc' : undefined
-    );
-    validateSort(sort, registry, kind);
-    const columns = parseColumns(parameter('columns') ?? saved?.columns.join(',') ?? '');
-    validateColumns(columns, registry, kind);
-
-    const all = readEntryViews(catalogRepository, { includeHidden: true });
-    const matched = sortRows(filterRows(all, query, registry), sort, registry);
-    const limit = Number(parameter('limit') ?? NaN);
-    const entries = Number.isFinite(limit) ? matched.slice(0, Math.max(0, limit)) : matched;
-
-    return json({
-      query: formatQuery(query),
-      sort: formatSort(sort),
-      columns,
-      saved: saved ?? null,
-      entries,
-      total: matched.length,
-      returned: entries.length,
-      catalogTotal: all.filter((entry) => !kind || entry.kind === kind).length,
-      hiddenCount: all.filter((entry) => entry.isHidden && (!kind || entry.kind === kind)).length,
-      fields: registry.fields
-        .filter((field) => !kind || field.kinds.includes('*') || field.kinds.includes(kind))
-        .map(describeField),
-      baselines: catalogRepository.listBaselineStatus(),
-      scan: catalogRepository.getLatestScanRun(),
-      generatedAt: new Date().toISOString()
-    });
+    const page = readEntriesPage(catalogRepository, (name) => url.searchParams.get(name));
+    return isEntriesPageError(page)
+      ? json({ error: page.error }, { status: page.status })
+      : json(page);
   } catch (error) {
     if (error instanceof QueryError) return json({ error: error.message }, { status: 400 });
     return json(
@@ -115,11 +39,6 @@ export const GET: RequestHandler = async ({ url }) => {
   }
 };
 
-/**
- * Creates an entry that no provider discovered — a technology, or anything else a person catalogs
- * by hand. Discovery still owns projects: a project entry gets its filesystem source from a scan,
- * so creating one here would be an entry with nowhere to point.
- */
 export const POST: RequestHandler = async ({ request }) => {
   const body = await readObject(request);
   if (body instanceof Response) return body;

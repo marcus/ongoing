@@ -45,14 +45,15 @@ import {
   type UsedTechnology
 } from '../src/lib/domain/technology';
 import type { AttributeValue } from '../src/lib/domain/entry';
+import type { HostAdapter, HostService } from '../src/lib/host/adapter';
 
 const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
-const SERVICE = 'com.marcusvorwaller.ongoing';
-const SCAN_SERVICE = `${SERVICE}.scan`;
-const LOG_DIR = join(homedir(), 'Library/Logs/Ongoing');
+// Service labels and log paths belong to the host adapter now (`src/lib/host/`), not to the CLI.
 const SESSION_FILE = join(homedir(), '.config/ongoing/session');
 const DEFAULT_URL = 'http://127.0.0.1:7766';
 const REQUEST_TIMEOUT_MS = 20_000;
+// Long enough for a loopback service to answer, short enough that a dead port is not a pause.
+const PROBE_TIMEOUT_MS = 1_500;
 const VERSION = '1.0.0';
 
 const VIEWS = [
@@ -257,7 +258,13 @@ function parseArgs(argv: string[]): Args {
     'tech',
     'ring',
     'tool-surface',
-    'name'
+    'name',
+    'data-dir',
+    'port',
+    'bind',
+    'host',
+    'transport',
+    'profile'
   ]);
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -413,11 +420,88 @@ interface ApiOptions {
   allowStatus?: number[];
 }
 
-class Client {
+/**
+ * The CLI's transport seam (Decision 1).
+ *
+ * `ongoing` speaks HTTP to a running service and links the core library in-process when nothing
+ * answers, so `ongoing scan` and `ongoing list` work with no daemon. Both transports answer the
+ * same paths with the same bodies because the in-process one calls the same library functions the
+ * routes call.
+ */
+interface ApiClient {
+  readonly url: string;
+  readonly transport: 'http' | 'local';
+  request<T>(path: string, options?: ApiOptions): Promise<T>;
+  close(): void;
+}
+
+/** Turns an API response into a value or a CliError, identically for both transports. */
+async function unwrap<T>(
+  response: Response,
+  method: string,
+  path: string,
+  allowStatus: number[] = []
+): Promise<T> {
+  if (!response.ok && !allowStatus.includes(response.status)) {
+    const detail = await response.text();
+    let message = detail.slice(0, 400);
+    try {
+      message = (JSON.parse(detail) as { error?: string }).error ?? message;
+    } catch {
+      /* non-JSON error bodies are shown verbatim */
+    }
+    throw new CliError(`${method} ${path} failed (${response.status}): ${message}`);
+  }
+  if (response.status === 204) return undefined as T;
+  return (await response.json()) as T;
+}
+
+/** Links the catalog into this process. Nothing is loaded until a command actually needs it. */
+class LocalClient implements ApiClient {
+  readonly transport = 'local';
+
+  private constructor(
+    private readonly api: { request(path: string, init?: ApiOptions): Promise<Response> },
+    readonly url: string
+  ) {}
+
+  static async open(): Promise<LocalClient> {
+    let createLocalApi: typeof import('../src/lib/server/api/local').createLocalApi;
+    try {
+      ({ createLocalApi } = await import('../src/lib/server/api/local'));
+    } catch (error) {
+      throw new CliError(
+        `No Ongoing service is answering, and the catalog could not be opened in this process ` +
+          `(${error instanceof Error ? error.message : error}).\n` +
+          `Run \`bun install\` in ${REPO}, start the service with \`ongoing restart\`, or point ` +
+          `elsewhere with --url / ONGOING_URL.`
+      );
+    }
+    const api = createLocalApi();
+    return new LocalClient(api, api.config.databasePath);
+  }
+
+  async request<T>(path: string, options: ApiOptions = {}): Promise<T> {
+    const response = await this.api.request(path, options);
+    return unwrap<T>(response, options.method ?? 'GET', path, options.allowStatus);
+  }
+
+  close(): void {
+    (this.api as { close?: () => void }).close?.();
+  }
+}
+
+class Client implements ApiClient {
+  readonly transport = 'http';
+
   constructor(private readonly base: string) {}
 
   get url(): string {
     return this.base;
+  }
+
+  close(): void {
+    /* nothing to release on the HTTP transport */
   }
 
   async request<T>(path: string, options: ApiOptions = {}, retry = true): Promise<T> {
@@ -454,20 +538,7 @@ class Client {
       throw new CliError(
         'Ongoing requires authentication. Run `ongoing login` or set ONGOING_ACCESS_SECRET.'
       );
-    if (!response.ok && !(options.allowStatus ?? []).includes(response.status)) {
-      const detail = await response.text();
-      let message = detail.slice(0, 400);
-      try {
-        message = (JSON.parse(detail) as { error?: string }).error ?? message;
-      } catch {
-        /* non-JSON error bodies are shown verbatim */
-      }
-      throw new CliError(
-        `${options.method ?? 'GET'} ${path} failed (${response.status}): ${message}`
-      );
-    }
-    if (response.status === 204) return undefined as T;
-    return (await response.json()) as T;
+    return unwrap<T>(response, options.method ?? 'GET', path, options.allowStatus);
   }
 
   /** Exchanges the access secret for a session cookie via the same form action the UI posts. */
@@ -502,7 +573,7 @@ function matches(project: Project, token: string): boolean {
 }
 
 /** Accepts an id, an exact name or path, `.` for the working directory, or a unique substring. */
-async function resolveProject(client: Client, token: string): Promise<Project> {
+async function resolveProject(client: ApiClient, token: string): Promise<Project> {
   const [visible, hidden] = await Promise.all([
     client.request<PageModel>('/api/projects'),
     client.request<PageModel>('/api/projects', { query: { hidden: 'true' } })
@@ -609,7 +680,7 @@ function columnValue(entry: EntryView, column: string): string {
   return formatValue(value);
 }
 
-async function commandList(client: Client, args: Args): Promise<void> {
+async function commandList(client: ApiClient, args: Args): Promise<void> {
   const saved = option(args, 'saved');
   const limit = option(args, 'limit', 'n');
   const columns = parseColumns(option(args, 'columns') ?? '');
@@ -686,7 +757,7 @@ async function commandList(client: Client, args: Args): Promise<void> {
   );
 }
 
-async function commandShow(client: Client, args: Args): Promise<void> {
+async function commandShow(client: ApiClient, args: Args): Promise<void> {
   const token = args.positional[0];
   if (!token) throw new CliError('Usage: ongoing show <project>');
   const project = await resolveProject(client, token);
@@ -843,7 +914,7 @@ function describeStack(stack: Stack): string {
  * one currently matches. The counts are evaluated locally with the same pure evaluator the server
  * runs, so listing thirty views costs one request rather than thirty.
  */
-async function commandViews(client: Client, args: Args): Promise<void> {
+async function commandViews(client: ApiClient, args: Args): Promise<void> {
   const [saved, page] = await Promise.all([
     client.request<{ views: SavedView[] }>('/api/views'),
     fetchEntryPage(client)
@@ -877,7 +948,7 @@ async function commandViews(client: Client, args: Args): Promise<void> {
  * per-project breakdown. It reads `/api/entries` through the query model, so any clause or flag
  * that narrows `ongoing list` narrows this the same way (`ongoing stacks go 'intent:invest'`).
  */
-async function commandStacks(client: Client, args: Args): Promise<void> {
+async function commandStacks(client: ApiClient, args: Args): Promise<void> {
   const toolchain = choice(args.positional[0], TOOLCHAINS, 'toolchain');
   if (toolchain) args.positional.shift();
   const page = await fetchEntryPage(client, {
@@ -982,7 +1053,7 @@ async function commandStacks(client: Client, args: Args): Promise<void> {
     );
 }
 
-async function commandFavorite(client: Client, args: Args): Promise<void> {
+async function commandFavorite(client: ApiClient, args: Args): Promise<void> {
   const project = await requireProject(client, args, 'favorite');
   const favorite = !flag(args, 'off');
   await client.request(`/api/projects/${project.id}/favorite`, {
@@ -996,7 +1067,7 @@ async function commandFavorite(client: Client, args: Args): Promise<void> {
   );
 }
 
-async function commandHide(client: Client, args: Args, hidden: boolean): Promise<void> {
+async function commandHide(client: ApiClient, args: Args, hidden: boolean): Promise<void> {
   const project = await requireProject(client, args, hidden ? 'hide' : 'unhide');
   const value = hidden ? !flag(args, 'off') : false;
   await client.request(`/api/projects/${project.id}/hide`, {
@@ -1010,7 +1081,7 @@ async function commandHide(client: Client, args: Args, hidden: boolean): Promise
   );
 }
 
-async function commandForget(client: Client, args: Args): Promise<void> {
+async function commandForget(client: ApiClient, args: Args): Promise<void> {
   const project = await requireProject(client, args, 'forget');
   // A project name may be matched by a unique substring, and forgetting cannot be undone: the
   // note, favourite, intent, and manual rank go with the row. Make the caller name the victim.
@@ -1033,7 +1104,7 @@ interface PruneResponse {
   forgotten: { id: string; name: string; canonicalPath: string; missingSince: string | null }[];
 }
 
-async function commandPrune(client: Client, args: Args): Promise<void> {
+async function commandPrune(client: ApiClient, args: Args): Promise<void> {
   // Dry run unless confirmed, so a bare `ongoing prune` reports rather than deletes.
   const dryRun = !flag(args, 'yes', 'y');
   const graceDays = option(args, 'grace-days');
@@ -1062,7 +1133,7 @@ async function commandPrune(client: Client, args: Args): Promise<void> {
   );
 }
 
-async function commandNote(client: Client, args: Args): Promise<void> {
+async function commandNote(client: ApiClient, args: Args): Promise<void> {
   const project = await requireProject(client, args, 'note');
   const rest = args.positional.slice(1).join(' ');
   if (!rest && !flag(args, 'clear')) {
@@ -1075,7 +1146,7 @@ async function commandNote(client: Client, args: Args): Promise<void> {
   report(args, { id: project.id, note }, `${project.name} note ${note ? 'updated' : 'cleared'}`);
 }
 
-async function commandWebsite(client: Client, args: Args): Promise<void> {
+async function commandWebsite(client: ApiClient, args: Args): Promise<void> {
   if (args.positional[0] === 'export') {
     return printJson(
       await client.request('/api/website', {
@@ -1117,7 +1188,7 @@ async function commandWebsite(client: Client, args: Args): Promise<void> {
  * `ongoing set <entry> <field> <value>` — one verb for every registered field, validated by the
  * same pure function the API and the browser run. The original decision flags stay as aliases.
  */
-async function commandSet(client: Client, args: Args): Promise<void> {
+async function commandSet(client: ApiClient, args: Args): Promise<void> {
   const token = args.positional[0];
   if (!token)
     throw new CliError('Usage: ongoing set <entry> <field> <value>  (or the --intent style flags)');
@@ -1174,7 +1245,7 @@ function describe(body: Record<string, unknown>): string {
     .join(' ');
 }
 
-async function commandScan(client: Client, args: Args): Promise<void> {
+async function commandScan(client: ApiClient, args: Args): Promise<void> {
   const token = args.positional[0];
   const project = token ? await resolveProject(client, token) : null;
   const refresh = flag(args, 'full') ? 'full' : flag(args, 'cheap') ? 'cheap' : undefined;
@@ -1197,7 +1268,7 @@ async function commandScan(client: Client, args: Args): Promise<void> {
 }
 
 /** Polls the latest run until it settles; a settled newer run means ours already finished. */
-async function waitForScan(client: Client, timeoutMs = 900_000): Promise<ScanRun | null> {
+async function waitForScan(client: ApiClient, timeoutMs = 900_000): Promise<ScanRun | null> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     await new Promise((done) => setTimeout(done, 2_000));
@@ -1207,7 +1278,7 @@ async function waitForScan(client: Client, timeoutMs = 900_000): Promise<ScanRun
   return null;
 }
 
-async function commandOpen(client: Client, args: Args): Promise<void> {
+async function commandOpen(client: ApiClient, args: Args): Promise<void> {
   const token = args.positional[0];
   if (!token) {
     run('open', [client.url]);
@@ -1225,14 +1296,15 @@ async function commandOpen(client: Client, args: Args): Promise<void> {
   report(args, { id: project.id, action }, `opened ${project.name} in ${action}`);
 }
 
-async function commandPath(client: Client, args: Args): Promise<void> {
+async function commandPath(client: ApiClient, args: Args): Promise<void> {
   const project = await requireProject(client, args, 'path');
   out(project.canonicalPath);
 }
 
-async function commandStatus(client: Client, args: Args): Promise<void> {
-  const web = launchdState(SERVICE);
-  const scanner = launchdState(SCAN_SERVICE);
+async function commandStatus(client: ApiClient, args: Args): Promise<void> {
+  const host = await hostAdapter(args);
+  const web = await host.status('web');
+  const scanner = await host.status('scan');
   let health: 'ok' | string;
   let page: PageModel | null = null;
   try {
@@ -1244,6 +1316,8 @@ async function commandStatus(client: Client, args: Args): Promise<void> {
   }
   const status = {
     url: client.url,
+    transport: client.transport,
+    host: host.name,
     health,
     web,
     scanner,
@@ -1254,13 +1328,13 @@ async function commandStatus(client: Client, args: Args): Promise<void> {
   if (flag(args, 'json')) return printJson(status);
 
   const label = 12;
-  out(`${dim(pad('url', label))}  ${client.url}`);
+  out(`${dim(pad(client.transport === 'local' ? 'catalog' : 'url', label))}  ${client.url}`);
   out(`${dim(pad('health', label))}  ${health === 'ok' ? green('ok') : red(health)}`);
   out(
-    `${dim(pad('web agent', label))}  ${web.running ? green(web.state) : red(web.state)} ${dim(SERVICE)}`
+    `${dim(pad('web agent', label))}  ${web.running ? green(web.state) : red(web.state)} ${dim(web.label ?? host.name)}`
   );
   out(
-    `${dim(pad('scan agent', label))}  ${scanner.running ? green(scanner.state) : dim(scanner.state)} ${dim(SCAN_SERVICE)}`
+    `${dim(pad('scan agent', label))}  ${scanner.running ? green(scanner.state) : dim(scanner.state)} ${dim(scanner.label ?? host.name)}`
   );
   if (page) {
     out(`${dim(pad('projects', label))}  ${page.totalCount} (${page.hiddenCount} hidden)`);
@@ -1282,21 +1356,29 @@ async function commandStatus(client: Client, args: Args): Promise<void> {
 
 /* ------------------------------------------------------- machine operations */
 
-interface LaunchdState {
-  label: string;
-  state: string;
-  running: boolean;
-  pid: number | null;
+/**
+ * `restart`, `stop`, `logs`, and `serve` go through a host adapter (ADR 0007): `launchd` on aerie,
+ * `foreground` anywhere else, chosen by `[host] adapter` in the configuration file, overridden by
+ * `ONGOING_HOST_ADAPTER` or `--host`. The CLI knows the five verbs; it does not know launchd.
+ */
+async function hostAdapter(args: Args): Promise<HostAdapter> {
+  const [{ createHostAdapter }, configFile] = await Promise.all([
+    import('../src/lib/host/index'),
+    import('../src/lib/server/config-file')
+  ]);
+  let configured = option(args, 'host') ?? process.env.ONGOING_HOST_ADAPTER;
+  if (!configured) {
+    try {
+      configured = configFile.readConfigFile(configFile.configPathFrom()).config.host?.adapter;
+    } catch {
+      /* an unreadable configuration file must not stop `ongoing logs` */
+    }
+  }
+  return createHostAdapter(configured, { root: REPO });
 }
 
-function launchdState(label: string): LaunchdState {
-  const result = spawnSync('launchctl', ['print', `gui/${process.getuid?.() ?? 501}/${label}`], {
-    encoding: 'utf8'
-  });
-  if (result.status !== 0) return { label, state: 'not loaded', running: false, pid: null };
-  const state = /^\s*state = (.+)$/m.exec(result.stdout)?.[1]?.trim() ?? 'unknown';
-  const pid = Number(/^\s*pid = (\d+)$/m.exec(result.stdout)?.[1] ?? NaN);
-  return { label, state, running: state === 'running', pid: Number.isFinite(pid) ? pid : null };
+function hostService(args: Args): HostService {
+  return flag(args, 'scan') ? 'scan' : 'web';
 }
 
 function run(command: string, argv: string[], options: { cwd?: string } = {}): number {
@@ -1305,58 +1387,59 @@ function run(command: string, argv: string[], options: { cwd?: string } = {}): n
   return result.status ?? 1;
 }
 
-function serviceLabel(args: Args): string {
-  return flag(args, 'scan') ? SCAN_SERVICE : SERVICE;
-}
-
-const wait = (ms: number): Promise<void> => new Promise((done) => setTimeout(done, ms));
-
 async function commandRestart(args: Args): Promise<void> {
-  const label = serviceLabel(args);
-  if (flag(args, 'build') && label === SERVICE) {
-    out(dim('building…'));
-    if (run('bun', ['run', 'build']) !== 0)
-      throw new CliError('build failed; service left running');
-  }
-  const domain = `gui/${process.getuid?.() ?? 501}`;
-  // bootout + bootstrap (rather than kickstart) so plist edits are picked up — see AGENTS.md.
-  spawnSync('launchctl', ['bootout', `${domain}/${label}`], { stdio: 'ignore' });
-
-  // bootout is asynchronous: bootstrapping before launchd has finished tearing the job down
-  // fails with "Input/output error", so wait for the label to disappear and retry a few times.
-  for (let attempt = 0; attempt < 10 && launchdState(label).state !== 'not loaded'; attempt += 1)
-    await wait(300);
-  const plist = join(homedir(), 'Library/LaunchAgents', `${label}.plist`);
-  for (let attempt = 1; attempt <= 5; attempt += 1) {
-    const result = spawnSync('launchctl', ['bootstrap', domain, plist], { encoding: 'utf8' });
-    if (result.status === 0) {
-      out(`${green('restarted')} ${label}`);
-      return;
-    }
-    if (attempt === 5)
-      throw new CliError(
-        `launchctl bootstrap ${label} exited ${result.status}: ${(result.stderr || '').trim()}`
-      );
-    await wait(500);
-  }
+  const host = await hostAdapter(args);
+  if (flag(args, 'build') && hostService(args) === 'web') out(dim('building…'));
+  const result = await host.restart(hostService(args), { build: flag(args, 'build') });
+  if (!result.ok) throw new CliError(result.message);
+  out(`${green('✓')} ${result.message}`);
 }
 
-function commandStop(args: Args): void {
-  const label = serviceLabel(args);
-  const status = run('launchctl', ['bootout', `gui/${process.getuid?.() ?? 501}/${label}`]);
-  out(status === 0 ? `${green('stopped')} ${label}` : dim(`${label} was not loaded`));
+async function commandStop(args: Args): Promise<void> {
+  const result = await (await hostAdapter(args)).stop(hostService(args));
+  out(result.ok ? `${green('✓')} ${result.message}` : red(result.message));
 }
 
-function commandLogs(args: Args): void {
-  const files = flag(args, 'scan')
-    ? [join(LOG_DIR, 'scan-stdout.log'), join(LOG_DIR, 'scan-stderr.log')]
-    : [join(LOG_DIR, 'stdout.log'), join(LOG_DIR, 'stderr.log')];
+async function commandLogs(args: Args): Promise<void> {
+  const target = (await hostAdapter(args)).logs(hostService(args));
+  if (!target.files.length) {
+    out(dim(target.detail ?? 'This host keeps no log files.'));
+    return;
+  }
   const lines = option(args, 'lines') ?? '50';
-  const argv = ['-n', lines, ...(flag(args, 'f', 'follow') ? ['-f'] : []), ...files];
+  const argv = ['-n', lines, ...(flag(args, 'f', 'follow') ? ['-f'] : []), ...target.files];
   const child = spawn('tail', argv, { stdio: 'inherit' });
   child.on('exit', (code) => process.exit(code ?? 0));
 }
 
+/**
+ * Runs the application in the foreground. `--data-dir` is the whole of "a fresh install": a
+ * directory nobody has written to becomes a catalog on first open, which is what lets a machine
+ * that is not aerie run Ongoing with no deployment profile and no launchd.
+ */
+async function commandServe(args: Args): Promise<void> {
+  const host = await hostAdapter(args);
+  const dataDir = option(args, 'data-dir');
+  const port = option(args, 'port');
+  if (port !== undefined && !/^\d+$/.test(port)) throw new CliError('--port must be a number');
+  out(
+    dim(
+      `serving with the ${host.name} host` +
+        (dataDir ? ` on ${expandHome(dataDir)}` : '') +
+        (port ? `, port ${port}` : '')
+    )
+  );
+  process.exit(
+    await host.serve({
+      dataDir: dataDir ? expandHome(dataDir) : undefined,
+      port: port ? Number(port) : undefined,
+      host: option(args, 'bind'),
+      build: !flag(args, 'no-build')
+    })
+  );
+}
+
+/* -------------------------------------------------------------------- shell */
 /* -------------------------------------------------------------------- shell */
 
 /* ------------------------------------------------------------------ entries */
@@ -1443,11 +1526,11 @@ interface EntryQuery {
   limit?: string;
 }
 
-async function fetchEntryPage(client: Client, query: EntryQuery = {}): Promise<EntriesPage> {
+async function fetchEntryPage(client: ApiClient, query: EntryQuery = {}): Promise<EntriesPage> {
   return client.request<EntriesPage>('/api/entries', { query: { ...query } });
 }
 
-async function fetchEntries(client: Client, kind?: string): Promise<EntryView[]> {
+async function fetchEntries(client: ApiClient, kind?: string): Promise<EntryView[]> {
   return (await fetchEntryPage(client, kind ? { q: `kind:${kind}` } : {})).entries;
 }
 
@@ -1455,7 +1538,7 @@ async function fetchEntries(client: Client, kind?: string): Promise<EntryView[]>
  * The registry as the service knows it, including user fields, rebuilt locally so `ongoing set`
  * can reject a bad value before it costs a round trip — the same function the API runs.
  */
-async function fetchRegistry(client: Client): Promise<FieldRegistry> {
+async function fetchRegistry(client: ApiClient): Promise<FieldRegistry> {
   const { fields } = await client.request<{ fields: FieldDefinition[] }>('/api/fields');
   return createFieldRegistry(fields.filter((field) => field.owner === 'user'));
 }
@@ -1470,7 +1553,7 @@ function entryLabel(entry: EntryView): string {
 }
 
 /** Accepts an id, `kind/slug`, a slug, a name, a path, `.`, or a unique substring. */
-async function resolveEntry(client: Client, token: string): Promise<EntryView> {
+async function resolveEntry(client: ApiClient, token: string): Promise<EntryView> {
   const entries = await fetchEntries(client);
   if (!entries.length) throw new CliError('The catalog is empty — run `ongoing scan` first.');
 
@@ -1520,7 +1603,7 @@ function formatValue(value: unknown): string {
  * `ongoing get <entry> [field]` — every field an entry carries, stored and projected alike, or one
  * value on stdout for a script to consume.
  */
-async function commandGet(client: Client, args: Args): Promise<void> {
+async function commandGet(client: ApiClient, args: Args): Promise<void> {
   const token = args.positional[0];
   if (!token) throw new CliError('Usage: ongoing get <entry> [field]');
   const entry = await resolveEntry(client, token);
@@ -1586,7 +1669,7 @@ async function commandGet(client: Client, args: Args): Promise<void> {
 }
 
 /** `ongoing entry add <kind> <name> [--slug s] [key=value …]` and `ongoing entry list`. */
-async function commandEntry(client: Client, args: Args): Promise<void> {
+async function commandEntry(client: ApiClient, args: Args): Promise<void> {
   const action = args.positional[0];
   if (action === 'list') {
     const entries = await fetchEntries(client, option(args, 'kind'));
@@ -1629,7 +1712,7 @@ async function commandEntry(client: Client, args: Args): Promise<void> {
 }
 
 /** `ongoing field list|add|remove` — the registry as a surface, not a migration. */
-async function commandField(client: Client, args: Args): Promise<void> {
+async function commandField(client: ApiClient, args: Args): Promise<void> {
   const action = args.positional[0] ?? 'list';
   if (action === 'list') {
     const { fields } = await client.request<{ fields: FieldDefinition[] }>('/api/fields', {
@@ -1679,7 +1762,7 @@ async function commandField(client: Client, args: Args): Promise<void> {
  * `ongoing tag <entry> [tag …]` adds, `ongoing untag <entry> <tag …>` removes, and a bare
  * `ongoing tag <entry>` reads. Removal is its own verb because `-tag` would parse as a flag.
  */
-async function commandTag(client: Client, args: Args, remove: boolean): Promise<void> {
+async function commandTag(client: ApiClient, args: Args, remove: boolean): Promise<void> {
   const token = args.positional[0];
   if (!token)
     throw new CliError(
@@ -1707,7 +1790,7 @@ async function commandTag(client: Client, args: Args, remove: boolean): Promise<
 }
 
 async function patchEntry(
-  client: Client,
+  client: ApiClient,
   entry: EntryView,
   patch: Record<string, unknown>
 ): Promise<EntryView> {
@@ -1718,7 +1801,7 @@ async function patchEntry(
 }
 
 /** `ongoing link <from> <kind> <to>` and `ongoing unlink <from> <kind> <to>`. */
-async function commandLink(client: Client, args: Args, remove: boolean): Promise<void> {
+async function commandLink(client: ApiClient, args: Args, remove: boolean): Promise<void> {
   const [fromToken, kind, toToken] = args.positional;
   if (!fromToken || !kind || !toToken)
     throw new CliError(
@@ -1743,7 +1826,7 @@ async function commandLink(client: Client, args: Args, remove: boolean): Promise
 }
 
 /** `ongoing view save|list|delete` — the saved query behind a name. */
-async function commandView(client: Client, args: Args): Promise<void> {
+async function commandView(client: ApiClient, args: Args): Promise<void> {
   const action = args.positional[0] ?? 'list';
   if (action === 'list') {
     const { views } = await client.request<{ views: SavedView[] }>('/api/views');
@@ -1820,11 +1903,11 @@ function byRing(left: EntryView, right: EntryView): number {
   );
 }
 
-async function fetchTechnologies(client: Client): Promise<EntryView[]> {
+async function fetchTechnologies(client: ApiClient): Promise<EntryView[]> {
   return (await fetchEntries(client, TECHNOLOGY_KIND)).sort(byRing);
 }
 
-async function resolveTechnology(client: Client, token: string): Promise<EntryView> {
+async function resolveTechnology(client: ApiClient, token: string): Promise<EntryView> {
   const technologies = await fetchTechnologies(client);
   const needle = token.toLocaleLowerCase('en');
   const found =
@@ -1862,7 +1945,7 @@ function usageRows(technology: EntryView): {
     );
 }
 
-async function commandTech(client: Client, args: Args): Promise<void> {
+async function commandTech(client: ApiClient, args: Args): Promise<void> {
   const action = args.positional.shift() ?? 'list';
   switch (action) {
     case 'list':
@@ -1886,7 +1969,7 @@ async function commandTech(client: Client, args: Args): Promise<void> {
  * `ongoing tech list` — the radar itself. Every flag is a clause against the same query model
  * `ongoing list` uses, so `ongoing list 'kind:technology ring:out'` is the identical read.
  */
-async function techList(client: Client, args: Args): Promise<void> {
+async function techList(client: ApiClient, args: Args): Promise<void> {
   const clauses = ['kind:technology'];
   const ring = choice(option(args, 'ring'), technologyRings, '--ring');
   const kind = choice(option(args, 'kind'), technologyKinds, '--kind');
@@ -1921,7 +2004,7 @@ async function techList(client: Client, args: Args): Promise<void> {
 }
 
 /** `ongoing tech show go` — the ring, the note, and every project using it with its version. */
-async function techShow(client: Client, args: Args): Promise<void> {
+async function techShow(client: ApiClient, args: Args): Promise<void> {
   const token = args.positional[0];
   if (!token) throw new CliError('Usage: ongoing tech show <technology>');
   const technology = await resolveTechnology(client, token);
@@ -1976,7 +2059,7 @@ function technologyPatch(args: Args, registry: FieldRegistry): Record<string, un
 }
 
 /** `ongoing tech add <slug> --kind K --ring R` — a technology no detector can invent for you. */
-async function techAdd(client: Client, args: Args): Promise<void> {
+async function techAdd(client: ApiClient, args: Args): Promise<void> {
   const slug = args.positional[0];
   if (!slug) throw new CliError('Usage: ongoing tech add <slug> --kind <kind> --ring <ring>');
   const registry = await fetchRegistry(client);
@@ -1995,7 +2078,7 @@ async function techAdd(client: Client, args: Args): Promise<void> {
 }
 
 /** `ongoing tech set sveltekit --ring warm` — the ring is the one thing Marcus keeps up to date. */
-async function techSet(client: Client, args: Args): Promise<void> {
+async function techSet(client: ApiClient, args: Args): Promise<void> {
   const token = args.positional[0];
   if (!token)
     throw new CliError('Usage: ongoing tech set <technology> [--ring …] [--note …] [--kind …]');
@@ -2017,7 +2100,7 @@ async function techSet(client: Client, args: Args): Promise<void> {
  * `ongoing tech export` — technologies and their edges as one deterministic document, which is what
  * the `project-standards` generator renders. JSON is the whole point, so `--json` is the default.
  */
-async function techExport(client: Client, args: Args): Promise<void> {
+async function techExport(client: ApiClient, args: Args): Promise<void> {
   const page = await fetchEntryPage(client, { q: '' });
   const document = technologyExport(page.entries, { generatedAt: page.generatedAt });
   if (flag(args, 'pretty')) {
@@ -2044,7 +2127,7 @@ interface SeedOutcome {
  * has since changed is left alone unless `--force` says otherwise. Running it twice changes
  * nothing the second time.
  */
-async function techSeed(client: Client, args: Args): Promise<void> {
+async function techSeed(client: ApiClient, args: Args): Promise<void> {
   const file = option(args, 'file');
   const seeds: TechnologySeed[] = file
     ? (JSON.parse(readFileSync(expandHome(file), 'utf8')) as TechnologySeed[])
@@ -2131,7 +2214,132 @@ async function techSeed(client: Client, args: Args): Promise<void> {
   );
 }
 
-async function requireProject(client: Client, args: Args, command: string): Promise<Project> {
+/* ---------------------------------------------------------------- providers */
+
+interface ProviderReport {
+  name: string;
+  enabled: boolean;
+  available: boolean;
+  state: 'active' | 'disabled' | 'unavailable';
+  reason: string | null;
+  schedule: string;
+  description: string;
+  kinds: string[];
+  dependsOn: string[];
+  requires: { commands: string[]; env: string[]; network: boolean };
+  fields: string[];
+  relations: string[];
+  settings: Record<string, unknown>;
+  lastRun: string | null;
+  lastRunStatus: string | null;
+  lastRunDetail: string | null;
+}
+
+interface ProvidersPage {
+  providers: ProviderReport[];
+  host: string;
+  configPath: string | null;
+}
+
+function paintState(state: string): string {
+  return state === 'active' ? green(state) : state === 'disabled' ? dim(state) : yellow(state);
+}
+
+/**
+ * Every provider's manifest, its availability, when it last ran, and what it contributes — the
+ * surface ADR 0007 promises, and the same payload the providers page renders.
+ */
+async function commandProviders(client: ApiClient, args: Args): Promise<void> {
+  const page = await client.request<ProvidersPage>('/api/providers');
+  const name = args.positional[0];
+  const providers = name
+    ? page.providers.filter((provider) => provider.name === name)
+    : page.providers;
+  if (name && !providers.length) throw new CliError(`Unknown provider: ${name}`);
+  if (flag(args, 'json')) return printJson(name ? providers[0] : page);
+
+  if (name || flag(args, 'verbose')) {
+    for (const provider of providers) {
+      out(`${bold(provider.name)}  ${paintState(provider.state)}`);
+      out(`  ${dim(provider.description)}`);
+      const label = 12;
+      out(`  ${dim(pad('schedule', label))}${provider.schedule}`);
+      out(`  ${dim(pad('kinds', label))}${provider.kinds.join(', ')}`);
+      if (provider.dependsOn.length)
+        out(`  ${dim(pad('depends on', label))}${provider.dependsOn.join(', ')}`);
+      const requires = [
+        ...provider.requires.commands,
+        ...provider.requires.env.map((entry) => `$${entry}`),
+        ...(provider.requires.network ? ['network'] : [])
+      ];
+      out(`  ${dim(pad('requires', label))}${requires.join(', ') || dim('nothing')}`);
+      out(
+        `  ${dim(pad('last run', label))}${provider.lastRun ? `${age(provider.lastRun)} ago · ${provider.lastRunStatus}` : dim('never')}`
+      );
+      if (provider.reason) out(`  ${dim(pad('why not', label))}${yellow(provider.reason)}`);
+      if (provider.lastRunDetail && provider.lastRunDetail !== provider.reason)
+        out(`  ${dim(pad('detail', label))}${provider.lastRunDetail}`);
+      out(`  ${dim(pad('fields', label))}${provider.fields.join(' ') || dim('none')}`);
+      if (provider.relations.length)
+        out(`  ${dim(pad('relations', label))}${provider.relations.join(' ')}`);
+      if (Object.keys(provider.settings).length)
+        out(`  ${dim(pad('settings', label))}${JSON.stringify(provider.settings)}`);
+      out();
+    }
+    return;
+  }
+
+  const rows = providers.map((provider) => ({
+    name: provider.name,
+    state: provider.state,
+    schedule: provider.schedule,
+    lastRun: provider.lastRun ? `${age(provider.lastRun)} ago` : 'never',
+    fields: provider.fields.length ? String(provider.fields.length) : '–',
+    note: provider.reason ?? provider.description
+  }));
+  const widths = {
+    name: Math.max(8, ...rows.map((row) => width(row.name))),
+    state: Math.max(5, ...rows.map((row) => width(row.state))),
+    schedule: Math.max(8, ...rows.map((row) => width(row.schedule))),
+    lastRun: Math.max(8, ...rows.map((row) => width(row.lastRun))),
+    fields: 6
+  };
+  out(
+    dim(
+      `${pad('PROVIDER', widths.name)}  ${pad('STATE', widths.state)}  ${pad('SCHEDULE', widths.schedule)}  ` +
+        `${pad('LAST RUN', widths.lastRun)}  ${padStart('FIELDS', widths.fields)}  NOTE`
+    )
+  );
+  for (const row of rows)
+    out(
+      `${pad(row.name, widths.name)}  ${paintState(row.state)}${' '.repeat(Math.max(0, widths.state - width(row.state)))}  ` +
+        `${pad(row.schedule, widths.schedule)}  ${pad(row.lastRun, widths.lastRun)}  ` +
+        `${padStart(row.fields, widths.fields)}  ${dim(row.note)}`
+    );
+  out();
+  out(dim(`host adapter: ${page.host} · configuration: ${page.configPath ?? 'defaults only'}`));
+}
+
+/* ------------------------------------------------------------------- export */
+
+/**
+ * Publishing the catalog is an adapter: `opentangle` is the shape OpenTangle's site build reads and
+ * `json` is the generic one beside it. `ongoing website export` is this command with the profile
+ * already chosen.
+ */
+async function commandExport(client: ApiClient, args: Args): Promise<void> {
+  const profile = option(args, 'profile') ?? args.positional[0] ?? 'json';
+  const payload = await client.request<unknown>('/api/export', {
+    query: {
+      profile,
+      drafts: flag(args, 'drafts') ? 'true' : undefined,
+      kind: option(args, 'kind')
+    }
+  });
+  out(flag(args, 'compact') ? JSON.stringify(payload) : JSON.stringify(payload, null, 2));
+}
+
+async function requireProject(client: ApiClient, args: Args, command: string): Promise<Project> {
   const token = args.positional[0];
   if (!token) throw new CliError(`Usage: ongoing ${command} <project>`);
   return resolveProject(client, token);
@@ -2229,11 +2437,19 @@ ${bold('Radar')}
   tech export [--pretty]                technologies and their edges, deterministic, for generators
   link <project> uses <technology>      a declared edge; detected ones come from a scan
 
+${bold('Providers and export')}
+  providers [name] [--verbose] [--json] every provider's manifest: availability, last run,
+                                        contributed fields, enable state, and why not
+  export [--profile opentangle|json]    publish the catalog through an export profile
+      [--drafts] [--kind <kind>] [--compact]
+
 ${bold('Local')}
+  serve [--data-dir <dir>] [--port N]   run the application in the foreground on this machine
+      [--bind <host>] [--no-build]      (a fresh --data-dir is a fresh install)
   open [project] [--terminal|--github]  open the dashboard, or reveal a project
   logs [-f] [--lines N] [--scan]        tail the service logs
-  restart [--build] [--scan]            reload the LaunchAgent
-  stop [--scan]                         unload the LaunchAgent
+  restart [--build] [--scan]            reload the managed service
+  stop [--scan]                         stop the managed service
   build                                 rebuild the production bundle
   dev                                   run the development server
   repo                                  print the repository directory
@@ -2242,11 +2458,53 @@ ${bold('Local')}
 ${bold('Entries')} may be named by id, kind/slug, slug, name, path, a unique substring, or "." for
 the current directory. ${bold('Projects')} are entries with kind=project.
 
+${bold('Transport')} is chosen for you: a service answering ${dim('/api/health')} wins, and otherwise the
+catalog is opened in this process, so ${dim('scan')} and ${dim('list')} work with no daemon. ${dim('--local')} and
+${dim('--remote')} say it outright. ${bold('Configuration')} is ${dim('~/.config/ongoing/config.toml')}
+(${dim('ONGOING_CONFIG')} to point elsewhere), overridden by environment variables.
+
 ${bold('Options')}
   --url <base>                          dashboard base URL (env ONGOING_URL, default ${DEFAULT_URL})
+  --local | --remote                    force the in-process or HTTP transport
+  --host <launchd|foreground>           force the host adapter for serve/restart/stop/logs
   --json                                JSON output
   -h, --help · --version
 `;
+
+/**
+ * Chooses a transport. A service that answers `/api/health` wins, because it owns the catalog's
+ * write lock and its scan lease; otherwise the core library is linked into this process so the CLI
+ * still works with no daemon. `--url` or `ONGOING_URL` means "talk to that service" and never falls
+ * back; `--local` and `--remote` say it outright.
+ */
+async function createClient(args: Args): Promise<ApiClient> {
+  const explicitUrl = Boolean(option(args, 'url') ?? process.env.ONGOING_URL);
+  const mode =
+    option(args, 'transport') ??
+    (flag(args, 'local') ? 'local' : flag(args, 'remote') ? 'http' : undefined) ??
+    process.env.ONGOING_TRANSPORT ??
+    'auto';
+  if (!['auto', 'http', 'local'].includes(mode))
+    throw new CliError('--transport must be auto, http, or local');
+  if (mode === 'local') return LocalClient.open();
+  const base = baseUrl(args);
+  if (mode === 'http' || explicitUrl) return new Client(base);
+  return (await serviceAnswers(base)) ? new Client(base) : LocalClient.open();
+}
+
+/** A short probe: a service that is up answers in a millisecond, and a dead port refuses at once. */
+async function serviceAnswers(base: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${base}/api/health`, {
+      headers: { accept: 'application/json' },
+      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS)
+    });
+    // 401 still means a service is there; the HTTP client knows how to log in.
+    return response.ok || response.status === 401;
+  } catch {
+    return false;
+  }
+}
 
 async function main(argv: string[]): Promise<void> {
   const args = parseArgs(argv);
@@ -2270,10 +2528,16 @@ async function main(argv: string[]): Promise<void> {
       return commandRestart(args);
     case 'stop':
       return commandStop(args);
+    case 'serve':
+      return commandServe(args);
   }
 
-  const client = new Client(baseUrl(args));
+  const client = await createClient(args);
   switch (command) {
+    case 'providers':
+      return commandProviders(client, args);
+    case 'export':
+      return commandExport(client, args);
     case 'list':
     case 'ls':
       return commandList(client, args);

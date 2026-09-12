@@ -16,7 +16,7 @@ import {
   PRODUCTION_WEB_LABEL,
   PRODUCTION_WEB_PLIST,
   releasePlan
-} from '../scripts/release-config';
+} from '../deploy/aerie/release-config';
 
 const required = [
   '--host',
@@ -105,15 +105,15 @@ describe('release tooling', () => {
 });
 
 describe('production LaunchAgent definitions', () => {
-  const web = readFileSync(resolve('config/ongoing.plist.example'), 'utf8');
-  const scan = readFileSync(resolve('config/ongoing-scan.plist.example'), 'utf8');
-  const provision = readFileSync(resolve('scripts/provision-runtime.sh'), 'utf8');
+  const web = readFileSync(resolve('deploy/aerie/config/ongoing.plist.example'), 'utf8');
+  const scan = readFileSync(resolve('deploy/aerie/config/ongoing-scan.plist.example'), 'utf8');
+  const provision = readFileSync(resolve('deploy/aerie/provision-runtime.sh'), 'utf8');
   const deployment = readFileSync(resolve('docs/deployment.md'), 'utf8');
   const packageJson = JSON.parse(readFileSync(resolve('package.json'), 'utf8')) as {
     scripts: Record<string, string>;
   };
-  const productionSmoke = readFileSync(resolve('scripts/production-smoke.ts'), 'utf8');
-  const remoteRelease = readFileSync(resolve('scripts/remote-release.ts'), 'utf8');
+  const productionSmoke = readFileSync(resolve('deploy/aerie/production-smoke.ts'), 'utf8');
+  const remoteRelease = readFileSync(resolve('deploy/aerie/remote-release.ts'), 'utf8');
 
   it('uses one stable app-scoped Bun executable, provisioned from .bun-version, for both agents', () => {
     expect(PRODUCTION_BUN).not.toMatch(/\d+\.\d+\.\d+/);
@@ -153,7 +153,7 @@ describe('production LaunchAgent definitions', () => {
       expect(packageJson.scripts[name]).not.toMatch(/(^|&& )bun /);
     }
     expect(productionSmoke).toContain(
-      "Bun.spawn([process.execPath, 'run', 'scripts/production-server.ts']"
+      "Bun.spawn([process.execPath, 'run', 'src/lib/host/production-server.ts']"
     );
     expect(deployment).toContain('"$ongoing_bun" run scripts/migrate.ts');
     expect(deployment).toContain('"$ongoing_bun" run scripts/scan.ts');

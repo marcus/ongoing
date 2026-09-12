@@ -1,5 +1,4 @@
 import { json } from '@sveltejs/kit';
-import type { Project } from '$lib/domain/project';
 import type { RequestHandler } from './$types';
 
 /**
@@ -7,7 +6,8 @@ import type { RequestHandler } from './$types';
  *
  * Defaults to a dry run. Deleting a project destroys its note, favourite, intent, and manual rank
  * with no undo, so the destructive form has to be asked for: `{"dryRun": false}`. A body-less POST
- * reports what would go rather than doing it.
+ * reports what would go rather than doing it. The rule itself lives in
+ * `$lib/server/catalog/prune`, which the CLI's in-process transport calls too.
  */
 export const POST: RequestHandler = async ({ request }) => {
   let body: unknown = {};
@@ -33,44 +33,22 @@ export const POST: RequestHandler = async ({ request }) => {
       fields.graceDays < 0)
   )
     return json({ error: 'graceDays must be a non-negative integer' }, { status: 400 });
-  const dryRun = fields.dryRun !== false;
 
   try {
     const { catalogRepository, appConfig } = await import('$lib/server/scanning/runtime');
-    const { findVanishedProjects } = await import('$lib/server/collectors/discover');
-    // A scan holds the catalog and is midway through writing metrics for these very projects;
-    // deleting rows underneath it fails the run on a foreign-key violation.
-    if (!dryRun && catalogRepository.getActiveScanRun())
+    const { pruneMissingProjects, PruneBlockedError } = await import('$lib/server/catalog/prune');
+    try {
       return json(
-        { error: 'A catalog scan is running — try again once it finishes' },
-        {
-          status: 409
-        }
+        await pruneMissingProjects(catalogRepository, appConfig, {
+          dryRun: fields.dryRun as boolean | undefined,
+          graceDays: fields.graceDays as number | undefined
+        })
       );
-
-    const graceDays = (fields.graceDays as number | undefined) ?? appConfig.forgetMissingAfterDays;
-    // Only roots that still resolve: a project under an unmounted volume reads as gone but is not.
-    const roots = await verifiedRoots(appConfig.scanRoots);
-    const vanished = await findVanishedProjects(catalogRepository, {
-      roots,
-      graceMs: graceDays * 86_400_000
-    });
-    const summarise = ({ id, name, canonicalPath, missingSince }: Project) => ({
-      id,
-      name,
-      canonicalPath,
-      missingSince
-    });
-
-    if (dryRun) return json({ dryRun: true, graceDays, forgotten: vanished.map(summarise) });
-
-    const forgottenIds = new Set(
-      await catalogRepository.forgetProjects(vanished.map(({ id }) => id))
-    );
-    const forgotten = vanished.filter(({ id }) => forgottenIds.has(id));
-    for (const project of forgotten)
-      console.warn(`Forgot missing project ${project.name} (${project.canonicalPath})`);
-    return json({ dryRun: false, graceDays, forgotten: forgotten.map(summarise) });
+    } catch (error) {
+      if (error instanceof PruneBlockedError)
+        return json({ error: error.message }, { status: 409 });
+      throw error;
+    }
   } catch (error) {
     return json(
       { error: error instanceof Error ? error.message : 'Unable to prune projects' },
@@ -78,19 +56,3 @@ export const POST: RequestHandler = async ({ request }) => {
     );
   }
 };
-
-/** Scan roots that currently resolve, so an unreachable root never makes its projects look gone. */
-async function verifiedRoots(scanRoots: readonly string[]): Promise<string[]> {
-  const { realpath } = await import('node:fs/promises');
-  const { resolve } = await import('node:path');
-  const resolved = await Promise.all(
-    scanRoots.map(async (root) => {
-      try {
-        return await realpath(resolve(root));
-      } catch {
-        return null;
-      }
-    })
-  );
-  return resolved.filter((root): root is string => root !== null);
-}
