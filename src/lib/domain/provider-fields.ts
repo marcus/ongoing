@@ -103,18 +103,33 @@ function projected(
 }
 
 /**
- * Fields the read model derives rather than reads: a filesystem source's path, the attention
- * classification, a relation roll-up. They are projected like any other provider field so the
- * query grammar cannot tell them apart from stored ones, and so `--filter missing`, `--view`,
- * `--stack`, and `tech:` all become ordinary clauses rather than special cases in the evaluator.
+ * Fields a provider contributes that the read model *derives* rather than reads out of a metric
+ * row: a filesystem source's path, the largest toolchain lag, a snapshot delta. They are projected
+ * like any other provider field so the query grammar cannot tell them apart from stored ones, and
+ * so `--filter missing`, `--view`, `--stack`, and `tech:` all become ordinary clauses rather than
+ * special cases in the evaluator. They are declared here and claimed by a manifest in `provider.ts`.
  */
-export const derivedFieldDefinitions: readonly FieldDefinition[] = [
+const derivedProviderFields: readonly FieldDefinition[] = [
   projected('path', 'filesystem', 'text', 'Path', {
     description: 'Where the filesystem provider found this entry'
   }),
   projected('is_missing', 'filesystem', 'boolean', 'Missing', {
     description: 'The directory this entry was discovered in is gone'
   }),
+  projected('stack.lag', 'stack', 'integer', 'Stack lag', {
+    description: 'Largest number of release cycles any declared toolchain is behind'
+  }),
+  projected('github.starsGained30d', 'github', 'integer', 'Stars gained (30d)'),
+  projected('github.trafficViewsDelta30d', 'github', 'integer', 'Traffic change (30d)')
+];
+
+/**
+ * Fields the catalog derives from itself rather than from a provider: the attention classification,
+ * the collector warning count, and the relation roll-ups. They are registered whether or not any
+ * provider is enabled, because an edge and a ring are catalog facts rather than measurements — the
+ * same reasoning that keeps the two radar attention reasons outside the freshness gate (Phase 3).
+ */
+export const catalogDerivedFields: readonly FieldDefinition[] = [
   projected('views', 'attention', 'multi_enum', 'Attention views', {
     options: { values: attentionViewKeys },
     sortable: false,
@@ -139,12 +154,7 @@ export const derivedFieldDefinitions: readonly FieldDefinition[] = [
   projected('ring_stale', 'radar', 'boolean', 'Ring is stale', {
     kinds: ['technology'],
     description: '`review_after` has passed, so the ring describes a moment that is over'
-  }),
-  projected('stack.lag', 'stack', 'integer', 'Stack lag', {
-    description: 'Largest number of release cycles any declared toolchain is behind'
-  }),
-  projected('github.starsGained30d', 'github', 'integer', 'Stars gained (30d)'),
-  projected('github.trafficViewsDelta30d', 'github', 'integer', 'Traffic change (30d)')
+  })
 ];
 
 /** `stack.go`, `stack.bun`, … — the declared version of each toolchain a project uses. */
@@ -152,11 +162,21 @@ const stackFields: readonly FieldDefinition[] = toolchainKeys.map((toolchain) =>
   projected(`stack.${toolchain}`, 'stack', 'text', `${toolchain} version`)
 );
 
-export const providerFieldDefinitions: readonly FieldDefinition[] = [
+/** Every projected field, tagged with the provider that owns it. */
+const allProjectedFields: readonly FieldDefinition[] = [
   ...projectedMetrics.map((field) => projected(field.key, field.provider, field.type, field.label)),
   ...stackFields,
-  ...derivedFieldDefinitions
+  ...derivedProviderFields
 ];
+
+/**
+ * The fields one provider contributes. `provider.ts` calls this to fill in each manifest's `fields`,
+ * which is what makes the manifest — rather than a hand-maintained table — the place a provider's
+ * contribution is declared (ADR 0007).
+ */
+export function projectedFieldsFor(provider: string): FieldDefinition[] {
+  return allProjectedFields.filter((field) => field.owner === `provider:${provider}`);
+}
 
 /**
  * The read model's projection: a metric row and a project's declarations become namespaced field

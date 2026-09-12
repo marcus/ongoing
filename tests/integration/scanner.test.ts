@@ -7,6 +7,7 @@ import { ScanProgressBus } from '$lib/server/scanning/progress';
 import { ScanScheduler, type SchedulerTimers } from '$lib/server/scanning/scheduler';
 import { scheduleAutomaticScan } from '$lib/server/scanning/automatic';
 import { loadConfig } from '$lib/server/config';
+import { providerManifests, providerNames, resolveProviders } from '$lib/domain/provider';
 import { ScanInProgressError, Scanner, type ScanRequest } from '$lib/server/scanning/scanner';
 import { createScanEventResponse } from '$lib/server/scanning/sse';
 
@@ -26,6 +27,12 @@ const config: AppConfig = {
   releaseBaselineEnabled: true,
   releaseBaselineMaxAgeHours: 24,
   releaseBaselineApiUrl: 'https://endoflife.date/api/v1',
+  providers: {
+    enabled: [...providerNames],
+    settings: Object.fromEntries(providerNames.map((name) => [name, {}]))
+  },
+  hostAdapter: 'foreground',
+  configPath: null,
   security: {
     authenticationRequired: false,
     sessionMaxAgeSeconds: 43_200,
@@ -33,6 +40,17 @@ const config: AppConfig = {
     maxRequestBytes: 16_384
   }
 };
+
+/**
+ * Every provider available, regardless of what this machine has installed. These tests inject the
+ * collectors, so what they are checking is the orchestration, not whether `cloc` happens to be on
+ * the PATH of whoever is running them.
+ */
+const allProviders = () =>
+  resolveProviders(() => true, {
+    commands: new Set(providerManifests.flatMap((m) => m.requires?.commands ?? [])),
+    env: new Set(providerManifests.flatMap((m) => m.requires?.env ?? []))
+  });
 
 const gitMetrics: GitMetrics = {
   headSha: 'a'.repeat(40),
@@ -94,6 +112,7 @@ describe('resilient scan orchestration', () => {
       locScannedAt: '2026-07-18T10:00:00.000Z'
     });
     const scanner = new Scanner(repository, config, {
+      resolveProviders: allProviders,
       now: () => now,
       createRunId: () => 'scan_partial',
       discover: discovery(projects),
@@ -130,6 +149,7 @@ describe('resilient scan orchestration', () => {
     });
     let id = 0;
     const dependencies = {
+      resolveProviders: allProviders,
       now: () => now,
       createRunId: () => `scan_lock_${++id}`,
       discover: discovery(projects),
@@ -157,6 +177,7 @@ describe('resilient scan orchestration', () => {
       errorCount: 0
     });
     const scanner = new Scanner(repository, config, {
+      resolveProviders: allProviders,
       now: () => now,
       createRunId: () => 'scan_recovered',
       createLeaseOwner: () => 'lease_recovered',
@@ -194,6 +215,7 @@ describe('resilient scan orchestration', () => {
       })
     ).resolves.toBe(true);
     const scanner = new Scanner(repository, config, {
+      resolveProviders: allProviders,
       now: () => now,
       createRunId: () => 'scan_after_expiry',
       createLeaseOwner: () => 'lease_new_process',
@@ -216,6 +238,7 @@ describe('resilient scan orchestration', () => {
       release = () => resolve(gitMetrics);
     });
     const first = new Scanner(repository, config, {
+      resolveProviders: allProviders,
       now: () => currentTime,
       createRunId: () => 'scan_long_running',
       createLeaseOwner: () => 'lease_long_running',
@@ -242,6 +265,7 @@ describe('resilient scan orchestration', () => {
 
     currentTime = '2026-07-19T10:03:00.000Z';
     const contender = new Scanner(repository, config, {
+      resolveProviders: allProviders,
       now: () => currentTime,
       createRunId: () => 'scan_contender',
       createLeaseOwner: () => 'lease_contender',
@@ -264,6 +288,7 @@ describe('resilient scan orchestration', () => {
     const progress = new ScanProgressBus();
     const firstCollect = vi.fn(() => firstMetrics);
     const first = new Scanner(repository, config, {
+      resolveProviders: allProviders,
       now: () => currentTime,
       createRunId: () => 'scan_owner_a',
       createLeaseOwner: () => 'owner_a',
@@ -287,6 +312,7 @@ describe('resilient scan orchestration', () => {
     currentTime = '2026-07-19T10:03:00.000Z';
     const replacementMetrics = { ...gitMetrics, headSha: 'b'.repeat(40), branch: 'replacement' };
     const replacement = new Scanner(repository, config, {
+      resolveProviders: allProviders,
       now: () => currentTime,
       createRunId: () => 'scan_owner_b',
       createLeaseOwner: () => 'owner_b',
@@ -336,6 +362,7 @@ describe('resilient scan orchestration', () => {
       releaseDiscovery = resolve;
     });
     const first = new Scanner(repository, config, {
+      resolveProviders: allProviders,
       now: () => currentTime,
       createRunId: () => 'scan_discovery_a',
       createLeaseOwner: () => 'discovery_owner_a',
@@ -360,6 +387,7 @@ describe('resilient scan orchestration', () => {
 
     currentTime = '2026-07-19T10:03:00.000Z';
     const replacement = new Scanner(repository, config, {
+      resolveProviders: allProviders,
       now: () => currentTime,
       createRunId: () => 'scan_discovery_b',
       createLeaseOwner: () => 'discovery_owner_b',
@@ -415,6 +443,7 @@ describe('resilient scan orchestration', () => {
     const { repository, projects } = await fixture();
     const progress = new ScanProgressBus();
     const scanner = new Scanner(repository, config, {
+      resolveProviders: allProviders,
       now: () => now,
       createRunId: () => 'scan_progress',
       progress,
@@ -453,6 +482,7 @@ describe('resilient scan orchestration', () => {
     let maxCloc = 0;
     const pause = () => new Promise((resolve) => setTimeout(resolve, 5));
     const scanner = new Scanner(repository, config, {
+      resolveProviders: allProviders,
       now: () => now,
       createRunId: () => 'scan_concurrency',
       discover: discovery(projects),
@@ -482,6 +512,7 @@ describe('resilient scan orchestration', () => {
     await repository.setHidden(projects[0].id, true);
     const collectGit = vi.fn(async () => gitMetrics);
     const scanner = new Scanner(repository, config, {
+      resolveProviders: allProviders,
       now: () => now,
       createRunId: () => 'scan_hidden',
       discover: discovery([{ ...projects[0], isHidden: true }]),
@@ -515,6 +546,7 @@ describe('resilient scan orchestration', () => {
         staleCount: 0
       });
     const scanner = new Scanner(repository, config, {
+      resolveProviders: allProviders,
       now: () => now,
       createRunId: () => `scan_td_${++run}`,
       discover: discovery(projects),
@@ -564,6 +596,7 @@ describe('resilient scan orchestration', () => {
         technologies: []
       });
     const scanner = new Scanner(repository, config, {
+      resolveProviders: allProviders,
       now: () => now,
       createRunId: () => `scan_stack_${++run}`,
       discover: discovery(projects),
@@ -629,6 +662,7 @@ describe('resilient scan orchestration', () => {
       })
       .mockResolvedValueOnce({ stacks: [], technologies: [] });
     const scanner = new Scanner(repository, config, {
+      resolveProviders: allProviders,
       now: () => now,
       createRunId: () => `scan_tech_${++run}`,
       discover: discovery(projects),
@@ -668,6 +702,7 @@ describe('resilient scan orchestration', () => {
       .mockRejectedValueOnce(new Error('endoflife.date unreachable'));
     let run = 0;
     const scanner = new Scanner(repository, config, {
+      resolveProviders: allProviders,
       now: () => now,
       createRunId: () => `scan_baseline_${++run}`,
       discover: discovery(projects),

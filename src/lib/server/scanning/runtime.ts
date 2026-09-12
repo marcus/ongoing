@@ -1,14 +1,19 @@
 import { CatalogDatabase } from '$lib/server/catalog/database';
 import { CatalogRepository } from '$lib/server/catalog/repository';
-import { loadConfig } from '$lib/server/config';
+import { loadRuntimeConfig } from '$lib/server/config';
+import { activeProviderNames } from '$lib/server/providers/registry';
 import { createScannerDependencies } from './dependencies';
 import { ScanScheduler } from './scheduler';
 import { Scanner, ScanInProgressError } from './scanner';
 
-const config = loadConfig();
+const config = loadRuntimeConfig();
 const database = new CatalogDatabase(config.databasePath);
 export const appConfig = config;
-export const catalogRepository = new CatalogRepository(database);
+// The registry only carries fields from providers that can actually run here, so a rule reading a
+// field belonging to a disabled or missing provider finds nothing rather than something wrong.
+export const catalogRepository = new CatalogRepository(database, undefined, {
+  providers: activeProviderNames(config)
+});
 export const catalogScanner = new Scanner(
   catalogRepository,
   config,

@@ -1,8 +1,8 @@
 import { json, redirect, type RequestHandler } from '@sveltejs/kit';
-import { loadConfig } from '$lib/server/config';
+import { loadRuntimeConfig } from '$lib/server/config';
 import { clearSessionCookie } from '$lib/server/security';
 
-const config = loadConfig();
+const config = loadRuntimeConfig();
 
 export const POST: RequestHandler = async ({ cookies, request }) => {
   // Reading before clearing the cookie makes adapter-node enforce BODY_SIZE_LIMIT for chunked

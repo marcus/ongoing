@@ -5,7 +5,7 @@ import {
   validateSlug,
   type AttributeValue
 } from './entry';
-import { providerFieldDefinitions } from './provider-fields';
+import { fieldsForProviders, providerFieldDefinitions } from './provider';
 import { technologyKinds, technologyRings } from './technology';
 
 /**
@@ -298,9 +298,24 @@ export function fieldAppliesTo(definition: FieldDefinition, kind: string): boole
   return definition.kinds.includes('*') || definition.kinds.includes(kind);
 }
 
-export function createFieldRegistry(userFields: readonly FieldDefinition[] = []): FieldRegistry {
+export interface FieldRegistryOptions {
+  /**
+   * The providers whose manifests contribute fields. Omitted means every shipped provider, which is
+   * what a caller that has no configuration in hand (a test, the browser) should see; the server
+   * passes the enabled, available set so a disabled provider registers nothing (ADR 0007).
+   */
+  providers?: readonly string[];
+}
+
+export function createFieldRegistry(
+  userFields: readonly FieldDefinition[] = [],
+  options: FieldRegistryOptions = {}
+): FieldRegistry {
   const byKey = new Map<string, FieldDefinition>();
-  for (const definition of [...builtinFields, ...providerFieldDefinitions, ...userFields])
+  const fromProviders = options.providers
+    ? fieldsForProviders(options.providers)
+    : providerFieldDefinitions;
+  for (const definition of [...builtinFields, ...fromProviders, ...userFields])
     byKey.set(definition.key, definition);
   const fields = [...byKey.values()].sort((left, right) => left.key.localeCompare(right.key, 'en'));
   return {

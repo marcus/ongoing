@@ -7,6 +7,7 @@ import website from './migrations/005_website.sql?raw';
 import websitePages from './migrations/006_website_pages.sql?raw';
 import entries from './migrations/007_entries.sql?raw';
 import rekeyMetrics from './migrations/008_rekey_metrics.sql?raw';
+import providerRuns from './migrations/009_provider_runs.sql?raw';
 import { migrateProjectsIntoEntries } from './migrations/007_entries';
 
 interface Migration {
@@ -27,7 +28,8 @@ const migrations: readonly Migration[] = [
   { version: 5, sql: website },
   { version: 6, sql: websitePages },
   { version: 7, sql: entries, migrate: migrateProjectsIntoEntries },
-  { version: 8, sql: rekeyMetrics }
+  { version: 8, sql: rekeyMetrics },
+  { version: 9, sql: providerRuns }
 ];
 
 /**

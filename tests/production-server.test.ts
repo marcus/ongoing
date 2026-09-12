@@ -1,6 +1,6 @@
 import { Readable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
-import { productionBodyLimit, readBoundedBody } from '../scripts/production-server';
+import { productionBodyLimit, readBoundedBody } from '$lib/host/production-server';
 
 describe('raw production request body boundary', () => {
   it('rejects an oversized declared body before forwarding it', async () => {

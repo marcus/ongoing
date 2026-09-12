@@ -352,13 +352,52 @@ export function stableEntryId(kind: string, slug: string): string {
  * read model rather than through SQLite's JSON functions, so the store interface stays key, record,
  * and simple scan (ADR 0005).
  */
+export type ProviderRunStatus = 'ok' | 'skipped' | 'disabled' | 'unavailable' | 'failed';
+
+export interface ProviderRun {
+  provider: string;
+  status: ProviderRunStatus;
+  lastRunAt: string;
+  runId?: string | null;
+  detail?: string | null;
+}
+
+export interface CatalogRepositoryOptions {
+  /**
+   * The providers whose manifests may contribute fields. Omitted registers every shipped provider,
+   * which is what a test or a caller with no configuration should see; the server passes the
+   * enabled, available set so a disabled provider's fields never enter the registry (ADR 0007).
+   */
+  providers?: readonly string[];
+}
+
 export class CatalogRepository {
   private registryCache: FieldRegistry | null = null;
+  private providerFilter: readonly string[] | undefined;
 
   constructor(
     private readonly catalog: CatalogDatabase,
-    private readonly now: () => string = () => new Date().toISOString()
-  ) {}
+    private readonly now: () => string = () => new Date().toISOString(),
+    options: CatalogRepositoryOptions = {}
+  ) {
+    this.providerFilter = options.providers;
+  }
+
+  /**
+   * Narrows the registry to the providers that can actually run. The scanner calls this once it has
+   * probed the machine, so a field belonging to an unavailable provider stops being registered and
+   * every rule that reads it goes inert rather than wrong.
+   */
+  setActiveProviders(providers: readonly string[]): void {
+    const next = [...providers].sort();
+    if (this.providerFilter && this.providerFilter.join() === next.join()) return;
+    this.providerFilter = next;
+    this.registryCache = null;
+  }
+
+  get activeProviders(): readonly string[] | undefined {
+    return this.providerFilter;
+  }
 
   get database(): Database {
     return this.catalog.sqlite;
@@ -538,7 +577,9 @@ export class CatalogRepository {
 
   /** Built-in fields, provider fields, and the user's own, as one registry. */
   registry(): FieldRegistry {
-    this.registryCache ??= createFieldRegistry(this.listUserFields());
+    this.registryCache ??= createFieldRegistry(this.listUserFields(), {
+      providers: this.providerFilter
+    });
     return this.registryCache;
   }
 
@@ -1510,6 +1551,41 @@ export class CatalogRepository {
       .query<Row, []>('SELECT * FROM scan_runs ORDER BY started_at DESC, id DESC LIMIT 1')
       .get();
     return row ? scanRunFromRow(row) : null;
+  }
+
+  /* ----------------------------------------------------------- provider runs */
+
+  /**
+   * What a provider did on the last scan that considered it. A skipped provider records a row too:
+   * "nothing happened, and here is why" is the answer `ongoing providers` exists to give.
+   */
+  async recordProviderRun(run: ProviderRun): Promise<void> {
+    await this.catalog.write((database) =>
+      database
+        .query(
+          `INSERT INTO provider_runs (provider, status, last_run_at, run_id, detail)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(provider) DO UPDATE SET
+             status = excluded.status,
+             last_run_at = excluded.last_run_at,
+             run_id = excluded.run_id,
+             detail = excluded.detail`
+        )
+        .run(run.provider, run.status, run.lastRunAt, run.runId ?? null, run.detail ?? null)
+    );
+  }
+
+  listProviderRuns(): ProviderRun[] {
+    return this.database
+      .query<Row, []>('SELECT * FROM provider_runs ORDER BY provider')
+      .all()
+      .map((row) => ({
+        provider: String(row.provider),
+        status: String(row.status) as ProviderRunStatus,
+        lastRunAt: String(row.last_run_at),
+        runId: row.run_id === null ? null : String(row.run_id),
+        detail: row.detail === null ? null : String(row.detail)
+      }));
   }
 }
 

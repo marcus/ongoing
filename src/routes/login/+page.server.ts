@@ -1,9 +1,9 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { loadConfig } from '$lib/server/config';
+import { loadRuntimeConfig } from '$lib/server/config';
 import { constantTimeSecretMatches, hasValidSession, setSessionCookie } from '$lib/server/security';
 import type { Actions, PageServerLoad } from './$types';
 
-const config = loadConfig();
+const config = loadRuntimeConfig();
 const attempts = new Map<string, { count: number; resetAt: number }>();
 
 function safeReturnTo(value: string | null): string {

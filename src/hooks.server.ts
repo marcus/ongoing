@@ -1,5 +1,5 @@
 import { json, redirect, type Handle } from '@sveltejs/kit';
-import { loadConfig } from '$lib/server/config';
+import { loadRuntimeConfig } from '$lib/server/config';
 import {
   hasValidSession,
   bufferRequestBodyWithinLimit,
@@ -8,7 +8,7 @@ import {
 import { scheduleAutomaticScan, type AutomaticScanState } from '$lib/server/scanning/automatic';
 
 const automaticScanState: AutomaticScanState = { scheduled: false };
-const config = loadConfig();
+const config = loadRuntimeConfig();
 const publicPaths = new Set(['/login', '/api/health']);
 
 function secure(response: Response): Response {
