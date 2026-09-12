@@ -116,8 +116,8 @@ model {
     metadata { uid 'domain' fractalColor '#89A579' evidence ['src/lib/domain/attention.ts', 'src/lib/domain/project.ts'] }
 
     readmodel = component 'Catalog read model' {
-      description 'Joins projects, metrics, snapshots, stacks, and errors into DashboardProject rows, resolves stacks against cached baselines, computes 30-day deltas, and applies the query.'
-      metadata { uid 'domain.readmodel' fractalColor '#89A579' evidence ['src/lib/dashboard/catalog.ts', 'src/lib/dashboard/options.ts'] }
+      description 'Merges an entry\'s columns, attributes, and projected provider metrics into one flat field map, and derives what the grammar needs but nothing stores: path, is_missing, the attention views, the collector warning count, linked technologies, stack lag, and the 30-day deltas. The dashboard projection over the same rows still builds DashboardProject for the current browser.'
+      metadata { uid 'domain.readmodel' fractalColor '#89A579' evidence ['src/lib/server/catalog/entries.ts', 'src/lib/dashboard/catalog.ts', 'src/lib/dashboard/options.ts'] }
     }
     attention = component 'Attention views' {
       description 'Seven independent classifications with explicit thresholds and a 72-hour freshness gate; every membership carries its reasons. No grand score.'
@@ -286,7 +286,7 @@ model {
   }
 
   inventory = subsystem 'Software inventory' {
-    description 'The catalog as typed entries. Phase 1 is built: the entries store, the field registry, the entries API, and the CLI verbs over them. The query grammar, the provider manifests, the host adapter, and the keyboard-first shell are still the settled design, marked proposed here.'
+    description 'The catalog as typed entries. Phases 1 and 2 are built: the entries store, the field registry, the query grammar, the entries API, and the CLI over them. The provider manifests, the host adapter, and the keyboard-first shell are still the settled design, marked proposed here.'
     metadata { uid 'inventory' fractalColor '#7FA8C9' evidence ['docs/plans/active/ongoing-inventory-redesign.md', 'src/lib/server/catalog/repository.ts'] }
 
     entries = store 'entries, fields, relations' {
@@ -300,18 +300,18 @@ model {
       metadata { uid 'inventory.registry' fractalColor '#89A579' evidence ['src/lib/domain/fields.ts', 'src/lib/domain/provider-fields.ts', 'src/lib/domain/fields.test.ts'] }
     }
     query = component 'Query grammar' {
-      #proposed
-      description 'One pure parser and evaluator for filter clauses, multi-key sorts, and column sets. Unknown keys error with the nearest registered field; a saved view is the same string stored.'
-      metadata { uid 'inventory.query' fractalColor '#89A579' evidence ['docs/adr/0006-one-query-grammar.md'] }
+      #current
+      description 'One pure parser and evaluator for filter clauses, multi-key sorts, and column sets. Parsing is total; unknown keys error against the registry with the nearest registered field. tag:, view:, tech: and kind: are field clauses like any other, because the read model derives path, is_missing, views, warnings, tech and stack.lag. The pre-Phase-2 view, filter, stack and search parameters translate into clauses through one exported table. A saved view is the same string stored, and views ship built in.'
+      metadata { uid 'inventory.query' fractalColor '#89A579' evidence ['src/lib/domain/query.ts', 'src/lib/domain/query.test.ts', 'src/lib/domain/view.ts', 'docs/adr/0006-one-query-grammar.md'] }
     }
     entries_api = component 'Entries API' {
       #current
-      description 'GET/POST /api/entries and GET/PATCH/DELETE /api/entries/:kind/:slug, plus /api/fields, /api/relations, and /api/views. One flat patch of field keys per write, validated by the registry. /api/projects survives as the project projection of the same entries until the new shell ships; q, sort, columns and saved arrive with the query grammar.'
+      description 'GET /api/entries?q=&sort=&columns=&saved= is the one read endpoint; GET/PATCH/DELETE /api/entries/:kind/:slug, POST /api/entries, /api/fields, /api/relations and /api/views are the rest. One flat patch of field keys per write, validated by the registry; one query string per read, parsed by the grammar. /api/projects survives as the project projection of the same entries until the new shell ships.'
       metadata { uid 'inventory.entries_api' fractalColor '#739886' evidence ['src/routes/api/entries/+server.ts', 'src/routes/api/fields/+server.ts', 'src/routes/api/relations/+server.ts', 'src/routes/api/views/+server.ts'] }
     }
     entry_cli = component 'Entry CLI verbs' {
       #current
-      description 'get, set <entry> <field> <value> with the original decision flags as aliases, entry add|list|remove, field list|add|remove, tag, untag, link, unlink, and view save|list|delete. The CLI imports the domain registry directly, so a bad value is refused before the round trip. A transport adapter and the query-model list arrive in later phases.'
+      description 'list with a query string, --sort, --columns, --saved and --count; views and stacks over the same endpoint; get, set <entry> <field> <value> with the original decision flags as aliases; entry, field, tag, untag, link, unlink, view. The CLI imports the domain registry and the query parser directly, so a bad value or a bad clause is refused before the round trip, and every flag it shipped with survives as a clause alias. A transport adapter arrives in Phase 5.'
       metadata { uid 'inventory.entry_cli' fractalColor '#82A6B6' evidence ['bin/ongoing.ts', 'docs/cli.md'] }
     }
     providers = component 'Provider registry & manifests' {
@@ -478,9 +478,9 @@ model {
   // Website consumer
   external.opentangle .calls service.website_api 'GET /api/website on deployment' { metadata { uid 'opentangle-export' } }
 
-  // The software inventory: built in Phase 1, proposed beyond it
+  // The software inventory: built in Phases 1 and 2, proposed beyond them
   user .calls inventory.shell 'Browses, filters, and edits in the table' { #proposed metadata { uid 'user-inventory' } }
-  user .calls inventory.entry_cli 'Runs the same verbs from a shell' { metadata { uid 'user-entry-cli' } }
+  user .calls inventory.entry_cli 'Runs the same verbs and the same queries from a shell' { metadata { uid 'user-entry-cli' } }
   inventory.shell .calls inventory.entries_api 'GET /api/entries?q=&sort=&columns=' { #proposed metadata { uid 'shell-api' } }
   inventory.shell .calls inventory.ui_kit 'Table, cell editors, rail, panel' { #proposed metadata { uid 'shell-uikit' } }
   inventory.shell .calls inventory.query 'Builds and validates the filter string in the browser' { #proposed metadata { uid 'shell-query' } }
@@ -488,12 +488,13 @@ model {
   inventory.entry_page .calls inventory.entries_api 'PATCH one field in place' { #proposed metadata { uid 'entrypage-api' } }
   inventory.entry_page .calls domain.attention 'Re-runs the reasons after an optimistic edit' { #proposed metadata { uid 'entrypage-attention' } }
   inventory.entry_cli .calls inventory.entries_api 'Over HTTP, or the core in-process when no service runs' { metadata { uid 'entrycli-api' } }
+  inventory.entry_cli .calls inventory.query 'Builds the query from flags and counts saved views without a round trip' { metadata { uid 'entrycli-query' } }
   inventory.entry_cli .calls inventory.host 'serve, scan, restart, stop, logs' { #proposed metadata { uid 'entrycli-host' } }
   inventory.entries_api .calls inventory.registry 'validateEntryPatch before any write' { metadata { uid 'api-registry' } }
-  inventory.entries_api .calls inventory.query 'Parses q, sort, columns, saved' { #proposed metadata { uid 'api-query' } }
+  inventory.entries_api .calls inventory.query 'Parses and evaluates q, sort, columns, saved' { metadata { uid 'api-query' } }
   inventory.entries_api .calls domain.readmodel 'Merges stored attributes and projected provider metrics into one field map' { metadata { uid 'api-readmodel' } }
   inventory.entries_api .writes catalog.repository 'Entries, fields, relations, saved views' { metadata { uid 'api-repo' } }
-  inventory.query .reads inventory.registry 'Resolves and type-checks every field key' { #proposed metadata { uid 'query-registry' } }
+  inventory.query .reads inventory.registry 'Resolves and type-checks every field key' { metadata { uid 'query-registry' } }
   inventory.registry .reads inventory.entries 'User-defined field rows' { metadata { uid 'registry-entries' } }
   service.projects_api .reads inventory.entries 'The project projection of the same entries, tags and attributes included' { metadata { uid 'projects-entries' } }
   inventory.providers .supplies inventory.registry 'Namespaced read-only field and relation definitions' { #proposed metadata { uid 'providers-registry' } }

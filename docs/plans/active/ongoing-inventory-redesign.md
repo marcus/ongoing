@@ -1,9 +1,9 @@
 # Ongoing as a software inventory
 
 **Status:** active, in implementation. Decisions 1 through 5 and every open question are settled
-(Phase 0, 2026-09-11). Phase 1 is built: the catalog is entries over a field registry, with relations
-and saved views, and an API and CLI over all of it. Phases 2 through 6 are unbuilt. Each phase has a
-td epic, listed in its section.
+(Phase 0, 2026-09-11). Phases 1 and 2 are built: the catalog is entries over a field registry, with
+relations and saved views, and one query grammar reads it from every surface. Phases 3 through 6 are
+unbuilt. Each phase has a td epic, listed in its section.
 
 Inputs: the running dashboard and its Fractal model (`docs/diagrams/fractal/`), the tech radar
 model (`tech-radar.md`, this plan's Phase 3 companion), the project-standards brief
@@ -308,7 +308,7 @@ recorded in td. td-c757bc and td-3a561b now point here and are Phase 3's to clos
 model's proposed scene now covers the whole plan (`inventory` subsystem, `proposed-inventory`
 scene); Phase 1 extends it rather than replacing it. Nothing was built, migrated, or deployed.
 
-### Phase 1: entry model, field registry, relations — td-1e9a01
+### Phase 1: entry model, field registry, relations — done (td-1e9a01)
 
 - Migration: `entries`, `entry_sources`, `fields`, `relations`, `saved_views`. Projects migrate in
   place with `kind = 'project'`; decision fields move into `attributes`; discovery columns move to
@@ -372,7 +372,7 @@ Not done here, deliberately: `/api/entries` still takes `kind` and `hidden` rath
 nothing seeds technologies (Phase 3). The production service has not been restarted; Marcus will do
 that once the plan lands, and the migration runs on first open.
 
-### Phase 2: query model and CLI parity — td-a4b0b6
+### Phase 2: query model and CLI parity — done (td-a4b0b6)
 
 Depends on Phase 1.
 
@@ -387,6 +387,54 @@ Depends on Phase 1.
 
 Evidence: docs/cli.md rewritten; a table of old flag → new clause with tests; parser fuzz test
 over registered fields.
+
+**Handoff (2026-09-11).** Built and pushed. Reading the catalog is now one grammar:
+`src/lib/domain/query.ts` parses it (totally — every string is a query) and evaluates it, and
+`validateQuery`, `validateSort`, and `validateColumns` are where anything fails, against the field
+registry, with the message every surface shows. `GET /api/entries?q=&sort=&columns=&saved=` is the
+single read endpoint and returns the matched entries, the echoed query and sort, the field registry
+for the kind, the release baselines, and the latest scan — everything `ongoing list`, `views`, and
+`stacks` need, so nothing in the read path touches `/api/projects` any more except `show` and
+`status`, which want the attention reasons the project projection still carries.
+
+The shape to build on. Every clause in the grammar is a **field** clause: `tag:` and `view:` are
+singular aliases for `tags` and `views`, and `tech:` and `kind:` are fields. That required the read
+model (`src/lib/server/catalog/entries.ts`) to derive `path`, `is_missing`, `views`, `warnings`,
+`tech`, `stack.lag`, `github.starsGained30d`, and `github.trafficViewsDelta30d`, and `kind` became a
+core field — so the evaluator has one shape and Phase 4's filter UI has one thing to build. An
+`EntryView` now also carries its resolved `stacks`, `errors`, `path`, and `views`, which is what let
+`ongoing stacks` move onto the entries endpoint. `readEntryViews` therefore classifies attention for
+every project on each call, the same work `/api/projects` already did per request; if the catalog
+grows enough for that to hurt, the fix is a bulk snapshot read, not a second endpoint.
+
+Old flags map onto clauses through one exported table, `legacyParamsToQuery`, used by both the route
+and the CLI and asserted row by row in `query.test.ts`; docs/cli.md prints the same table. Saved
+views ship built in (`builtinSavedViews` in `src/lib/domain/view.ts`) — declared in code beside
+`builtinFields` for the same reason — covering the attention views, the toolchains as
+`stack-<toolchain>`, favourites, hidden, missing, warnings, and technologies. A stored view of the
+same name shadows a built-in; deleting a built-in is refused.
+
+Three judgment calls. `:` on a text field is equality and `:~` is contains, because ADR 0006's
+operator table is the authority and a `:~` that duplicated `:` would be a dead operator; bare text
+is still the substring search people reach for. `--filter warnings` is now `warnings>0`, which is
+narrower than the old flag — that also matched anything in `view:attention` — because the grammar
+has no OR, so it is two queries now. And a legacy sort alias keeps its old descending default only
+when it is not itself a field key (`latestCommit` does, `name` does not), which is what makes
+`formatSort`'s output safe for the server to re-parse without flipping direction twice; `?sort=name`
+consequently sorts A→Z rather than Z→A.
+
+Not done, deliberately: the **browser was left alone**. The dashboard still reads `/api/projects`
+with `?sort=&dir=&filter=&view=&stack=&q=`, where `q` is the old search box rather than a query
+string. Making it build the grammar would mean changing what `q` means in a URL people have
+bookmarked and reworking the header flyout and sort controls — all of which Phase 4 deletes
+(`dashboard.css`, the ticker, the flyout, the drawer). The cheap half is already done for it: the
+evaluator, the registry, and `legacyParamsToQuery` are pure and importable from the browser, so the
+new shell can build `?q=&sort=` against `/api/entries` without a server change. `/api/projects` kept
+its exact contract for the same reason.
+
+One repair on the way through: `playwright.config.ts` set `reuseExistingServer` whenever CI was
+unset, so a stranger already listening on `E2E_PORT` absorbed the whole browser suite (a Fractal
+server on 5199 failed all fifteen tests with 404s). Naming a port now turns reuse off.
 
 ### Phase 3: technologies and the radar — td-1155ba
 
@@ -494,6 +542,10 @@ Settled in Phase 0 on 2026-09-11. Reopen one only with a reason written down her
 - 2026-09-11: Phase 0 — decisions 1–5 and every open question settled, ADRs 0005–0008 written, the
   shipped dashboard plan moved to `implemented/`, the tech radar re-homed here as Phase 3's
   companion, six phase epics filed in td, and the Fractal proposal scene widened to the whole plan.
+- 2026-09-11: Phase 2 — one query grammar reads the catalog: a pure parser and evaluator over the
+  field registry, `GET /api/entries?q=&sort=&columns=&saved=` as the single read endpoint, `ongoing
+list`, `views`, and `stacks` rewritten on it with every old flag kept as a clause alias, saved
+  views shipped built in, and docs/cli.md rewritten around the grammar.
 - 2026-09-11: Phase 1 — the catalog moved onto entries, a field registry, relations, and saved views;
   one validated patch path serves the API, the CLI, and the browser; `/api/entries`, `/api/fields`,
   `/api/relations`, and `/api/views` shipped with the CLI verbs over them; the production catalog
