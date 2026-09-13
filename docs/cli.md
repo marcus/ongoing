@@ -325,6 +325,8 @@ ongoing field add identity.logo --type json --kind project --adapter impressions
 ongoing attachment get <project-id> --field identity.logo --remote --json
 ongoing attachment set <project-id> --field identity.logo --file bundle.json --expected none --remote --json
 ongoing attachment export <project-id> --field identity.logo --output ./logo-export --json
+ongoing list 'kind:project identity.logo:*' --json       # has a logo
+ongoing list 'kind:project identity.logo:none' --json    # no logo
 ```
 
 An Impressions v1 bundle contains `kind: "impressions.logo.bundle"`, `version: 1`, its portable `document`, and `poster: { mediaType: "image/png", base64: "..." }`. Ongoing validates the document through its installed adapter, validates and hashes the PNG, stores both files beside the catalog, and writes only their hashes and the acknowledged revision into the field. A conflict returns the current revision without replacing the selected value. Public website inclusion remains a separate explicit policy.
