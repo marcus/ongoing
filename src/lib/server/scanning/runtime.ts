@@ -4,6 +4,7 @@ import { loadRuntimeConfig } from '$lib/server/config';
 import { activeProviderNames } from '$lib/server/providers/registry';
 import { createScannerDependencies } from './dependencies';
 import { ScanScheduler } from './scheduler';
+import { AttachmentService } from '$lib/server/attachments';
 import { Scanner, ScanInProgressError } from './scanner';
 
 const config = loadRuntimeConfig();
@@ -14,6 +15,7 @@ export const appConfig = config;
 export const catalogRepository = new CatalogRepository(database, undefined, {
   providers: activeProviderNames(config)
 });
+export const attachmentService = new AttachmentService(catalogRepository, config.databasePath);
 export const catalogScanner = new Scanner(
   catalogRepository,
   config,

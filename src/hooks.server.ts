@@ -6,6 +6,7 @@ import {
   isSameOriginMutation
 } from '$lib/server/security';
 import { scheduleAutomaticScan, type AutomaticScanState } from '$lib/server/scanning/automatic';
+import { MAX_ATTACHMENT_REQUEST_BYTES } from '$lib/server/attachments';
 
 const automaticScanState: AutomaticScanState = { scheduled: false };
 const config = loadRuntimeConfig();
@@ -42,7 +43,12 @@ export const handle: Handle = async ({ event, resolve }) => {
     !isSameOriginMutation(event.request, config.security.appOrigin)
   )
     return secure(json({ error: 'Request origin is not allowed' }, { status: 403 }));
-  const routeLimit = pathname === '/login' ? 1_024 : config.security.maxRequestBytes;
+  const routeLimit =
+    pathname === '/login'
+      ? 1_024
+      : pathname.startsWith('/api/attachments/')
+        ? MAX_ATTACHMENT_REQUEST_BYTES
+        : config.security.maxRequestBytes;
   const boundedRequest = await bufferRequestBodyWithinLimit(event.request, routeLimit);
   if (!boundedRequest) return secure(json({ error: 'Request body is too large' }, { status: 413 }));
   if (boundedRequest !== event.request) (event as { request: Request }).request = boundedRequest;

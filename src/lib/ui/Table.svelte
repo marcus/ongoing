@@ -6,6 +6,7 @@
   import FieldEditor from './FieldEditor.svelte';
   import Icon from './Icon.svelte';
   import { formatValue, isTimestampField } from './format';
+  import RichFieldPreview from './RichFieldPreview.svelte';
 
   /**
    * The inventory table. Columns are field definitions, so every cell knows its type and every
@@ -25,7 +26,8 @@
     onsave,
     oncancel,
     onsort,
-    caption = 'Inventory'
+    caption = 'Inventory',
+    identityField = null
   }: {
     columns: FieldDefinition[];
     rows: EntryView[];
@@ -41,6 +43,7 @@
     oncancel?: () => void;
     onsort?: (key: string) => void;
     caption?: string;
+    identityField?: FieldDefinition | null;
   } = $props();
 
   let now = Date.now();
@@ -112,6 +115,11 @@
                   title={String(row.fields.path ?? row.name)}
                 >
                   {#if row.fields.is_favorite}<Icon name="star" size={11} />{/if}
+                  {#if identityField}<RichFieldPreview
+                      entry={row}
+                      field={identityField}
+                      compact
+                    />{/if}
                   <span>{row.name}</span>
                 </button>
               {:else if column.editable && column.storage !== 'projected'}

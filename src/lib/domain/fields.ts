@@ -7,6 +7,7 @@ import {
 } from './entry';
 import { fieldsForProviders, providerFieldDefinitions } from './provider';
 import { technologyKinds, technologyRings } from './technology';
+import { hasRichFieldAdapter } from './rich-fields';
 
 /**
  * The field registry. Every value an entry carries — in a column, in its `attributes` document, or
@@ -39,6 +40,12 @@ export interface FieldOptions {
   maxLength?: number;
 }
 
+export interface FieldPresentation {
+  /** Identifier of a trusted, code-registered adapter. Never a URL or executable. */
+  adapter: string;
+  role?: string;
+}
+
 /**
  * Where a value physically lives. Callers never see this — it exists so the repository can apply a
  * validated patch without re-deriving which keys are columns.
@@ -62,6 +69,7 @@ export interface FieldDefinition {
   storage: FieldStorage;
   /** Column name for `storage: 'column'`. */
   column?: string;
+  presentation?: FieldPresentation;
 }
 
 export class FieldValidationError extends Error {
@@ -452,7 +460,8 @@ export function coerceFieldValue(definition: FieldDefinition, value: unknown): A
 export function validateEntryPatch(
   registry: FieldRegistry,
   kind: string,
-  patch: Record<string, unknown>
+  patch: Record<string, unknown>,
+  options: { allowRich?: boolean } = {}
 ): EntryPatch {
   const result: EntryPatch = { columns: {}, attributes: {} };
   for (const [key, raw] of Object.entries(patch)) {
@@ -469,6 +478,11 @@ export function validateEntryPatch(
       throw new FieldValidationError(`Field ${key} does not apply to ${kind} entries`, key);
     if (!definition.editable || definition.storage === 'projected')
       throw new FieldValidationError(`Field ${key} is read-only (${definition.owner})`, key);
+    if (definition.presentation && !options.allowRich)
+      throw new FieldValidationError(
+        `Field ${key} must be changed through the attachment API`,
+        key
+      );
 
     const value = coerceFieldValue(definition, raw);
     if (definition.storage === 'column') {
@@ -551,6 +565,55 @@ export function validateFieldDefinition(
     return value;
   };
 
+  let presentation: FieldPresentation | undefined;
+  if (input.presentation !== undefined) {
+    if (
+      !input.presentation ||
+      typeof input.presentation !== 'object' ||
+      Array.isArray(input.presentation)
+    )
+      throw new FieldValidationError('presentation must be an object', key);
+    const rawPresentation = input.presentation as Record<string, unknown>;
+    if (
+      typeof rawPresentation.adapter !== 'string' ||
+      !/^[a-z][a-z0-9.-]*$/.test(rawPresentation.adapter)
+    )
+      throw new FieldValidationError(
+        'presentation.adapter must be a registered adapter identifier',
+        key
+      );
+    if (
+      rawPresentation.role !== undefined &&
+      (typeof rawPresentation.role !== 'string' || !/^[a-z][a-z0-9.-]*$/.test(rawPresentation.role))
+    )
+      throw new FieldValidationError('presentation.role must be an identifier', key);
+    presentation = {
+      adapter: rawPresentation.adapter,
+      ...(rawPresentation.role ? { role: rawPresentation.role as string } : {})
+    };
+    if (type !== 'json')
+      throw new FieldValidationError('rich field presentations require type json', key);
+    if (!hasRichFieldAdapter(presentation.adapter))
+      throw new FieldValidationError(`Unknown rich field adapter: ${presentation.adapter}`, key);
+    if (
+      presentation.role &&
+      registry.fields.some(
+        (field) =>
+          field.presentation?.role === presentation!.role &&
+          field.kinds.some(
+            (kind) =>
+              (kinds as string[]).includes(kind) ||
+              kind === '*' ||
+              (kinds as string[]).includes('*')
+          )
+      )
+    )
+      throw new FieldValidationError(
+        `Only one ${presentation.role} field may apply to an entry kind`,
+        key
+      );
+  }
+
   return {
     key,
     kinds: kinds as string[],
@@ -563,7 +626,8 @@ export function validateFieldDefinition(
     filterable: boolean('filterable', true),
     editable: true,
     required: boolean('required', false),
-    storage: 'attribute'
+    storage: 'attribute',
+    presentation
   };
 }
 

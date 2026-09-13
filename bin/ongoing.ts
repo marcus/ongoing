@@ -247,15 +247,20 @@ function parseArgs(argv: string[]): Args {
     'stack',
     'grace-days',
     'file',
+    'field',
     'kind',
     'type',
     'label',
     'description',
+    'adapter',
+    'role',
     'values',
     'columns',
     'note',
     'slug',
     'evidence',
+    'expected',
+    'output',
     'saved',
     'tech',
     'ring',
@@ -1863,6 +1868,12 @@ async function commandField(client: ApiClient, args: Args): Promise<void> {
       required: flag(args, 'required')
     };
     if (values) body.options = { values: values.split(',').map((value) => value.trim()) };
+    const adapter = option(args, 'adapter');
+    if (adapter)
+      body.presentation = {
+        adapter,
+        ...(option(args, 'role') ? { role: option(args, 'role') } : {})
+      };
     const created = await client.request<FieldDefinition>('/api/fields', { method: 'POST', body });
     return report(args, created, `registered field ${created.key} (${created.type})`);
   }
@@ -1880,6 +1891,75 @@ async function commandField(client: ApiClient, args: Args): Promise<void> {
     return report(args, removed, `removed field ${key} and its stored values`);
   }
   throw new CliError('Usage: ongoing field list|add|remove');
+}
+
+interface AttachmentRead {
+  entry: string;
+  field: string;
+  revision: string | null;
+  value: Record<string, unknown> | null;
+  document?: unknown;
+  poster?: { mediaType: string; base64: string };
+  bundleKind?: string;
+}
+
+async function commandAttachment(client: ApiClient, args: Args): Promise<void> {
+  const action = args.positional.shift();
+  const projectId = args.positional.shift();
+  const field = option(args, 'field') ?? 'identity.logo';
+  if (!action || !['get', 'set', 'export'].includes(action) || !projectId)
+    throw new CliError('Usage: ongoing attachment get|set|export <project-id> --field <key>');
+  const path = `/api/attachments/${encodeURIComponent(projectId)}/${encodeURIComponent(field)}`;
+  if (action === 'set') {
+    const file = option(args, 'file');
+    if (!file) throw new CliError('attachment set requires --file <bundle.json>');
+    const expectedRaw = option(args, 'expected');
+    if (expectedRaw === undefined)
+      throw new CliError('attachment set requires --expected <revision|none>');
+    let bundle: unknown;
+    try {
+      bundle = JSON.parse(readFileSync(resolvePath(file), 'utf8'));
+    } catch (error) {
+      throw new CliError(
+        `Unable to read attachment bundle: ${error instanceof Error ? error.message : error}`
+      );
+    }
+    const result = await client.request<AttachmentRead>(path, {
+      method: 'PUT',
+      body: { bundle, expected: expectedRaw === 'none' ? null : expectedRaw }
+    });
+    if (flag(args, 'json')) return printJson(result);
+    return out(`${green('✓')} attached ${field} to ${projectId} at ${result.revision}`);
+  }
+  const result = await client.request<AttachmentRead>(path);
+  if (action === 'get') {
+    if (flag(args, 'json')) return printJson(result);
+    return out(result.revision ? `${field} ${result.revision}` : `${field} is not set`);
+  }
+  const output = option(args, 'output');
+  if (!output) throw new CliError('attachment export requires --output <directory>');
+  if (!result.value || !result.poster || result.document === undefined)
+    throw new CliError(`${field} is not set for ${projectId}`);
+  const directory = resolvePath(output);
+  mkdirSync(directory, { recursive: true });
+  const bundle = {
+    kind: result.bundleKind ?? 'impressions.logo.bundle',
+    version: 1,
+    document: result.document,
+    poster: result.poster
+  };
+  writeFileSync(join(directory, 'manifest.json'), `${JSON.stringify(result.document, null, 2)}\n`);
+  writeFileSync(join(directory, 'poster.png'), Buffer.from(result.poster.base64, 'base64'));
+  writeFileSync(join(directory, 'bundle.json'), `${JSON.stringify(bundle, null, 2)}\n`);
+  const exported = {
+    entry: result.entry,
+    field,
+    revision: result.revision,
+    directory,
+    files: ['manifest.json', 'poster.png', 'bundle.json']
+  };
+  if (flag(args, 'json')) return printJson(exported);
+  out(`${green('✓')} exported ${field} to ${directory}`);
 }
 
 /**
@@ -2541,7 +2621,12 @@ ${bold('Catalog')}
   entry remove <entry> --yes            drop a hand-made entry (projects use forget)
   field list [--kind <kind>]            the field registry: built-in, provider, and user fields
   field add <key> --type <type> [--label …] [--kind …] [--values a,b] [--required]
+      [--adapter <trusted-id>] [--role <role>]
   field remove <key> --yes              drop a user field and every value stored under it
+  attachment get <project-id> [--field <key>] [--json]
+  attachment set <project-id> --field <key> --file <bundle.json> --expected <revision|none>
+  attachment export <project-id> --field <key> --output <directory>
+                                        import, inspect, or export a rich field attachment
   tag <entry> [tag …] [--clear]         read or add tags
   untag <entry> <tag …>                 remove tags
   link <entry> <kind> <entry> [--note …]
@@ -2719,6 +2804,9 @@ async function main(argv: string[]): Promise<void> {
     case 'field':
     case 'fields':
       return commandField(client, args);
+    case 'attachment':
+    case 'attachments':
+      return commandAttachment(client, args);
     case 'tag':
       return commandTag(client, args, false);
     case 'untag':

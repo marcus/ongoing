@@ -23,6 +23,7 @@ import { createScannerDependencies } from '$lib/server/scanning/dependencies';
 import { ScanInProgressError, Scanner, type RefreshPolicy } from '$lib/server/scanning/scanner';
 import { isEntriesPageError, readEntriesPage } from './entries';
 import { failure, resolveEntryRef } from './support';
+import { attachmentError, AttachmentService } from '$lib/server/attachments';
 
 /**
  * The CLI's in-process transport (Decision 1).
@@ -51,6 +52,7 @@ type Handler = (context: {
   params: string[];
   body: Record<string, unknown>;
   scan: () => Scanner;
+  attachments: AttachmentService;
 }) => Promise<Response> | Response;
 
 function notFound(path: string, method: string): Response {
@@ -63,6 +65,27 @@ function notFound(path: string, method: string): Response {
 }
 
 const routes: { method: string; pattern: RegExp; handle: Handler }[] = [
+  {
+    method: 'GET',
+    pattern: /^\/api\/attachments\/([^/]+)\/([^/]+)$/,
+    handle: async ({ attachments, params }) => json(await attachments.get(params[0], params[1]))
+  },
+  {
+    method: 'PUT',
+    pattern: /^\/api\/attachments\/([^/]+)\/([^/]+)$/,
+    handle: async ({ attachments, params, body }) => {
+      try {
+        const expected =
+          body.expected === null || body.expected === undefined ? null : String(body.expected);
+        const result = await attachments.set(params[0], params[1], body.bundle, expected);
+        const current = await attachments.get(params[0], params[1]);
+        return json({ ...result, document: current.document });
+      } catch (error) {
+        const failure = attachmentError(error);
+        return json(failure.body, { status: failure.status });
+      }
+    }
+  },
   {
     method: 'GET',
     pattern: /^\/api\/health$/,
@@ -563,6 +586,7 @@ export function createLocalApi(env: Record<string, string | undefined> = process
   const repository = new CatalogRepository(database, undefined, {
     providers: activeProviderNames(config)
   });
+  const attachments = new AttachmentService(repository, config.databasePath);
   let scanner: Scanner | null = null;
 
   return {
@@ -589,6 +613,7 @@ export function createLocalApi(env: Record<string, string | undefined> = process
             parameter: (name) => search.get(name),
             params: match.slice(1).map((value) => decodeURIComponent(value)),
             body,
+            attachments,
             scan: () =>
               (scanner ??= new Scanner(repository, config, createScannerDependencies(config)))
           });

@@ -318,6 +318,17 @@ $ ongoing set ongoing github.stars 5
 error Field github.stars is read-only (provider:github)
 ```
 
+Rich JSON fields name a trusted presentation adapter and optional semantic role. Their values are immutable artifact references, so ordinary `set` refuses them; import and revision checks use the attachment command. The project argument is its stable exact ID. `none` means the field must not already have a selection.
+
+```sh
+ongoing field add identity.logo --type json --kind project --adapter impressions.logo.v1 --role identity
+ongoing attachment get <project-id> --field identity.logo --remote --json
+ongoing attachment set <project-id> --field identity.logo --file bundle.json --expected none --remote --json
+ongoing attachment export <project-id> --field identity.logo --output ./logo-export --json
+```
+
+An Impressions v1 bundle contains `kind: "impressions.logo.bundle"`, `version: 1`, its portable `document`, and `poster: { mediaType: "image/png", base64: "..." }`. Ongoing validates the document through its installed adapter, validates and hashes the PNG, stores both files beside the catalog, and writes only their hashes and the acknowledged revision into the field. A conflict returns the current revision without replacing the selected value. Public website inclusion remains a separate explicit policy.
+
 Relations are rows between entries, with the kinds they may connect declared up front — `uses` and
 `provides` run project → technology, `depends_on` and `part_of` project → project. Edges written by
 hand are `declared`; a provider's detected edges are rewritten on every scan and never hand-edited.

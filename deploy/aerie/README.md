@@ -49,7 +49,7 @@ ongoing serve
 - scan logs: `~/Library/Logs/Ongoing/scan-stdout.log` and `scan-stderr.log`
 - app runtime: `/Users/marcus/.local/share/ongoing/bun` (a symlink into `/Users/marcus/.local/share/ongoing/mise/installs/bun/<version>/`)
 - release record: `/Users/marcus/code/ongoing/.deploy/release.json`
-- database backups: `/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite.backups/` (newest five)
+- database and attachment backups: `/Users/marcus/Library/Application Support/Ongoing/ongoing.sqlite.backups/` (newest five matched SQLite and `.artifacts` snapshots)
 
 Both agents use that one app-owned Bun executable. `.bun-version` is the only place the Bun version is written down: `deploy/aerie/provision-runtime.sh` installs that release with `/opt/homebrew/bin/mise` scoped to Ongoing's own data directory and points the stable executable at it, and the release worker re-runs provisioning whenever the checkout moves, so bumping Bun is editing `.bun-version`, running `bun install` to refresh `bun.lock`, and deploying. Provisioning does not install into, replace, or select Marcus's `~/.bun` runtime and does not change a global mise default. Release scripts reject different hosts, paths, labels, and health targets. They do not use `sudo`, modify the firewall/router, or touch unrelated services.
 

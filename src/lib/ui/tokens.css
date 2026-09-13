@@ -81,6 +81,7 @@
   --rail-width: 216px;
   --panel-width: 400px;
   --row-height: 30px;
+  --rich-preview-height: 280px;
   --header-height: 40px;
 
   /* Elevation belongs to floating overlays only. Never to data. */

@@ -1,12 +1,14 @@
 import { Database } from 'bun:sqlite';
 import {
   copyFile,
+  cp,
   mkdir,
   readdir,
   readFile,
   rename,
   stat,
   unlink,
+  rm,
   writeFile
 } from 'node:fs/promises';
 import { realpathSync } from 'node:fs';
@@ -17,6 +19,7 @@ interface ReleaseRecord {
   priorSha: string;
   deployedSha: string;
   backup?: string;
+  artifactBackup?: string;
   recordedAt: string;
 }
 
@@ -55,7 +58,7 @@ async function removeIfPresent(path: string): Promise<void> {
 async function backupDatabase(
   config: ReleaseConfig,
   priorSha: string
-): Promise<string | undefined> {
+): Promise<Pick<ReleaseRecord, 'backup' | 'artifactBackup'>> {
   const directory = `${config.database}.backups`;
   await mkdir(directory, { recursive: true });
   const backup = join(
@@ -65,20 +68,39 @@ async function backupDatabase(
   try {
     await stat(config.database);
   } catch (error) {
-    if ((error as { code?: string }).code === 'ENOENT') return undefined;
+    if ((error as { code?: string }).code === 'ENOENT') return {};
     throw error;
   }
   const database = new Database(config.database, { readonly: true });
   database.exec(`VACUUM INTO '${backup.replaceAll("'", "''")}'`);
   database.close();
+  const artifactSource = join(dirname(config.database), 'artifacts');
+  const artifactBackup = `${backup}.artifacts`;
+  try {
+    await stat(artifactSource);
+    await cp(artifactSource, artifactBackup, { recursive: true, force: false });
+  } catch (error) {
+    if ((error as { code?: string }).code !== 'ENOENT') throw error;
+  }
   const backups = (await readdir(directory))
     .filter((name) => name.endsWith('.sqlite'))
     .sort()
     .reverse();
   await Promise.all(
-    backups.slice(config.backupRetention).map((name) => unlink(join(directory, name)))
+    backups
+      .slice(config.backupRetention)
+      .flatMap((name) => [
+        unlink(join(directory, name)),
+        rm(join(directory, `${name}.artifacts`), { recursive: true, force: true })
+      ])
   );
-  return backup;
+  return {
+    backup,
+    artifactBackup: await stat(artifactBackup).then(
+      () => artifactBackup,
+      () => undefined
+    )
+  };
 }
 
 async function waitForHealth(url: string): Promise<void> {
@@ -215,7 +237,12 @@ async function deploy(config: ReleaseConfig, recordPath: string): Promise<void> 
   });
   await installAgentDefinitions(config);
   await startAgents(config);
-  await record(recordPath, { priorSha, deployedSha, backup, recordedAt: new Date().toISOString() });
+  await record(recordPath, {
+    priorSha,
+    deployedSha,
+    ...backup,
+    recordedAt: new Date().toISOString()
+  });
   console.log(`Deployed ${deployedSha}; prior ${priorSha}.`);
 }
 
@@ -241,6 +268,13 @@ async function rollback(
     if (dirname(resolve(release.backup)) !== resolve(`${config.database}.backups`))
       throw new Error('recorded database backup is outside the managed backup directory');
     await copyFile(release.backup, config.database);
+    const artifactTarget = join(dirname(config.database), 'artifacts');
+    await rm(artifactTarget, { recursive: true, force: true });
+    if (release.artifactBackup) {
+      if (dirname(resolve(release.artifactBackup)) !== resolve(`${config.database}.backups`))
+        throw new Error('recorded artifact backup is outside the managed backup directory');
+      await cp(release.artifactBackup, artifactTarget, { recursive: true, force: false });
+    }
     await Promise.all([
       removeIfPresent(`${config.database}-shm`),
       removeIfPresent(`${config.database}-wal`)
@@ -251,7 +285,7 @@ async function rollback(
   await record(recordPath, {
     priorSha: current,
     deployedSha: release.priorSha,
-    backup: safetyBackup,
+    ...safetyBackup,
     recordedAt: new Date().toISOString()
   });
   console.log(`Rolled back to ${release.priorSha}.`);

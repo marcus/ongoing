@@ -26,6 +26,7 @@
   } from '$lib/ui/query-state';
   import Table from '$lib/ui/Table.svelte';
   import { attentionTone, VIEW_LABELS } from '$lib/ui/views';
+  import { roleField } from '$lib/ui/rich-fields';
 
   /**
    * The inventory. Filtering, sorting, and column choice run locally over the rows the layout
@@ -43,6 +44,9 @@
   let filterInput = $state<HTMLInputElement | null>(null);
 
   let columns = $derived(resolveColumns(inventory.columns, catalog.registry, inventory.kind));
+  let identityField = $derived(
+    roleField(catalog.registry, inventory.kind ?? 'project', 'identity')
+  );
 
   let queryError = $derived.by(() => {
     try {
@@ -302,6 +306,7 @@
       </p>
     {:else}
       <Table
+        {identityField}
         {columns}
         {rows}
         sort={inventory.sort}

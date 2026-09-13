@@ -114,4 +114,4 @@ Old builds are retained deliberately: removing one while a process still imports
 original outage. During maintenance, stop all Ongoing servers and remove only unused build
 directories, keeping the directory selected by `build`. Failed staging directories can be removed
 after their build process exits. Code rollback does not roll back schema migrations; keep a catalog
-backup when deploying schema changes, and use the deployment profile's database recovery workflow.
+backup when deploying schema changes, and use the deployment profile's database recovery workflow. Rich-field artifacts live beside the database under `artifacts/`; deployment snapshots and restores that directory together with SQLite so field references never outlive their files.

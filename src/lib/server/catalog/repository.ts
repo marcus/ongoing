@@ -29,6 +29,7 @@ import {
   type FieldRegistry,
   type FieldType
 } from '$lib/domain/fields';
+import { AttachmentConflictError } from '$lib/domain/rich-fields';
 import {
   validateRelation,
   type Relation,
@@ -226,7 +227,10 @@ function fieldFromRow(row: Row): FieldDefinition {
     filterable: bool(row.filterable),
     editable: bool(row.editable),
     required: bool(row.required),
-    storage: 'attribute'
+    storage: 'attribute',
+    presentation: row.presentation
+      ? (JSON.parse(String(row.presentation)) as FieldDefinition['presentation'])
+      : undefined
   };
 }
 
@@ -608,8 +612,8 @@ export class CatalogRepository {
         .query(
           `INSERT INTO fields (
              key, kinds, type, options, label, description, sortable, filterable, editable,
-             required, created_at, updated_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`
+             required, presentation, created_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`
         )
         .run(
           definition.key,
@@ -621,12 +625,49 @@ export class CatalogRepository {
           definition.sortable ? 1 : 0,
           definition.filterable ? 1 : 0,
           definition.required ? 1 : 0,
+          definition.presentation ? JSON.stringify(definition.presentation) : null,
           timestamp,
           timestamp
         );
     });
     this.registryCache = null;
     return definition;
+  }
+
+  async setAttributeIfRevision(
+    id: string,
+    key: string,
+    value: Record<string, unknown>,
+    expectedRevision: string | null
+  ): Promise<Entry> {
+    return this.catalog.write((database) => {
+      const row = database.query<Row, [string]>('SELECT * FROM entries WHERE id = ?').get(id);
+      if (!row) throw new Error(`Unknown entry ID: ${id}`);
+      const entry = entryFromRow(row);
+      const validated = validateEntryPatch(
+        this.registry(),
+        entry.kind,
+        { [key]: value },
+        { allowRich: true }
+      );
+      const current = entry.attributes[key];
+      const currentRevision =
+        current && typeof current === 'object' && !Array.isArray(current)
+          ? (current as Record<string, unknown>).revision
+          : undefined;
+      if ((typeof currentRevision === 'string' ? currentRevision : null) !== expectedRevision)
+        throw new AttachmentConflictError(
+          typeof currentRevision === 'string' ? currentRevision : null,
+          expectedRevision
+        );
+      const attributes = { ...entry.attributes, ...validated.attributes };
+      database
+        .query('UPDATE entries SET attributes = ?, updated_at = ? WHERE id = ?')
+        .run(JSON.stringify(attributes), this.now(), id);
+      const updated = database.query<Row, [string]>('SELECT * FROM entries WHERE id = ?').get(id);
+      if (!updated) throw new Error('Failed to persist attachment');
+      return entryFromRow(updated);
+    });
   }
 
   /**

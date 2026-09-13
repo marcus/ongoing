@@ -89,6 +89,14 @@ model {
       description 'Public-copy endpoints: per-project website metadata, standalone pages, and the deterministic live or draft export that OpenTangle consumes.'
       metadata { uid 'service.website_api' fractalColor '#739886' evidence ['src/routes/api/website/+server.ts', 'src/routes/api/projects/[id]/website/+server.ts', 'src/routes/api/website/pages/+server.ts'] }
     }
+    attachments_api = component 'Rich attachment API' {
+      description 'Imports, reads and exports trusted rich-field bundles with field-specific revision checks; immutable artifact reads carry content hashes and long-lived cache headers.'
+      metadata { uid 'service.attachments_api' fractalColor '#739886' evidence ['src/routes/api/attachments/[id]/[field]/+server.ts', 'src/routes/api/artifacts/[hash]/+server.ts', 'src/lib/server/attachments.ts'] }
+    }
+    rich_adapters = adapter 'Trusted rich-field adapters' {
+      description 'Code-registered document validators and lazy UI renderers. Unknown adapters preserve their JSON and poster fallback without loading executable field content.'
+      metadata { uid 'service.rich_adapters' fractalColor '#739886' evidence ['src/lib/domain/rich-fields.ts', 'src/lib/ui/rich-field-adapters.ts', 'src/lib/ui/RichFieldPreview.svelte'] }
+    }
     runtime = component 'Composition root' {
       description 'Loads config, opens the catalog, wires the scanner with the production collector set, and retries enrichment for a restored project until no scan is running.'
       metadata { uid 'service.runtime' fractalColor '#739886' evidence ['src/lib/server/scanning/runtime.ts', 'src/lib/server/config.ts'] }
@@ -210,6 +218,10 @@ model {
     sqlite = store 'ongoing.sqlite' {
       description 'entries, entry_sources, fields, relations, saved_views, plus project_metrics, metric_snapshots, project_stacks re-keyed to entry_id, toolchain_releases, toolchain_baseline_status, collection_errors, scan_runs, website_pages. Default .data/ongoing.sqlite; Application Support in production.'
       metadata { uid 'catalog.sqlite' fractalColor '#B59669' evidence ['src/lib/server/catalog/migrations/007_entries.sql', 'src/lib/server/catalog/migrations/008_rekey_metrics.sql', 'src/lib/server/catalog/migrations/001_initial.sql'] }
+    }
+    artifacts = store 'Immutable artifacts' {
+      description 'Canonical manifests and PNG posters stored beside SQLite by SHA-256, copied with catalog backups and retained for recovery.'
+      metadata { uid 'catalog.artifacts' fractalColor '#B59669' evidence ['src/lib/server/attachments.ts', 'deploy/aerie/remote-release.ts'] }
     }
   }
 
@@ -420,6 +432,7 @@ model {
   // CLI is a pure API client
   cli.read_cmds .calls cli.client 'Requests page models' { metadata { uid 'cli-read-client' } }
   cli.edit_cmds .calls cli.client 'Sends mutations' { metadata { uid 'cli-edit-client' } }
+  cli.edit_cmds .calls service.attachments_api 'attachment set, get and export by exact project ID' { metadata { uid 'cli-attachments-api' } }
   cli.scan_cmd .calls cli.client 'Starts and polls scans' { metadata { uid 'cli-scan-client' } }
   cli.client .calls service.projects_api 'GET /api/projects, PATCH /api/projects/:id, ...' { metadata { uid 'cli-projects-api' } }
   cli.client .calls service.scan_api 'POST /api/scan' { metadata { uid 'cli-scan-api' } }
@@ -441,6 +454,9 @@ model {
   service.projects_api .calls domain.readmodel 'Builds the page model' { metadata { uid 'projects-readmodel' } }
   service.projects_api .calls domain.project 'Validates notes and decisions' { metadata { uid 'projects-domain' } }
   service.projects_api .writes catalog.repository 'Flags, notes, decisions, order, forget' { metadata { uid 'projects-repo' } }
+  service.attachments_api .calls service.rich_adapters 'Validates the registered document contract' { metadata { uid 'attachments-adapters' } }
+  service.attachments_api .writes catalog.repository 'Selects one compact field reference under revision compare-and-set' { metadata { uid 'attachments-repo' } }
+  service.attachments_api .writes catalog.artifacts 'Writes canonical manifest and poster before selection' { metadata { uid 'attachments-artifacts' } }
   service.scan_api .calls scanning.scanner 'Starts a manual or project run' { metadata { uid 'scanapi-scanner' } }
   service.scan_api .reads scanning.progress 'Replays and subscribes to run events' { metadata { uid 'scanapi-progress' } }
   service.website_api .calls domain.website 'Validates copy and exports eligible entries' { metadata { uid 'website-domain' } }
@@ -504,6 +520,7 @@ model {
   ops.scan_job .calls service.scan_api 'Request a deployed scan and poll its exact run ID' { metadata { uid 'scanjob-scanner' } }
   ops.release .calls external.launchd 'Quiesce, reinstall definitions, start' { metadata { uid 'release-launchd' } }
   ops.release .writes catalog.sqlite 'Consistent backup, migrate once, restore on rollback' { metadata { uid 'release-sqlite' } }
+  ops.release .writes catalog.artifacts 'Matched backup and restore beside SQLite' { metadata { uid 'release-artifacts' } }
   ops.release .calls ops.provision 'Validates the pinned Bun before deploying' { metadata { uid 'release-provision' } }
   ops.smoke .calls service.edge 'Health and authenticated LAN smoke' { metadata { uid 'smoke-edge' } }
   ops.smoke .calls catalog.database 'Standalone migration' { metadata { uid 'smoke-migrate' } }

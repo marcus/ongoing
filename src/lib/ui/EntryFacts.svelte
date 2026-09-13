@@ -10,6 +10,8 @@
   import { formatValue, relativeAge } from './format';
   import Icon from './Icon.svelte';
   import Sparkline from './Sparkline.svelte';
+  import RichFieldPreview from './RichFieldPreview.svelte';
+  import { roleField } from './rich-fields';
   import { attentionTone, providerLabel, VIEW_LABELS } from './views';
 
   /**
@@ -43,6 +45,7 @@
   );
 
   let completeness = $derived(entryCompleteness(catalog.registry, entry.kind, entry.fields));
+  let identityField = $derived(roleField(catalog.registry, entry.kind, 'identity'));
 
   /** A remote-only entry: discovered by a provider that is not the filesystem, so it has no path. */
   let remoteSource = $derived(
@@ -60,6 +63,12 @@
 </script>
 
 <div class="facts">
+  {#if identityField && hasValue(entry, identityField.key)}
+    <section class="block rich-identity">
+      <h3>{identityField.label}</h3>
+      <RichFieldPreview {entry} field={identityField} interactive />
+    </section>
+  {/if}
   <section class="block">
     <h3>Identity</h3>
     <dl class="kv">

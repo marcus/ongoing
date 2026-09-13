@@ -43,5 +43,8 @@
     "typescript-eslint": "^8.64.0",
     "vite": "^8.1.5",
     "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "@impressions/logo": "file:./vendor/impressions-logo-1.0.0-9a8e869.tgz"
   }
 }
