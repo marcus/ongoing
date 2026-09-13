@@ -295,7 +295,7 @@
   </div>
 {/if}
 
-<div class="workspace">
+<div class="workspace" class:panel-open={Boolean(openEntry)}>
   <main class="list">
     {#if queryError}
       <p class="empty" role="alert">{queryError}</p>
@@ -425,5 +425,33 @@
     gap: var(--space-1);
     padding: var(--space-2) var(--space-3);
     border-bottom: 1px solid var(--border-subtle);
+  }
+
+  @media (max-width: 640px) {
+    .bar {
+      flex-wrap: wrap;
+      align-content: center;
+      height: auto;
+      min-height: calc(var(--header-height) * 2);
+      padding-block: var(--space-2);
+    }
+
+    .filter,
+    .controls {
+      flex-basis: 100%;
+    }
+
+    .controls {
+      gap: var(--space-1);
+      overflow-x: auto;
+    }
+
+    .controls .count {
+      margin-left: auto;
+    }
+
+    .workspace.panel-open .list {
+      display: none;
+    }
   }
 </style>

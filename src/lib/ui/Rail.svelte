@@ -105,6 +105,46 @@
     background: var(--accent);
   }
 
+  @media (max-width: 640px) {
+    .rail {
+      flex: none;
+      flex-direction: row;
+      align-items: center;
+      gap: var(--space-2);
+      width: 100%;
+      padding: var(--space-2);
+      overflow-x: auto;
+      overflow-y: hidden;
+      border-right: 0;
+      border-bottom: 1px solid var(--border-strong);
+    }
+
+    .wordmark {
+      padding: 0 var(--space-1);
+    }
+    section {
+      flex: none;
+    }
+    section h2 {
+      display: none;
+    }
+    section ul {
+      display: flex;
+    }
+    .item {
+      padding: var(--space-1) var(--space-2);
+    }
+    .item .count {
+      display: none;
+    }
+    .footer {
+      flex: none;
+      margin: 0;
+      padding: 0;
+      border: 0;
+    }
+  }
+
   .label {
     flex: 1;
     overflow: hidden;

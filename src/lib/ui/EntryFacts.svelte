@@ -11,7 +11,6 @@
   import Icon from './Icon.svelte';
   import Sparkline from './Sparkline.svelte';
   import RichFieldPreview from './RichFieldPreview.svelte';
-  import { roleField } from './rich-fields';
   import { attentionTone, providerLabel, VIEW_LABELS } from './views';
 
   /**
@@ -32,6 +31,11 @@
   let decisions = $derived(
     decisionFields(catalog.registry, entry.kind).filter((field) => !field.presentation)
   );
+  let richFields = $derived(
+    decisionFields(catalog.registry, entry.kind).filter(
+      (field) => field.presentation && hasValue(entry, field.key)
+    )
+  );
   let visibleDecisions = $derived(
     showEmpty ? decisions : decisions.filter((field) => hasValue(entry, field.key))
   );
@@ -47,7 +51,6 @@
   );
 
   let completeness = $derived(entryCompleteness(catalog.registry, entry.kind, entry.fields));
-  let identityField = $derived(roleField(catalog.registry, entry.kind, 'identity'));
 
   /** A remote-only entry: discovered by a provider that is not the filesystem, so it has no path. */
   let remoteSource = $derived(
@@ -65,12 +68,12 @@
 </script>
 
 <div class="facts">
-  {#if identityField && hasValue(entry, identityField.key)}
+  {#each richFields as richField (richField.key)}
     <section class="block rich-identity">
-      <h3>{identityField.label}</h3>
-      <RichFieldPreview {entry} field={identityField} interactive />
+      <h3>{richField.label}</h3>
+      <RichFieldPreview {entry} field={richField} interactive />
     </section>
-  {/if}
+  {/each}
   <section class="block">
     <h3>Identity</h3>
     <dl class="kv">

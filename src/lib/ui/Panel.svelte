@@ -93,4 +93,10 @@
     flex: 1;
     overflow-y: auto;
   }
+
+  @media (max-width: 640px) {
+    .panel {
+      width: 100%;
+    }
+  }
 </style>

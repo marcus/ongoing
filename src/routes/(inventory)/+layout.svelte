@@ -481,4 +481,13 @@
     border-color: var(--status-error);
     color: var(--status-error);
   }
+
+  @media (max-width: 640px) {
+    .shell {
+      flex-direction: column;
+    }
+    .main {
+      min-height: 0;
+    }
+  }
 </style>
