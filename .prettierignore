@@ -9,3 +9,6 @@ docs/mockups
 
 .ongoing-builds/
 .ongoing-build-*
+
+# Fractal generates standalone HTML with bundled runtime code.
+docs/diagrams/fractal/artifacts/*.html
