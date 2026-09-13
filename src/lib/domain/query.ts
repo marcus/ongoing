@@ -288,7 +288,14 @@ export function validateQuery(query: ParsedQuery, registry: FieldRegistry, kind?
     if (clause.type !== 'field') continue;
     const definition = registry.get(clause.field);
     if (!definition) throw unknownField(registry, clause.field, kind, 'field');
-    if (!definition.filterable)
+    const presenceOnly =
+      definition.presentation !== undefined &&
+      (clause.operator === ':' || clause.operator === '!:') &&
+      clause.values.length > 0 &&
+      clause.values.every(
+        (value) => value === ANY_TOKEN || (EMPTY_TOKENS as readonly string[]).includes(lower(value))
+      );
+    if (!definition.filterable && !presenceOnly)
       throw new QueryError(`Field ${clause.field} cannot be filtered`, clause.field);
   }
 }

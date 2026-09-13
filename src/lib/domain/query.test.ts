@@ -31,7 +31,21 @@ const userField: FieldDefinition = {
   storage: 'attribute'
 };
 
-const registry = createFieldRegistry([userField]);
+const richField: FieldDefinition = {
+  key: 'identity.logo',
+  kinds: ['project'],
+  type: 'json',
+  owner: 'user',
+  label: 'Logo',
+  sortable: false,
+  filterable: false,
+  editable: false,
+  required: false,
+  storage: 'attribute',
+  presentation: { adapter: 'impressions.logo.v1', role: 'identity' }
+};
+
+const registry = createFieldRegistry([userField, richField]);
 
 function row(id: string, fields: QueryRow['fields']): QueryRow {
   return { id, fields: { kind: 'project', ...fields } };
@@ -52,7 +66,8 @@ const catalog: QueryRow[] = [
     'git.latestCommit': '2026-09-10T12:00:00.000Z',
     'stack.go': '1.27',
     views: ['attention', 'rising'],
-    tech: ['go', 'sveltekit']
+    tech: ['go', 'sveltekit'],
+    'identity.logo': { kind: 'impressions.logo.ref', version: 1 }
   }),
   row('b', {
     name: 'beta',
@@ -218,6 +233,10 @@ describe('validateQuery', () => {
 
   it('refuses a field that is not filterable', () => {
     expect(() => ids('manual_rank:1')).toThrow(/manual_rank cannot be filtered/);
+    expect(() => ids('identity.logo:impressions.logo.ref')).toThrow(
+      /identity\.logo cannot be filtered/
+    );
+    expect(() => ids('identity.logo:~logo')).toThrow(/identity\.logo cannot be filtered/);
   });
 
   it('rejects unknown sort fields and columns the same way', () => {
@@ -267,6 +286,12 @@ describe('evaluation', () => {
     expect(ids('stack.go:*')).toEqual(['a']);
     expect(ids('intent:none')).toEqual(['c']);
     expect(ids('-intent:none')).toEqual(['a', 'b']);
+  });
+
+  it('allows presence queries for rich fields without exposing their structured value', () => {
+    expect(ids('identity.logo:*')).toEqual(['a']);
+    expect(ids('identity.logo:none')).toEqual(['b', 'c']);
+    expect(ids('identity.logo!:none')).toEqual(['a']);
   });
 
   it('combines clauses with AND and negates with a leading dash or !:', () => {

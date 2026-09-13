@@ -40,6 +40,12 @@ describe('attachment CLI', () => {
       name: 'Ongoing',
       scanRoot: '/code'
     });
+    await repository.upsertDiscovered({
+      canonicalPath: '/code/without-logo',
+      relativePath: 'without-logo',
+      name: 'Without Logo',
+      scanRoot: '/code'
+    });
     database.close();
     const document = JSON.parse(
       readFileSync(join(process.cwd(), 'tests/fixtures/impressions-logo-v1.json'), 'utf8')
@@ -90,6 +96,8 @@ describe('attachment CLI', () => {
       )
     );
     expect(current).toMatchObject({ revision: saved.revision, document });
+    expect(await cli(databasePath, 'list', 'identity.logo:*', '--local', '--count')).toBe('1');
+    expect(await cli(databasePath, 'list', 'identity.logo:none', '--local', '--count')).toBe('1');
     const output = join(directory, 'export');
     const exported = JSON.parse(
       await cli(
