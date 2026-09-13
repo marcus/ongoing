@@ -42,7 +42,7 @@ describe('attachment CLI', () => {
     });
     database.close();
     const document = JSON.parse(
-      readFileSync(join(process.cwd(), '../impressions/packages/logo/fixtures/v1.json'), 'utf8')
+      readFileSync(join(process.cwd(), 'tests/fixtures/impressions-logo-v1.json'), 'utf8')
     );
     const bundle = {
       kind: 'impressions.logo.bundle',

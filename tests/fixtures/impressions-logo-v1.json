@@ -1,0 +1,41 @@
+{
+  "kind": "impressions.logo",
+  "version": 1,
+  "recipe": {
+    "shape": "vibes",
+    "count": 48,
+    "size": 0.04,
+    "palette": "vibes",
+    "treatment": "halftone",
+    "surface": "none",
+    "thickness": 0.012,
+    "extrusion": 0
+  },
+  "camera": { "yaw": 0, "pitch": 0, "roll": 12, "scale": 1.1, "distance": 8 },
+  "renderer": {
+    "profile": "impressions.point-study",
+    "version": 1,
+    "canvas": { "width": 1024, "height": 1024 },
+    "background": "transparent"
+  },
+  "snapshot": {
+    "generator": "vibes-planar-v1",
+    "version": 1,
+    "positions": [
+      [-0.5, 0, 0],
+      [0.5, 0, 0]
+    ],
+    "contours": [
+      [-0.5, 0, 0],
+      [0.5, 0, 0]
+    ],
+    "color": "#f12eb3",
+    "radius": 0.04,
+    "radii": [0.03, 0.04],
+    "colors": ["#f12eb3", "#65dbff"],
+    "treatment": "halftone",
+    "surface": "none",
+    "thickness": 0.012
+  },
+  "layouts": { "card": { "productName": { "x": 4.5, "y": -12, "size": 24, "color": "#d5b14e" } } }
+}

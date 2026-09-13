@@ -17,6 +17,7 @@ import { pathToFileURL } from 'node:url';
 import { join } from 'node:path';
 import { pinBuild } from './build';
 import { repositoryRoot } from './run';
+import { MAX_ATTACHMENT_REQUEST_BYTES } from '$lib/server/attachments';
 
 const CLIENT_ADDRESS_HEADER = 'x-ongoing-client-address';
 
@@ -25,6 +26,11 @@ export function productionBodyLimit(value = process.env.BODY_SIZE_LIMIT): number
   if (!Number.isSafeInteger(limit) || limit < 1)
     throw new Error('BODY_SIZE_LIMIT must be a positive integer');
   return limit;
+}
+
+export function productionRequestBodyLimit(url: string | undefined, defaultLimit: number): number {
+  const pathname = new URL(url ?? '/', 'http://ongoing.local').pathname;
+  return pathname.startsWith('/api/attachments/') ? MAX_ATTACHMENT_REQUEST_BYTES : defaultLimit;
 }
 
 export async function readBoundedBody(
@@ -103,6 +109,9 @@ function forward(
 
 export async function startProductionServer(): Promise<void> {
   const limit = productionBodyLimit();
+  // adapter-node has one process-wide body limit. Keep its outer ceiling large enough for rich
+  // attachments; the public edge and SvelteKit hook retain narrow per-route limits.
+  process.env.BODY_SIZE_LIMIT = String(Math.max(limit, MAX_ATTACHMENT_REQUEST_BYTES));
   // The adapter trusts this header only on its private ephemeral loopback listener. The public
   // listener always overwrites it from the actual socket, preserving login rate limiting.
   process.env.ADDRESS_HEADER = CLIENT_ADDRESS_HEADER;
@@ -124,7 +133,11 @@ export async function startProductionServer(): Promise<void> {
         forward(request, response, address.port);
         return;
       }
-      const body = await readBoundedBody(request, request.headers, limit);
+      const body = await readBoundedBody(
+        request,
+        request.headers,
+        productionRequestBodyLimit(request.url, limit)
+      );
       if (body === null) {
         rejectTooLarge(request, response);
         return;

@@ -1,6 +1,10 @@
 import { Readable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
-import { productionBodyLimit, readBoundedBody } from '$lib/host/production-server';
+import {
+  productionBodyLimit,
+  productionRequestBodyLimit,
+  readBoundedBody
+} from '$lib/host/production-server';
 
 describe('raw production request body boundary', () => {
   it('rejects an oversized declared body before forwarding it', async () => {
@@ -34,5 +38,28 @@ describe('raw production request body boundary', () => {
     expect(productionBodyLimit('16384')).toBe(16_384);
     expect(() => productionBodyLimit('0')).toThrow(/positive integer/);
     expect(() => productionBodyLimit('16K')).toThrow(/positive integer/);
+  });
+
+  it('allows large attachment imports without widening ordinary mutation routes', async () => {
+    const body = Buffer.alloc(652_166);
+    const attachmentLimit = productionRequestBodyLimit(
+      '/api/attachments/project_123/identity.logo',
+      16_384
+    );
+    expect(attachmentLimit).toBe(16 * 1024 * 1024);
+    expect(
+      await readBoundedBody(
+        Readable.from([body]),
+        { 'content-length': String(body.length) },
+        attachmentLimit
+      )
+    ).toHaveLength(body.length);
+    expect(
+      await readBoundedBody(
+        Readable.from([body]),
+        { 'content-length': String(body.length) },
+        productionRequestBodyLimit('/api/entries/project/ongoing', 16_384)
+      )
+    ).toBeNull();
   });
 });
