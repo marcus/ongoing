@@ -45,6 +45,20 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
+      # Provider fields like `loc.code` and `td.total` only register when their commands exist on
+      # PATH (ADR 0007). GitHub runners already have `git` and `gh`; install the rest so e2e can
+      # exercise the same projected columns a local Aerie session sees.
+      - name: Install cloc and td
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cloc
+          td_tag=$(curl -fsSL https://api.github.com/repos/marcus/td/releases/latest | jq -r .tag_name)
+          td_ver=${td_tag#v}
+          curl -fsSL "https://github.com/marcus/td/releases/download/${td_tag}/td_${td_ver}_linux_amd64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin td
+          td --version
+          cloc --version
+
       # Chromium alone: the suite asserts behaviour and contrast, not rendering differences
       # between engines, and every mutation it makes is checked again through `bin/ongoing`.
       - run: bunx playwright install --with-deps chromium
