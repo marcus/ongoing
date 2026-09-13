@@ -207,34 +207,42 @@ describe('production LaunchAgent definitions', () => {
     expect(PRODUCTION_SCAN_LABEL).not.toBe(PRODUCTION_WEB_LABEL);
   });
 
-  it('resolves every scheduled tool with only the launchd PATH', async () => {
-    // launchd gives the agent this PATH and nothing else from a shell — but it does set HOME, and
-    // `gh` is a mise shim that reads the user's mise config to resolve its version. So the probe
-    // runs with the real HOME and no other inherited environment: that is exactly what the
-    // scheduled scan gets.
-    const probes = [
-      [process.execPath, '--version'],
-      ['gh', '--version'],
-      ['gh', 'auth', 'status'],
-      ['td', '--version'],
-      ['cloc', '--version'],
-      ['git', '--version']
-    ];
-    for (const probe of probes) {
-      const child = Bun.spawn(probe, {
-        cwd: process.cwd(),
-        env: { HOME: homedir(), PATH: PRODUCTION_SCAN_PATH },
-        stdout: 'pipe',
-        stderr: 'pipe'
-      });
-      const [status, stderr] = await Promise.all([child.exited, new Response(child.stderr).text()]);
-      // A logged-out or rate-limited `gh auth status` exits 1; the collector treats that as
-      // "unavailable" rather than a failure, so it must not fail this test either.
-      if (probe[1] === 'auth') expect([0, 1]).toContain(status);
-      else expect(status, `${probe[0]} was not available: ${stderr}`).toBe(0);
+  // Machine-bound: the PATH string is asserted above; this spawn probe needs Aerie's real
+  // Homebrew/mise tools and must not fail GitHub's ubuntu runners (or any non-Aerie host).
+  it.skipIf(process.platform !== 'darwin' || Boolean(process.env.CI))(
+    'resolves every scheduled tool with only the launchd PATH',
+    async () => {
+      // launchd gives the agent this PATH and nothing else from a shell — but it does set HOME, and
+      // `gh` is a mise shim that reads the user's mise config to resolve its version. So the probe
+      // runs with the real HOME and no other inherited environment: that is exactly what the
+      // scheduled scan gets.
+      const probes = [
+        [process.execPath, '--version'],
+        ['gh', '--version'],
+        ['gh', 'auth', 'status'],
+        ['td', '--version'],
+        ['cloc', '--version'],
+        ['git', '--version']
+      ];
+      for (const probe of probes) {
+        const child = Bun.spawn(probe, {
+          cwd: process.cwd(),
+          env: { HOME: homedir(), PATH: PRODUCTION_SCAN_PATH },
+          stdout: 'pipe',
+          stderr: 'pipe'
+        });
+        const [status, stderr] = await Promise.all([
+          child.exited,
+          new Response(child.stderr).text()
+        ]);
+        // A logged-out or rate-limited `gh auth status` exits 1; the collector treats that as
+        // "unavailable" rather than a failure, so it must not fail this test either.
+        if (probe[1] === 'auth') expect([0, 1]).toContain(status);
+        else expect(status, `${probe[0]} was not available: ${stderr}`).toBe(0);
+      }
+      expect(Bun.version).toBe(readFileSync(resolve('.bun-version'), 'utf8').trim());
     }
-    expect(Bun.version).toBe(readFileSync(resolve('.bun-version'), 'utf8').trim());
-  });
+  );
 
   it('preflights tooling before quiescing and reloads the installed scan definition', () => {
     expect(remoteRelease).toContain('await validateScanTooling(config);');

@@ -50,7 +50,8 @@ jobs:
       - run: bunx playwright install --with-deps chromium
 
       # A port nothing else on a runner listens on, so `reuseExistingServer` cannot pick up
-      # a stranger — the failure mode Phase 2 fixed.
+      # a stranger — the failure mode Phase 2 fixed. `test:e2e` runs `svelte-kit sync` first so
+      # Bun can resolve `$lib` while seeding the fixture (no prior `check` job shares this workspace).
       - run: bun run test:e2e
         env:
           E2E_PORT: 7801
