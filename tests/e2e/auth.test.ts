@@ -13,10 +13,10 @@ test('LAN authentication protects the catalog and logout clears the session', as
   await page.goto('/');
   await expect(page).toHaveURL(/\/login/);
   await page.getByLabel('Access secret').fill('wrong-secret-value');
-  await page.getByRole('button', { name: /enter dashboard/i }).click();
+  await page.getByRole('button', { name: /open the inventory/i }).click();
   await expect(page.getByRole('alert')).toContainText('not accepted');
   await page.getByLabel('Access secret').fill('browser-auth-test-secret');
-  await page.getByRole('button', { name: /enter dashboard/i }).click();
+  await page.getByRole('button', { name: /open the inventory/i }).click();
   await expect(page).toHaveURL(/\/$/);
   const authenticatedAttachment = await page.request.get(
     '/api/attachments/project_missing/identity.logo'

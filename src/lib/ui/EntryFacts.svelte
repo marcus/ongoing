@@ -29,7 +29,9 @@
   let editing = $state<string | null>(null);
   let now = Date.now();
 
-  let decisions = $derived(decisionFields(catalog.registry, entry.kind));
+  let decisions = $derived(
+    decisionFields(catalog.registry, entry.kind).filter((field) => !field.presentation)
+  );
   let visibleDecisions = $derived(
     showEmpty ? decisions : decisions.filter((field) => hasValue(entry, field.key))
   );
