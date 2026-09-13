@@ -172,4 +172,25 @@
     overflow-y: auto;
     max-width: 760px;
   }
+
+  @media (max-width: 640px) {
+    .head {
+      flex-direction: column;
+    }
+
+    .identity,
+    .badges,
+    .actions {
+      width: 100%;
+    }
+
+    .badges,
+    .actions {
+      flex: none;
+    }
+
+    .actions {
+      flex-wrap: wrap;
+    }
+  }
 </style>
