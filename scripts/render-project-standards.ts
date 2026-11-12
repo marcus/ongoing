@@ -3,7 +3,7 @@
  *
  * The skill used to hand-maintain both. They are now views of the catalog: the language table is
  * every `kind = language` technology in ring order, and the tool table is every technology that
- * carries a `tool_surface`. The generator only ever rewrites what is between the markers, so the
+ * carries a `tool_surface` and is in the hot ring. The generator only ever rewrites what is between the markers, so the
  * prose around them stays exactly as written.
  *
  *   bun run scripts/render-project-standards.ts              # rewrite the skill in place
@@ -45,7 +45,8 @@ const BLOCKS: readonly Block[] = [
       '| Tool | Use it for |',
       '|---|---|',
       ...technologies
-        .filter((technology) => technology.toolSurface)
+        // Hot tools are the ones every project uses; warm ones are home tools, found through skills and TOOLS.md.
+        .filter((technology) => technology.toolSurface && technology.ring === 'hot')
         .map((technology) => `| \`${technology.slug}\` | ${technology.toolSurface} |`)
     ]
   }
